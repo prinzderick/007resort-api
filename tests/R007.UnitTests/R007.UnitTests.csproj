@@ -10,6 +10,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +20,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\R007.SharedKernel\R007.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\R007.Contracts\R007.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\R007.Infrastructure\R007.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\R007.Api\R007.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\R007.Modules.Organization\R007.Modules.Organization.csproj" />
+    <ProjectReference Include="..\..\src\Modules\R007.Modules.Identity\R007.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Modules\R007.Modules.Devices\R007.Modules.Devices.csproj" />
+    <ProjectReference Include="..\..\src\Modules\R007.Modules.Audit\R007.Modules.Audit.csproj" />
   </ItemGroup>
 
 </Project>

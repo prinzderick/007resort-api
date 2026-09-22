@@ -86,8 +86,13 @@ public sealed class DeviceService(R007DbContext db, JwtTokenService jwtTokenServ
     public async Task<bool> IsRegistrationActiveAsync(Guid deviceId, Guid tokenId, CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNow;
-        return await db.Set<DeviceRegistration>().AnyAsync(
-            r => r.DeviceId == deviceId && r.TokenId == tokenId && r.RevokedAt == null && r.ExpiresAt > now,
-            cancellationToken);
+        var registration = await db.Set<DeviceRegistration>()
+            .Where(r => r.DeviceId == deviceId && r.TokenId == tokenId && r.RevokedAt == null)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Compared client-side: SQLite (used by this repository's non-MySQL test runs) cannot
+        // translate a DateTimeOffset ">" comparison server-side; MySQL/Pomelo can, but this
+        // keeps the same code path correct on both providers.
+        return registration is not null && registration.ExpiresAt > now;
     }
 }
