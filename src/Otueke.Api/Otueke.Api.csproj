@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Otueke.Api</RootNamespace>
+    <UserSecretsId>otueke-api-8f3d2c1e-local-dev</UserSecretsId>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Http" />
+    <PackageReference Include="Asp.Versioning.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Otueke.Contracts\Otueke.Contracts.csproj" />
+    <ProjectReference Include="..\Otueke.SharedKernel\Otueke.SharedKernel.csproj" />
+    <ProjectReference Include="..\Otueke.Infrastructure\Otueke.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
