@@ -28,7 +28,7 @@ jobs:
     #   mysql:
     #     image: mysql:8.4
     #     env:
-    #       MYSQL_DATABASE: otueke_test
+    #       MYSQL_DATABASE: r007_test
     #       MYSQL_ROOT_PASSWORD: ${{ secrets.CI_MYSQL_ROOT_PASSWORD }}
     #     ports: ["3306:3306"]
     #     options: >-
@@ -42,13 +42,13 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore Otueke.sln
+        run: dotnet restore R007.sln
 
       - name: Build
-        run: dotnet build Otueke.sln -c Release --no-restore
+        run: dotnet build R007.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test Otueke.sln -c Release --no-build --logger trx --results-directory TestResults
+        run: dotnet test R007.sln -c Release --no-build --logger trx --results-directory TestResults
 
       - name: Upload test results
         if: always()

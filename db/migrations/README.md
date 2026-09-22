@@ -1,6 +1,6 @@
 # Database migrations
 
-**This repository (`otueke-api`) is the single authoritative owner of the Otueke MySQL 8.4 schema.**
+**This repository (`007resort-api`) is the single authoritative owner of the 007 Resort & Spa MySQL 8.4 schema.**
 No other repository, service or client may create or alter tables.
 
 ## Tooling
@@ -21,5 +21,5 @@ Until the ADR is accepted, do not add migrations.
 - Every migration is reviewed in a PR (see the PR template checklist).
 - Migrations must be safe to run on a live site server: prefer additive changes, backfill in
   separate steps, avoid long table locks (use `ALGORITHM=INPLACE/INSTANT` where possible).
-- Follow the data rules in [`src/Otueke.Infrastructure/README.md`](../../src/Otueke.Infrastructure/README.md)
+- Follow the data rules in [`src/R007.Infrastructure/README.md`](../../src/R007.Infrastructure/README.md)
   (InnoDB, `DECIMAL(19,4)` money, UTC, `BINARY(16)` UUIDs).

@@ -8,8 +8,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Deterministic>true</Deterministic>
-    <Company>Otueke</Company>
-    <Product>Otueke Integrated Facility Operations Platform</Product>
+    <Company>007 Resort &amp; Spa</Company>
+    <Product>007 Resort &amp; Spa Integrated Facility Operations Platform</Product>
     <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>

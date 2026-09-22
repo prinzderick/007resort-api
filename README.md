@@ -1,6 +1,6 @@
-# otueke-api
+# 007resort-api
 
-Backend API for the **Otueke Integrated Facility Operations Platform** — a multi-facility property
+Backend API for the **007 Resort & Spa Integrated Facility Operations Platform** — a multi-facility property
 system covering POS, orders, kitchen display (KDS), inventory, bookings, tickets, memberships and
 staff authentication, designed to run **local-first on each site with cloud sync**.
 
@@ -9,11 +9,11 @@ staff authentication, designed to run **local-first on each site with cloud sync
 
 ## The API is the brain
 
-- `otueke-api` owns **all business rules** and is the **only** component that talks to MySQL.
+- `007resort-api` owns **all business rules** and is the **only** component that talks to MySQL.
 - Clients (POS desktop, KDS, admin web, booking web, mobile) are thin: they call the API and render
   what it returns. **Clients must not reimplement business rules** (pricing, tax, permissions,
   stock, entitlements, etc.).
-- The same binary runs in two roles, selected by `Otueke:DeploymentMode`:
+- The same binary runs in two roles, selected by `R007:DeploymentMode`:
   - **Site** — on-premises server at the facility with its own MySQL 8.4; keeps operating when the
     internet is down.
   - **Cloud** — central instance for cross-site sync, reporting and remote administration.
@@ -29,16 +29,16 @@ staff authentication, designed to run **local-first on each site with cloud sync
 ## Repository layout
 
 ```
-Otueke.sln
+R007.sln
 src/
-  Otueke.Api/             ASP.NET Core host: endpoints, composition root, configuration
-  Otueke.Contracts/       Public API DTOs (may be consumed by first-party clients)
-  Otueke.SharedKernel/    Minimal shared primitives (IClock, Result/Error)
-  Otueke.Infrastructure/  Persistence & integrations (placeholder) — see its README for DB rules
+  R007.Api/             ASP.NET Core host: endpoints, composition root, configuration
+  R007.Contracts/       Public API DTOs (may be consumed by first-party clients)
+  R007.SharedKernel/    Minimal shared primitives (IClock, Result/Error)
+  R007.Infrastructure/  Persistence & integrations (placeholder) — see its README for DB rules
   Modules/                Planned business modules (README only for now)
 tests/
-  Otueke.UnitTests/         xUnit unit tests
-  Otueke.IntegrationTests/  xUnit + WebApplicationFactory smoke tests
+  R007.UnitTests/         xUnit unit tests
+  R007.IntegrationTests/  xUnit + WebApplicationFactory smoke tests
 db/migrations/            Authoritative schema migrations (tooling pending ADR)
 .github/                  CI (build/test + gitleaks secret scan), PR template
 ```
@@ -56,17 +56,17 @@ Configuration comes from `appsettings.json` → `appsettings.{Environment}.json`
 
 ```bash
 # Local secrets (stored outside the repo)
-dotnet user-secrets --project src/Otueke.Api set "ConnectionStrings:Otueke" "Server=localhost;Database=otueke;User ID=otueke_app;Password=..."
+dotnet user-secrets --project src/R007.Api set "ConnectionStrings:R007" "Server=localhost;Database=r007;User ID=r007_app;Password=..."
 
 # or environment variables (see .env.example for the full list)
-export ConnectionStrings__Otueke="..."
-export Otueke__DeploymentMode=Site
+export ConnectionStrings__R007="..."
+export R007__DeploymentMode=Site
 ```
 
 ## Running
 
 ```bash
-dotnet run --project src/Otueke.Api --launch-profile http
+dotnet run --project src/R007.Api --launch-profile http
 ```
 
 - `GET http://localhost:5080/health/live` — liveness (process up)
@@ -88,8 +88,8 @@ CI (`.github/workflows/ci.yml`) restores, builds in Release and runs all tests o
 
 | Key | Env var | Default | Notes |
 |---|---|---|---|
-| `Otueke:DeploymentMode` | `Otueke__DeploymentMode` | `Site` | `Site` or `Cloud` |
-| `ConnectionStrings:Otueke` | `ConnectionStrings__Otueke` | `""` | MySQL 8.4 connection string — secret store only |
+| `R007:DeploymentMode` | `R007__DeploymentMode` | `Site` | `Site` or `Cloud` |
+| `ConnectionStrings:R007` | `ConnectionStrings__R007` | `""` | MySQL 8.4 connection string — secret store only |
 | `Serilog:MinimumLevel:Default` | `Serilog__MinimumLevel__Default` | `Information` | Log level |
 | `ASPNETCORE_ENVIRONMENT` | — | `Production` | `Development` enables OpenAPI/Scalar UI |
 | `ASPNETCORE_URLS` | — | — | e.g. `http://+:5080` |
@@ -101,4 +101,4 @@ Signing keys, sync credentials and other secrets are provided via the secret sto
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, commits, money/time/ID rules, API and audit
 conventions. Architecture decisions and platform-wide docs live in
-[prinzderick/otueke-docs](https://github.com/prinzderick/otueke-docs).
+[prinzderick/007resort-docs](https://github.com/prinzderick/007resort-docs).

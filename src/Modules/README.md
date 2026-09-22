@@ -26,8 +26,8 @@ under review.
 
 ```
 src/Modules/<Name>/
-  Otueke.Modules.<Name>/            # domain + application + endpoints (internal by default)
-  Otueke.Modules.<Name>.Contracts/  # integration events / public module API (optional)
+  R007.Modules.<Name>/            # domain + application + endpoints (internal by default)
+  R007.Modules.<Name>.Contracts/  # integration events / public module API (optional)
 ```
 
 ## Rules

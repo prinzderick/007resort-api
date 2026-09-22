@@ -1,4 +1,4 @@
-# Contributing to otueke-api
+# Contributing to 007resort-api
 
 ## Workflow
 
@@ -15,7 +15,7 @@
 - **The API is the brain.** Business rules live in the API modules; clients stay thin.
 - This repo is the **only owner of the MySQL schema**; see `db/migrations/README.md`.
 - Modules communicate through public contracts/integration events, not each other's internals.
-- **DTOs never expose entities.** Public request/response types live in `Otueke.Contracts`.
+- **DTOs never expose entities.** Public request/response types live in `R007.Contracts`.
 - Breaking API changes require a new API version (`/api/v2`).
 - Errors are returned as RFC 7807 `ProblemDetails` with stable error codes.
 
