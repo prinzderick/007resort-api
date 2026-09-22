@@ -14,12 +14,18 @@
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Serilog.Formatting.Compact" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\R007.Contracts\R007.Contracts.csproj" />
     <ProjectReference Include="..\R007.SharedKernel\R007.SharedKernel.csproj" />
     <ProjectReference Include="..\R007.Infrastructure\R007.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\R007.Modules.Organization\R007.Modules.Organization.csproj" />
+    <ProjectReference Include="..\Modules\R007.Modules.Identity\R007.Modules.Identity.csproj" />
+    <ProjectReference Include="..\Modules\R007.Modules.Devices\R007.Modules.Devices.csproj" />
+    <ProjectReference Include="..\Modules\R007.Modules.Audit\R007.Modules.Audit.csproj" />
   </ItemGroup>
 
 </Project>

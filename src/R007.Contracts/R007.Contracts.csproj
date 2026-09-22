@@ -4,4 +4,11 @@
     <RootNamespace>R007.Contracts</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Needed only for the shared authorization-policy primitives (PermissionRequirement),
+         which are plain, framework-level types (Microsoft.AspNetCore.Authorization), not web-app
+         specific. Every module already takes this same FrameworkReference. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

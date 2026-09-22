@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>R007.Modules.Organization</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\R007.Contracts\R007.Contracts.csproj" />
+    <ProjectReference Include="..\..\R007.SharedKernel\R007.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\R007.Infrastructure\R007.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
