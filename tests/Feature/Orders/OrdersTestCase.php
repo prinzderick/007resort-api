@@ -23,6 +23,8 @@ abstract class OrdersTestCase extends TestCase
 
     protected function token(string $user): string
     {
+        $this->flushHeaders();
+
         return $this->tokens[$user] ??= $this->postJson('/api/v1/auth/staff/login', ['username' => $user, 'password' => TestData::PASSWORD])->json('accessToken');
     }
 
@@ -30,6 +32,8 @@ abstract class OrdersTestCase extends TestCase
     protected function api(string $user, string $method, string $uri, array $body = [], array $headers = []): TestResponse
     {
         $headers += ['Idempotency-Key' => 'k-'.Str::random(24)];
+
+        $this->flushHeaders(); // withHeaders() is sticky on the test case: never leak If-Match / step-up tokens into the next call
 
         return $this->withToken($this->token($user))->withHeaders($headers)->json($method, '/api/v1'.$uri, $body);
     }
@@ -56,5 +60,21 @@ abstract class OrdersTestCase extends TestCase
     protected function send(string $orderId, string $etag, string $user = 'waiter'): TestResponse
     {
         return $this->api($user, 'POST', "/orders/{$orderId}/send", [], ['If-Match' => $etag]);
+    }
+
+    /** Supervisor (or anyone) authenticates on the caller's device: returns a single-use X-Step-Up-Token for a permission. */
+    protected function stepUp(string $caller, string $approver, string $permission, ?string $entityId = null): string
+    {
+        return $this->withToken($this->token($caller))->postJson('/api/v1/auth/staff/step-up', array_filter([
+            'credentialType' => 'PASSWORD', 'identifier' => $approver, 'secret' => TestData::PASSWORD, 'permission' => $permission, 'entityId' => $entityId,
+        ]))->assertOk()->json('stepUpToken');
+    }
+
+    /** Sent order (lines routed) for the waiter; returns the SENT order response. */
+    protected function sent(array $lines = ['jollof' => 1, 'chapman' => 1], string $table = 'T1'): TestResponse
+    {
+        $d = $this->draft($lines, 'waiter', $table);
+
+        return $this->send($d->json('id'), $this->etag($d))->assertOk();
     }
 }

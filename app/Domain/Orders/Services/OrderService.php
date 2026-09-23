@@ -371,7 +371,7 @@ final class OrderService
             $paid = bccomp($order->amount_paid, $order->total, 4) >= 0 && bccomp($order->total, '0', 4) > 0;
             $upd = ['status' => 'SERVED', 'served_at' => $now, 'row_version' => $order->row_version + 1];
             if ($paid) { // pay-first: already covered, the serve completes the order
-                $upd += ['status' => 'SETTLED', 'settled_at' => $order->settled_at ?? $now];
+                $upd = ['status' => 'SETTLED', 'settled_at' => $order->settled_at ?? $now] + $upd;
             }
             DB::table('order')->where('id', $order->id)->update($upd);
             $fresh = $this->find($orderId);
