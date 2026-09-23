@@ -46,6 +46,11 @@ Login body: `{"username": "...", "password": "..."}` **or** `{"username": "...",
 `/api/v1`, camelCase JSON, ISO-8601 UTC, money as decimal strings, `application/problem+json` errors with stable `code`, cursor pagination
 (`?limit=&cursor=` -> `{data, page:{nextCursor,hasMore,limit}}`), `Idempotency-Key` on non-idempotent mutations. Details: [docs/MODULES.md](docs/MODULES.md).
 
+### Sync engine (Local <-> Cloud)
+
+Outbox publisher, inbox receiver + applier registry, Cloud->Local pull, heartbeat/site availability, conflicts, IT admin endpoints:
+[docs/sync-engine.md](docs/sync-engine.md). Run both nodes on one laptop with `composer two-node`; sync tests: `vendor/bin/phpunit -c phpunit.sync.xml`.
+
 ## Configuration
 
 See `.env.example` (placeholders only — never commit real secrets). Key variables: `APP_NODE`, `SITE_ID`, `DB_*`, `REDIS_*`,

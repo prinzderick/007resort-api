@@ -111,7 +111,8 @@ DB::transaction(function () use ($order, $facilityId) {
 ```
 - `Audit::record` = append-only, SHA-256 hash-chained (`audit_log`). Values are arrays; money as strings. `Audit::verifyChain()` recomputes the chain.
   Writers are serialised by a row lock on `audit_chain_head` (tail-row locking deadlocks — see ConcurrencyTest).
-- `Outbox::record` writes `outbox_event` (event types: `architecture/sync/event-catalogue.md`). The Sync module drains it.
+- `Outbox::record` writes `outbox_event` (event types: `architecture/sync/event-catalogue.md`). The Sync module drains it. To **receive** an event type
+  from the other node, register a `SyncApplier` from your provider (`callAfterResolving(SyncApplierRegistry::class, ...)`) — see [sync-engine.md](sync-engine.md).
 - Audit every sensitive action (`architecture/06`): voids/discounts/overrides/refunds/adjustments/role & device changes/login.
 
 ## Scarce resources and concurrency (stock, slots, tickets, payments, checkouts)

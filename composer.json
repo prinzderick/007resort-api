@@ -65,6 +65,10 @@
         ],
         "fix": [
             "vendor/bin/pint"
+        ],
+        "two-node": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan r007:two-node"
         ]
     },
     "extra": {

@@ -79,3 +79,52 @@ paths:
     get: { security: [{ bearer: [] }], summary: 'Audit log (permission audit.view), cursor paginated', responses: { '200': { description: OK } } }
   /audit/verify:
     get: { security: [{ bearer: [] }], summary: Recompute the audit hash chain (permission audit.view), responses: { '200': { description: '{valid, rowsChecked, brokenAtSeq, reason, tailHash}' } } }
+  /sync/inbox:
+    post:
+      summary: Node-to-node. Receive pushed sync events (node credential bearer). Per-event result; at-least-once delivery, exactly-once effect (dedup on eventId).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [events], properties: { events: { type: array, items: { type: object, required: [eventId, eventType, entityType, entityId, entityVersion, sourceNode, occurredAt, payload] } } } } } } }
+      responses:
+        '200': { description: '{results:[{eventId, result: APPLIED|DUPLICATE|CONFLICT|DEFERRED|FAILED, detail?}]}' }
+        '401': { description: invalid_node_token }
+        '403': { description: node_mismatch | node_site_mismatch }
+        '404': { description: sync_inbox_disabled (Local does not accept pushes) }
+        '422': { description: validation_failed }
+        '429': { description: too_many_requests }
+  /sync/pull:
+    get:
+      summary: Node-to-node. Serve queued events to the puller (Local polls Cloud). Un-acked events are re-served after the lease.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: siteId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: '{items:[SyncEvent], nextCursor}' }
+        '401': { description: invalid_node_token }
+  /sync/pull/ack:
+    post:
+      summary: Node-to-node (contract extension). Acknowledge served events with the per-event outcome.
+      responses: { '200': { description: '{acknowledged:n}' }, '401': { description: invalid_node_token } }
+  /sync/heartbeat:
+    post:
+      summary: Node-to-node. Local heartbeat (nodeId = site UUID). Cloud upserts site_health; sentAt must be within the skew window.
+      responses: { '200': { description: '{ackAt, peerReachable, commandsPending, serverVersion}' }, '401': { description: invalid_node_token }, '422': { description: heartbeat_clock_skew | validation_failed } }
+  /sync/status:
+    get: { security: [{ bearer: [] }], summary: 'Sync/outbox status (permission config.manage)', responses: { '200': { description: 'SyncStatus (+ openConflicts, lastError, sites[])' } } }
+  /sync/conflicts:
+    get: { security: [{ bearer: [] }], summary: 'List sync conflicts (config.manage); filters status, category, entityType; cursor paginated', responses: { '200': { description: OK } } }
+  /sync/conflicts/{id}:
+    get: { security: [{ bearer: [] }], summary: 'One conflict with both versions/payloads', responses: { '200': { description: OK }, '404': { description: conflict_not_found } } }
+  /sync/conflicts/{id}/resolve:
+    post: { security: [{ bearer: [] }], summary: 'Record the human resolution (KEEP_LOCAL|MANUAL|DISMISSED + note). Idempotent, audited. Never force-applies the incoming event.', responses: { '200': { description: OK }, '409': { description: conflict_already_resolved } } }
+  /sync/conflicts/{id}/reprocess:
+    post: { security: [{ bearer: [] }], summary: 'Re-run the applier for the conflicting event; auto-resolves as REPROCESSED when it now applies. Audited.', responses: { '200': { description: '{outcome, conflict}' } } }
+  /sync/outbox:
+    get: { security: [{ bearer: [] }], summary: 'Outbox events (filter status, eventType), newest first', responses: { '200': { description: OK } } }
+  /sync/outbox/{id}/retry:
+    post: { security: [{ bearer: [] }], summary: 'Re-queue a terminal FAILED outbox event. Audited.', responses: { '200': { description: OK }, '409': { description: outbox_event_not_retryable } } }
+  /sync/outbox/replay-failed:
+    post: { security: [{ bearer: [] }], summary: 'Re-queue every FAILED outbox event and reprocess every FAILED inbox event. Audited.', responses: { '200': { description: '{outboxRequeued, inbox:{reprocessed, applied}}' } } }
+  /sync/inbox-events:
+    get: { security: [{ bearer: [] }], summary: 'Inbox events (filter result=PENDING|APPLIED|CONFLICT|FAILED)', responses: { '200': { description: OK } } }
+  /sync/inbox-events/{id}/reprocess:
+    post: { security: [{ bearer: [] }], summary: 'Reprocess one stored inbox event. Audited.', responses: { '200': { description: '{eventId, result, detail?}' } } }
