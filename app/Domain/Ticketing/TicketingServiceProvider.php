@@ -10,6 +10,7 @@ use App\Domain\Ticketing\Services\DbOrderLineSource;
 use App\Domain\Ticketing\Services\InventoryRentalStockHook;
 use App\Domain\Ticketing\Services\NullRentalStockHook;
 use App\Domain\Ticketing\Services\QrTokens;
+use App\Domain\Ticketing\Sync\TicketingEventApplier;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +28,10 @@ class TicketingServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Sync module integration: inbox appliers for the other node's ticketing events.
+        $this->callAfterResolving('App\\Domain\\Sync\\Services\\SyncApplierRegistry', function ($registry): void {
+            $registry->register(TicketingEventApplier::EVENT_TYPES, TicketingEventApplier::class);
+        });
         // Inventory's rental ledger (pooled quantities) replaces the no-op hook once that module is installed; bound after every provider registered.
         $this->app->booted(function (): void {
             if (interface_exists(RentalGateway::class)) {

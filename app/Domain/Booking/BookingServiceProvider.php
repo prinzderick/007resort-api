@@ -13,8 +13,10 @@ use App\Domain\Booking\Services\BookingRules;
 use App\Domain\Booking\Services\ConfigConnectivityProbe;
 use App\Domain\Booking\Services\NullCloudBookingAuthority;
 use App\Domain\Booking\Services\PaymentsBookingGateway;
+use App\Domain\Booking\Services\SyncConnectivityProbe;
 use App\Domain\Booking\Services\UnboundPaymentGateway;
 use App\Domain\Booking\Services\UnlinkedPaymentGateway;
+use App\Domain\Booking\Sync\BookingEventApplier;
 use App\Domain\Orders\Services\OrderService;
 use App\Domain\Payments\Contracts\PayableSubjectResolver;
 use App\Domain\Payments\Services\PaymentService;
@@ -59,6 +61,15 @@ class BookingServiceProvider extends ServiceProvider
         foreach (['App\\Domain\\Payments\\Events\\PaymentCaptured', 'App\\Domain\\Orders\\Events\\OrderSettled'] as $event) {
             Event::listen($event, [ConfirmBookingsForPaidOrder::class, 'handle']);
         }
+        // Sync module integration (referenced by name; absent on branches without Sync): inbox appliers + heartbeat-backed connectivity.
+        $this->callAfterResolving('App\\Domain\\Sync\\Services\\SyncApplierRegistry', function ($registry): void {
+            $registry->register(BookingEventApplier::EVENT_TYPES, BookingEventApplier::class);
+        });
+        $this->app->booted(function (): void {
+            if (class_exists('App\\Domain\\Sync\\Services\\SyncState')) {
+                $this->app->bind(ConnectivityProbe::class, SyncConnectivityProbe::class);
+            }
+        });
         $this->app->booted(function (): void {
             if (interface_exists(PayableSubjectResolver::class)) {
                 $this->app->bind(PayableSubjectResolver::class, BookingPayableSubjectResolver::class); // after every provider: wins over the Null default

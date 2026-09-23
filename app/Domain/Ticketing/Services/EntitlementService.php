@@ -173,10 +173,7 @@ final class EntitlementService
         $entitlement = Entitlement::query()->findOrFail($id)->load('items');
         Audit::record('ticket.issue', 'Entitlement', $id, null, ['sourceKey' => $sourceKey, 'items' => $entitlement->items->count(), 'bookingId' => $bookingId, 'orderId' => $orderId],
             organizationId: $organizationId, siteId: $siteId);
-        Outbox::record('EntitlementIssued', 'Entitlement', $id, [
-            'entitlementId' => $id, 'bookingId' => $bookingId, 'orderId' => $orderId, 'holderName' => $holderName,
-            'items' => $entitlement->items->map(fn ($i) => ['id' => $i->id, 'kind' => $i->kind, 'name' => $i->name, 'qty' => (string) $i->qty])->all(),
-        ], organizationId: $organizationId, siteId: $siteId);
+        Outbox::record('EntitlementIssued', 'Entitlement', $id, app(EntitlementSyncApplier::class)->snapshot($entitlement), organizationId: $organizationId, siteId: $siteId);
 
         return $entitlement;
     }
