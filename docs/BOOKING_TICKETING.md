@@ -14,6 +14,9 @@ entitlement-tokens). Design: architecture/10, 11, 23 and `sync/booking-authority
 | Redemptions / scans are never rewritten | `redemption`, `validation_event` are append-only (no UPDATE/DELETE in code; production DB user should be REVOKEd them). |
 | Audit + outbox commit with the change | `Audit::record` / `Outbox::record` in the same transaction as every hold-confirm/cancel/reschedule/issue/redeem/release/return. |
 
+MySQL FK / CHECK constraint names are schema-wide: every constraint here is prefixed (`fk_bkslot_*`, `chk_tkt_item_*`, ...). `bookable_resource` is created by the Organization
+module when present; this module then only ALTERs in its booking columns (same final shape either way).
+
 Deadlocks / lock-wait timeouts surface as `409 concurrency_conflict` with `meta.retryable=true` (`Booking\Support\Tx`).
 
 ## Endpoints (all `/api/v1`, `auth:staff`, mutating = `Idempotency-Key`)
@@ -69,18 +72,30 @@ hold slot -> `POST /orders` (slot-fee product = `bookable_resource.product_id`, 
 Payments' `PaymentCaptured` (or Orders' `OrderSettled`) fires INSIDE the payment transaction -> `ConfirmBookingsForPaidOrder` confirms the booking and issues ONE QR
 (ACCESS + RENTAL + store GOODS items) and `IssueEntitlementsForPaidOrder` issues individual/combined TICKET entitlements for the order. All idempotent; a stale
 hold rolls the payment back (`hold_expired`). `PaymentCaptured{subjectType:'BOOKING'}` (Paystack) confirms the booking itself; `BookingPayableSubjectResolver` is bound when Payments' interface exists.
-Until Payments is bound, `POST /bookings/{id}/confirm {tenders}` uses `UnlinkedPaymentGateway` (dev/demo only, `BOOKING_PAYMENT_GATEWAY=unlinked`; production defaults to `payments` and refuses with 501 if none is bound).
+`POST /bookings/{id}/confirm {tenders, cashSessionId}` (contract path) uses `PaymentsBookingGateway` when Orders + Payments exist: the slot fee becomes an order (or the
+attached one is paid) and Payments captures the tenders (cash session, receipt, ledger); its `PaymentCaptured` confirms the booking in the same transaction. Requirements at the paying
+facility: `payment_timing = PAY_FIRST` (Reception counter) and, for cash, an open cash session. Without Payments the dev-only `UnlinkedPaymentGateway` is used
+(`BOOKING_PAYMENT_GATEWAY=auto|unlinked`; production without Payments refuses with 501).
 
-Inventory hooks: `Ticketing\Contracts\RentalStockHook::{rentalOut,rentalIn}` (no-op default, called inside the release/return transaction).
+Inventory hooks: `Ticketing\Contracts\RentalStockHook::{rentalOut,rentalIn}` (no-op default, called inside the release/return transaction); `InventoryRentalStockHook` moves pooled
+stock through Inventory's `RentalGateway` (RENTAL_OUT / RENTAL_IN via `product_stock_link` at the facility's stock location) when Inventory exists; DAMAGED/LOST returns do not restock.
+
+Sync module (when present): `BookingEventApplier` / `TicketingEventApplier` are registered with `SyncApplierRegistry` for `OnlineBookingCreated`, `BookingConfirmedLocally`,
+`OnlineBookingCancelled`, `BookingCancelled`, `BookingRescheduled`, `EntitlementIssued` (full snapshot incl. the QR token), `TicketRedeemed`, `RentalReleased`, `RentalReturned`
+(unit collisions => BOOKING conflict, unknown booking => DEFERRED); `SyncConnectivityProbe` answers the policy from `SyncState::peerReachable()` / `SiteAvailability`.
+Still to build in Sync: a Local->Cloud synchronous endpoint + client implementing `CloudBookingAuthority::hold` (delegation while online).
 
 ## Config / env
 
-`BOOKING_TIMEZONE` (Africa/Lagos), `BOOKING_CLOUD_ENABLED`, `BOOKING_PAYMENT_GATEWAY`, `TICKET_QR_KEY`, `TICKET_STORE_FACILITY_CODE` (SPORTS-STORE).
+`BOOKING_TIMEZONE` (Africa/Lagos), `BOOKING_CLOUD_ENABLED`, `BOOKING_PAYMENT_GATEWAY` (`auto`), `TICKET_QR_KEY`, `TICKET_STORE_FACILITY_CODE` (SPORTS-STORE).
 Scheduler: `booking:expire-holds` every minute (also cleared lazily when a hold is what blocks a new request).
 
 ## Demo data
 
-`php artisan r007:demo-seed` (idempotent; refuses in production): facilities RECEPTION / SPORTS-ARENA > SPORTS-ENTRANCE / SPORTS-STORE / POOL, resources Football Pitch,
+Integrated build (Organization/Identity/Devices/Catalog demo framework): `Booking\Demo\BookingDemoSeeder` (priority 110) enriches THEIR facilities/resources (Football Pitch 1, Lawn
+Tennis Court 1-2, Basketball Court 1 with hourly prices; Event Hall as per-seat capacity with an offline reserve), adds slot-fee / pool-ticket / rental / store-goods products, pool
+ticket types, the Reception `payment_timing=PAY_FIRST` rule and two sample QR entitlements; it adds no staff/roles (sign in as cashier1 at Reception, supervisor1/manager1 at the
+Sports Entrance and Pool gate, storekeeper1 at the Sports Store; PIN 1234). Standalone (this module alone) `php artisan r007:demo-seed` (idempotent; refuses in production): facilities RECEPTION / SPORTS-ARENA > SPORTS-ENTRANCE / SPORTS-STORE / POOL, resources Football Pitch,
 Lawn Tennis Court 1-2, Basketball Court (hourly, 07:00-21:00), Tennis Clinic (8 seats, whole-clinic allowed, 2 offline-reserve seats), pool ticket types (adult/child), Catalog
 products (slot fees, pool tickets, rentals, store goods) when the Catalog tables exist, users `reception` / `entrance` / `store` / `pool` (dev password `Demo-Pass-007!`),
 and two sample entitlements whose QR tokens are printed.
