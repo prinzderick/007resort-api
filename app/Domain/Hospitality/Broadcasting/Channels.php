@@ -19,7 +19,12 @@ final class Channels
     public static function register(): void
     {
         Broadcast::routes(['prefix' => 'api/v1', 'middleware' => ['api', 'auth:staff']]);
+        self::define();
+    }
 
+    /** Channel authorisation callbacks (separate from the route so tests can re-bind them after switching the broadcaster). */
+    public static function define(): void
+    {
         Broadcast::channel('kds.station.{stationId}', function (UserAccount $user, string $stationId): bool {
             if (! Ids::isUuid($stationId)) {
                 return false;

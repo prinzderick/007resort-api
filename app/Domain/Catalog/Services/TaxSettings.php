@@ -18,7 +18,7 @@ final class TaxSettings
     {
         $r = DB::table('organization_tax_setting')->where('organization_id', Ids::toBinary($organizationId))->first();
         if ($r === null) {
-            return ['vatEnabled' => false, 'vatRatePercent' => self::DEFAULT_RATE, 'pricesTaxInclusive' => true, 'vatNumber' => null, 'rowVersion' => 0];
+            return ['vatEnabled' => false, 'vatRatePercent' => '7.5', 'pricesTaxInclusive' => true, 'vatNumber' => null, 'rowVersion' => 0];
         }
 
         return [
