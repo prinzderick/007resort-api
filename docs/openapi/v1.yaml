@@ -2933,6 +2933,63 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/TooMany'
+  /cash-sessions/{cashSessionId}/movements:
+    post:
+      operationId: recordCashMovement
+      tags:
+      - Cash sessions
+      summary: Record a paid-in, paid-out or safe drop against an open session
+      x-permission: cash_movement.record
+      description: |-
+        Additive to v1. Movements are immutable ledger rows and change `expectedCash` (paid-in +, paid-out -, drop -). Only the cashier who owns the OPEN session may record them.
+
+        Required permission: `cash_movement.record`.
+      parameters:
+      - name: cashSessionId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                  - PAID_IN
+                  - PAID_OUT
+                  - DROP
+                amount:
+                  $ref: '#/components/schemas/Money'
+                reason:
+                  type: string
+                  minLength: 3
+              required:
+              - kind
+              - amount
+              - reason
+      responses:
+        '201':
+          description: The updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /receipts/{receiptId}:
     get:
       operationId: getReceipt
@@ -6556,6 +6613,9 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Timestamp'
           - type: 'null'
+        unallocatedAmount:
+          $ref: '#/components/schemas/Money'
+          description: Additive. Online money captured for an order that was settled another way in the meantime; needs a refund decision.
       required:
       - id
       - facilityId
@@ -6619,6 +6679,14 @@ components:
           - type: 'null'
         createdAt:
           $ref: '#/components/schemas/Timestamp'
+        tenderType:
+          $ref: '#/components/schemas/TenderType'
+        providerActionRequired:
+          type: boolean
+          description: Additive. True for provider (Paystack) payments - finance completes the money-out in the provider dashboard.
+        approval:
+          $ref: '#/components/schemas/Approval'
+          description: Present on a `202` PENDING_APPROVAL response.
       required:
       - id
       - paymentId
@@ -6740,6 +6808,22 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Timestamp'
           - type: 'null'
+        currency:
+          type: string
+          enum:
+          - NGN
+        totals:
+          type: object
+          description: 'Additive. System totals behind expectedCash (computed live while OPEN, snapshot once CLOSED): cashSales, cashRefunds, cashReversals, paidIn, paidOut, drops and nonCash (per tender).'
+          additionalProperties: true
+        note:
+          type:
+          - string
+          - 'null'
+        closedByStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
       required:
       - id
       - facilityId
@@ -6855,6 +6939,32 @@ components:
           type: integer
         footer:
           type: string
+        businessName:
+          type: string
+        terminal:
+          type:
+          - string
+          - 'null'
+          description: Device (till) name that issued the receipt.
+        amountPaid:
+          $ref: '#/components/schemas/Money'
+        balanceDue:
+          $ref: '#/components/schemas/Money'
+        vatRegistered:
+          type: boolean
+          description: Snapshot of organization VAT status at issue time (ADR-0011). VAT line and vatNumber are only meaningful when true.
+        vatRatePercent:
+          type:
+          - string
+          - 'null'
+        duplicate:
+          type: boolean
+          description: True on a reprint (`?reprint=true`); the printed copy must carry a DUPLICATE marker.
+        printLines:
+          type: array
+          items:
+            type: string
+          description: Pre-rendered monospace text lines for 80mm printers (48 columns; RECEIPT_COLUMNS). Clients may ignore it and render natively.
       required:
       - id
       - number
