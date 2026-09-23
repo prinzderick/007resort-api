@@ -40,7 +40,9 @@ final class KdsService
     {
         $q = DB::table('kds_station')->where('organization_id', Ids::toBinary(Tenant::organizationId()))->where('is_active', 1);
         if ($fid = $request->query('facilityId')) {
-            $q->where('facility_unit_id', Ids::toBinary($fid));
+            // stations located at the facility PLUS stations elsewhere that prepare its orders (Restaurant -> Main Kitchen)
+            $q->where(fn ($w) => $w->where('facility_unit_id', Ids::toBinary($fid))
+                ->orWhereIn('id', DB::table('prep_route_station')->where('facility_unit_id', Ids::toBinary($fid))->select('kds_station_id')));
         }
         $page = CursorPage::paginate($q, $request);
         $can = [];
@@ -69,16 +71,27 @@ final class KdsService
     public function get(string $ticketId): object
     {
         $t = DB::table('prep_ticket')->where('id', Ids::toBinary($ticketId))->first() ?? throw ApiProblem::notFound('not_found', 'Prep ticket not found.');
-        Authz::require('prep_ticket.view', Ids::fromBinary($t->facility_unit_id));
+        $this->authorize('prep_ticket.view', $t);
 
         return $t;
+    }
+
+    /** A ticket is visible/workable to staff scoped to the station's facility (the kitchen) OR to the ordering facility. */
+    private function authorize(string $permission, object $ticket): void
+    {
+        $order = Ids::fromBinary($ticket->facility_unit_id);
+        $stationFacility = DB::table('kds_station')->where('id', $ticket->station_id)->value('facility_unit_id');
+        if (Authz::can($permission, $order) || ($stationFacility !== null && Authz::can($permission, Ids::fromBinary($stationFacility)))) {
+            return;
+        }
+        throw ApiProblem::permissionDenied($permission);
     }
 
     /** @return array<string, mixed> ticket JSON */
     public function transition(string $ticketId, string $to, ?int $ifMatch, ?string $note = null): array
     {
         $pre = DB::table('prep_ticket')->where('id', Ids::toBinary($ticketId))->first() ?? throw ApiProblem::notFound('not_found', 'Prep ticket not found.');
-        Authz::require('prep_ticket.transition', Ids::fromBinary($pre->facility_unit_id));
+        $this->authorize('prep_ticket.transition', $pre);
 
         return DB::transaction(function () use ($to, $ifMatch, $pre) {
             $order = $this->orders->lock(Ids::fromBinary($pre->order_id)); // parent first

@@ -20,6 +20,7 @@ return new class extends Migration
         'table.manage' => 'Change table status, assignment and transfer orders between tables',
         'catalog.availability.manage' => 'Set per-facility product availability (86 an item)',
         'catalog.manage' => 'Create and edit catalog categories and products',
+        'report.view' => 'View operational reports',
     ];
 
     /** @var array<string, list<string>> role code => permissions */
@@ -29,7 +30,8 @@ return new class extends Migration
         'KITCHEN_STAFF' => ['catalog.availability.manage'],
         'CASHIER' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage'],
         'UNIT_SUPERVISOR' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage', 'catalog.availability.manage', 'prep_ticket.view', 'prep_ticket.transition'],
-        'MANAGER' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage', 'catalog.availability.manage', 'catalog.manage', 'prep_ticket.view', 'prep_ticket.transition'],
+        'ACCOUNTANT' => ['report.view'],
+        'MANAGER' => ['report.view', 'order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage', 'catalog.availability.manage', 'catalog.manage', 'prep_ticket.view', 'prep_ticket.transition'],
     ];
 
     public function up(): void
