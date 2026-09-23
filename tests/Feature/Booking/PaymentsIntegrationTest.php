@@ -64,7 +64,11 @@ class PaymentsIntegrationTest extends TestCase
         $this->assertSame('HELD', DB::table('booking')->value('status'));
         $this->assertSame(0, DB::table('payment')->count());
 
-        $ok = $this->postJson("/api/v1/bookings/{$held['id']}/confirm", ['tenders' => [['tenderType' => 'CASH', 'amount' => '5000.0000', 'tendered' => '10000.0000']]], $h($held))->assertOk()
+        // cash needs an open drawer at Reception (Payments' rule)
+        $this->postJson("/api/v1/bookings/{$held['id']}/confirm", ['tenders' => [['tenderType' => 'CASH', 'amount' => '5000.0000']]], $h($held))->assertStatus(409)->assertJsonPath('code', 'cash_session_required');
+        $session = $this->postJson('/api/v1/cash-sessions', ['facilityId' => $this->w['reception']->id, 'openingFloat' => '0.0000'], $this->idem($this->token))->assertStatus(201)->json('id');
+
+        $ok = $this->postJson("/api/v1/bookings/{$held['id']}/confirm", ['tenders' => [['tenderType' => 'CASH', 'amount' => '5000.0000', 'tendered' => '10000.0000']], 'cashSessionId' => $session], $h($held))->assertOk()
             ->assertJsonPath('status', 'CONFIRMED')->assertJsonPath('amountPaid', '5000.0000')->json();
         $this->assertNotNull($ok['orderId']);
         $this->assertNotNull($ok['entitlementId']);
