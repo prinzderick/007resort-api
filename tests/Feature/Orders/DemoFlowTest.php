@@ -85,6 +85,10 @@ class DemoFlowTest extends TestCase
         $t = $this->as('kitchen1', 'GET', '/prep-tickets/'.$tk['id']);
         $a = $this->as('kitchen1', 'POST', '/prep-tickets/'.$tk['id'].'/transition', ['to' => 'ACCEPTED'], ['If-Match' => $t->headers->get('ETag')])->assertOk();
         $r = $this->as('kitchen1', 'POST', '/prep-tickets/'.$tk['id'].'/transition', ['to' => 'READY'], ['If-Match' => $a->headers->get('ETag')])->assertOk();
+        // RFC 7807: `status` stays the HTTP status (int); the ticket's own state is `currentStatus`.
+        $this->as('kitchen1', 'POST', '/prep-tickets/'.$tk['id'].'/transition', ['to' => 'ACCEPTED'], ['If-Match' => $r->headers->get('ETag')])
+            ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid')->assertJsonPath('status', 409)
+            ->assertJsonPath('currentStatus', 'READY')->assertJsonPath('allowed', ['DISPENSED']);
         $this->assertSame('READY', $r->json('status'));
         // the supervisor works the bar station
         $btk = $this->as('supervisor1', 'GET', "/kds/stations/{$bar}/tickets")->json('items.0');
