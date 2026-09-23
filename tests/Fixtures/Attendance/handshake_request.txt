@@ -1,0 +1,1 @@
+GET /iclock/cdata?SN=ZK-TEST-001&options=all&pushver=2.4.1&language=69 HTTP/1.1

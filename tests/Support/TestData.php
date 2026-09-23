@@ -96,7 +96,7 @@ final class TestData
         $ledger = array_map(fn ($r) => $r->t, DB::select(
             "SELECT DISTINCT EVENT_OBJECT_TABLE AS t FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND EVENT_MANIPULATION = 'DELETE'"
         ));
-        foreach (DB::select('SHOW TABLES') as $row) {
+        foreach (DB::select("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'") as $row) {
             $t = array_values((array) $row)[0];
             if (! in_array($t, ['migrations', 'capability_type', 'role', 'permission', 'role_permission', 'audit_chain_head'], true)) {
                 in_array($t, $ledger, true) ? DB::statement("TRUNCATE TABLE `{$t}`") : DB::table($t)->delete();
