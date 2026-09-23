@@ -6,7 +6,11 @@ use App\Domain\Booking\Contracts\CloudBookingAuthority;
 use App\Domain\Booking\Contracts\CloudUnreachableException;
 use App\Domain\Booking\Contracts\ConnectivityProbe;
 use App\Domain\Booking\Models\BookableResource;
+use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Services\BookingAuthorityPolicy;
+use App\Domain\Booking\Services\BookingService;
+use App\Domain\Booking\Services\BookingSyncApplier;
+use App\Domain\Booking\Services\NullCloudBookingAuthority;
 use App\Domain\Booking\Support\HoldCommand;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
@@ -48,9 +52,9 @@ class BookingAuthorityTest extends TestCase
                 return $this->age;
             }
         });
-        $this->app->instance(CloudBookingAuthority::class, $cloud ?? new \App\Domain\Booking\Services\NullCloudBookingAuthority);
+        $this->app->instance(CloudBookingAuthority::class, $cloud ?? new NullCloudBookingAuthority);
         $this->app->forgetInstance(BookingAuthorityPolicy::class);
-        $this->app->forgetInstance(\App\Domain\Booking\Services\BookingService::class);
+        $this->app->forgetInstance(BookingService::class);
     }
 
     private function res(string $strategy, int $capacity = 5, int $reserve = 2): BookableResource
@@ -172,11 +176,11 @@ class BookingAuthorityTest extends TestCase
         $this->assertSame('CLOUD', DB::table('booking')->where('id', Ids::toBinary($body['id']))->value('allocation_pool'));
         $this->assertSame(1, DB::table('slot_allocation')->count());
         // redelivery of the same snapshot is a no-op (idempotent inbox)
-        $snap = app(\App\Domain\Booking\Services\BookingSyncApplier::class)->snapshot(\App\Domain\Booking\Models\Booking::query()->findOrFail($body['id']));
-        app(\App\Domain\Booking\Services\BookingSyncApplier::class)->applySnapshot($snap);
+        $snap = app(BookingSyncApplier::class)->snapshot(Booking::query()->findOrFail($body['id']));
+        app(BookingSyncApplier::class)->applySnapshot($snap);
         $this->assertSame(1, DB::table('booking')->count());
         // cancelling from Cloud releases the local slot; a snapshot for an occupied unit is a conflict
-        app(\App\Domain\Booking\Services\BookingSyncApplier::class)->applyCancelled($body['id'], 'cloud cancel');
+        app(BookingSyncApplier::class)->applyCancelled($body['id'], 'cloud cancel');
         $this->assertSame(0, DB::table('slot_allocation')->count());
         $this->assertSame('CANCELLED', DB::table('booking')->where('id', Ids::toBinary($body['id']))->value('status'));
     }
@@ -224,10 +228,10 @@ class BookingAuthorityTest extends TestCase
         $cloudPolicy = app(BookingAuthorityPolicy::class);
         for ($i = 0; $i < 2; $i++) {
             $this->assertSame(1, $cloudPolicy->plan($r->fresh(), new HoldCommand($r->id, CarbonImmutable::parse($slot[0]), CarbonImmutable::parse($slot[1]), 1, false, null, 'ONLINE'))->unitLo);
-            app(\App\Domain\Booking\Services\BookingService::class)->hold(new HoldCommand($r->id, CarbonImmutable::parse($slot[0]), CarbonImmutable::parse($slot[1]), 1, false, null, 'ONLINE', $this->staffIdFor()));
+            app(BookingService::class)->hold(new HoldCommand($r->id, CarbonImmutable::parse($slot[0]), CarbonImmutable::parse($slot[1]), 1, false, null, 'ONLINE', $this->staffIdFor()));
         }
         try {
-            app(\App\Domain\Booking\Services\BookingService::class)->hold(new HoldCommand($r->id, CarbonImmutable::parse($slot[0]), CarbonImmutable::parse($slot[1]), 1, false, null, 'ONLINE', $this->staffIdFor()));
+            app(BookingService::class)->hold(new HoldCommand($r->id, CarbonImmutable::parse($slot[0]), CarbonImmutable::parse($slot[1]), 1, false, null, 'ONLINE', $this->staffIdFor()));
             $this->fail('third website booking must not get the reserve unit');
         } catch (ApiProblem $e) {
             $this->assertSame('slot_unavailable', $e->problemCode);

@@ -7,8 +7,8 @@ use App\Domain\Booking\Http\Presenters\Preconditions;
 use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Services\BookingService;
 use App\Domain\Booking\Support\HoldCommand;
-use App\Support\Http\ApiProblem;
 use App\Support\Api\Paged;
+use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
@@ -75,6 +75,7 @@ class BookingController
             $like = '%'.addcslashes($term, '%_\\').'%';
             $q->where(fn ($w) => $w->where('number', 'like', $like)->orWhere('customer_name', 'like', $like)->orWhere('customer_phone', 'like', $like));
         }
+
         return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'desc'), fn ($b) => BookingPresenter::booking($b));
     }
 
@@ -117,6 +118,14 @@ class BookingController
         $booking = $this->bookings->reschedule($this->id($bookingId), Preconditions::rowVersion($request), CarbonImmutable::parse($data['start'])->utc(), CarbonImmutable::parse($data['end'])->utc(), $data['reason'] ?? null);
 
         return $this->respond($booking);
+    }
+
+    /** POST /bookings/{id}/order — Reception flow: attach the order (slot fee + rentals + store items) that will pay for this hold. */
+    public function attachOrder(Request $request, string $bookingId): JsonResponse
+    {
+        $data = $request->validate(['orderId' => ['required', 'uuid']]);
+
+        return $this->respond($this->bookings->attachOrder($this->id($bookingId), Preconditions::rowVersion($request), strtolower($data['orderId'])));
     }
 
     private function id(string $id): string

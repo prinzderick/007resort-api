@@ -16,10 +16,12 @@ use App\Domain\Organization\Models\Site;
 use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Models\TicketType;
 use App\Domain\Ticketing\Services\EntitlementService;
+use App\Support\Ids;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Demo data for Sports Booking / Ticketing (Reception, Sports Entrance, Sports Store, Pool). Idempotent.
@@ -30,6 +32,7 @@ use Illuminate\Support\Facades\Hash;
  *              Tennis Clinic (per-seat capacity 8, whole-clinic allowed, 2 seats reserved for offline Reception).
  * Ticketing:   POOL-ADULT / POOL-CHILD ticket types (individual, single-use, valid the issue day).
  * Demo people: users reception / entrance / store / pool  (dev password below — NEVER use outside dev).
+ * Catalog:     (if the Catalog tables exist) slot-fee, pool-ticket, rental and store-goods products, linked to the above.
  * Samples:     two ready-made entitlements (arena booking + racket rental; pool ticket) whose QR tokens are printed.
  */
 class BookingDemoSeeder extends Seeder
@@ -94,6 +97,7 @@ class BookingDemoSeeder extends Seeder
             $this->person($t, 'store', $attendant, $store->id);
             $this->person($t, 'pool', $attendant, $pool->id);
 
+            $this->catalog($t, $reception, $store);
             $this->samples($t, $arena, $store, $pool);
         });
 
@@ -121,6 +125,47 @@ class BookingDemoSeeder extends Seeder
                 'organization_id' => $t['org'], 'site_id' => $t['site'], 'facility_unit_id' => $facilityId,
             ]);
         }
+    }
+
+    /**
+     * Sellable products for the Reception flow (only when the Catalog tables exist): slot fees (one per resource, linked via
+     * bookable_resource.product_id), pool tickets (linked via ticket_type.product_id), rentals and store goods.
+     */
+    private function catalog(array $t, FacilityUnit $reception, FacilityUnit $store): void
+    {
+        if (! Schema::hasTable('product') || ! Schema::hasTable('price_list')) {
+            return;
+        }
+        $org = Ids::toBinary($t['org']);
+        $cat = DB::table('product_category')->where('organization_id', $org)->where('name', 'Sports & Pool')->value('id') ?? tap(Ids::toBinary(Ids::uuid7()), fn ($id) => DB::table('product_category')->insert(['id' => $id, 'organization_id' => $org, 'name' => 'Sports & Pool', 'sort_order' => 90]));
+        $list = DB::table('price_list')->where('organization_id', $org)->where('is_default', 1)->value('id') ?? tap(Ids::toBinary(Ids::uuid7()), fn ($id) => DB::table('price_list')->insert(['id' => $id, 'organization_id' => $org, 'name' => 'Standard', 'is_default' => 1]));
+
+        $sell = function (string $sku, string $name, string $kind, string $price, bool $atStore = false) use ($org, $cat, $list, $reception, $store): string {
+            $id = DB::table('product')->where('organization_id', $org)->where('sku', $sku)->value('id');
+            if ($id === null) {
+                $id = Ids::toBinary(Ids::uuid7());
+                DB::table('product')->insert(['id' => $id, 'organization_id' => $org, 'category_id' => $cat, 'sku' => $sku, 'name' => $name, 'kind' => $kind]);
+                DB::table('price')->insert(['id' => Ids::toBinary(Ids::uuid7()), 'price_list_id' => $list, 'product_id' => $id, 'amount' => $price]);
+            }
+            foreach (array_filter([$reception->id, $atStore ? $store->id : null]) as $fac) {
+                DB::table('product_facility')->insertOrIgnore(['product_id' => $id, 'facility_unit_id' => Ids::toBinary($fac)]);
+            }
+
+            return Ids::fromBinary($id);
+        };
+
+        foreach (['FOOTBALL' => ['FEE-FOOTBALL', 'Football pitch (per hour)', '25000'], 'TENNIS-1' => ['FEE-TENNIS-1', 'Lawn tennis court 1 (per hour)', '5000'], 'TENNIS-2' => ['FEE-TENNIS-2', 'Lawn tennis court 2 (per hour)', '5000'],
+            'BASKETBALL' => ['FEE-BASKETBALL', 'Basketball court (per hour)', '8000'], 'TENNIS-CLINIC' => ['FEE-TENNIS-CLINIC', 'Tennis clinic (per seat)', '3000']] as $code => [$sku, $name, $price]) {
+            DB::table('bookable_resource')->where('site_id', Ids::toBinary($t['site']))->where('code', $code)->update(['product_id' => Ids::toBinary($sell($sku, $name, 'FEE', $price))]);
+        }
+        foreach (['POOL-ADULT' => ['Pool - Adult', '3000'], 'POOL-CHILD' => ['Pool - Child', '1500']] as $code => [$name, $price]) {
+            DB::table('ticket_type')->where('site_id', Ids::toBinary($t['site']))->where('code', $code)->update(['product_id' => Ids::toBinary($sell($code, $name, 'TICKET', $price))]);
+        }
+        $sell('RENTAL-RACKET', 'Tennis racket hire', 'RENTAL', '1500');
+        $sell('RENTAL-FOOTBALL', 'Football hire', 'RENTAL', '1000');
+        $sell('RENTAL-BASKETBALL', 'Basketball hire', 'RENTAL', '800');
+        $sell('GOODS-TENNIS-BALLS', 'Tennis balls (tube)', 'GOOD', '2500', atStore: true);
+        $sell('GOODS-SPORTS-DRINK', 'Sports drink', 'GOOD', '700', atStore: true);
     }
 
     /** Ready-made entitlements so Entrance/Store can be demoed before the Reception order flow exists. */

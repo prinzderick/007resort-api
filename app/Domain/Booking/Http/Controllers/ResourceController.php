@@ -3,12 +3,12 @@
 namespace App\Domain\Booking\Http\Controllers;
 
 use App\Domain\Booking\Http\Presenters\BookingPresenter;
-use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Models\Blackout;
+use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Services\AvailabilityService;
+use App\Support\Api\Paged;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
-use App\Support\Api\Paged;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\RequestContext;
@@ -34,6 +34,7 @@ class ResourceController
             }
             $q->where('facility_unit_id', strtolower($fac));
         }
+
         return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'asc'), fn ($r) => BookingPresenter::resource($r));
     }
 

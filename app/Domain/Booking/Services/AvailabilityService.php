@@ -2,8 +2,8 @@
 
 namespace App\Domain\Booking\Services;
 
-use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Models\Blackout;
+use App\Domain\Booking\Models\BookableResource;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Money\Money;

@@ -7,9 +7,10 @@ use App\Domain\Ticketing\Contracts\OrderLineSource;
 use App\Domain\Ticketing\Http\Presenters\EntitlementPresenter;
 use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Services\EntitlementService;
+use App\Domain\Ticketing\Services\OrderTicketing;
 use App\Domain\Ticketing\Services\RedemptionService;
-use App\Support\Http\ApiProblem;
 use App\Support\Api\Paged;
+use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
@@ -23,6 +24,7 @@ class EntitlementController
         private readonly EntitlementService $issuer,
         private readonly RedemptionService $redemptions,
         private readonly OrderLineSource $orders,
+        private readonly OrderTicketing $orderTickets,
     ) {}
 
     public function index(Request $request): array
@@ -40,6 +42,7 @@ class EntitlementController
                 $q->where($col, strtolower($f[$param]));
             }
         }
+
         return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'desc'), fn ($e) => EntitlementPresenter::entitlement($e));
     }
 
@@ -62,9 +65,15 @@ class EntitlementController
 
                 return response()->json(EntitlementPresenter::entitlement($ent), 201);
             }
-            $order = $this->orders->forOrder(strtolower($data['orderId'])) ?? throw ApiProblem::notFound('not_found', 'Order not found.');
-            $org = Tenant::organizationId() ?? throw ApiProblem::unauthenticated();
-            $list = $this->issuer->issueForOrderLines(strtolower($data['orderId']), $org, Tenant::siteId(), $order['lines'], $order['holderName']);
+            $orderId = strtolower($data['orderId']);
+            $order = $this->orders->forOrder($orderId) ?? throw ApiProblem::notFound('not_found', 'Order not found.');
+            if (($org = Tenant::organizationId()) !== null && $order['organizationId'] !== $org) {
+                throw ApiProblem::notFound('not_found', 'Order not found.');
+            }
+            if (! $order['fullyPaid']) {
+                throw ApiProblem::conflict('payment_state_invalid', 'Entitlements are issued only for a fully paid order.');
+            }
+            $list = $this->orderTickets->issueForPaidOrder($orderId);
             if ($list === []) {
                 throw ApiProblem::unprocessable('validation_failed', 'The order has no ticket or rental lines.');
             }

@@ -5,9 +5,13 @@ namespace Tests\Feature\Ticketing;
 use App\Domain\Ticketing\Contracts\RentalStockHook;
 use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Services\EntitlementService;
+use App\Domain\Ticketing\Services\RedemptionService;
 use App\Support\Audit\Audit;
+use App\Support\Http\ApiProblem;
 use App\Support\Ids;
+use App\Support\RequestContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\BookingHelpers;
 use Tests\Support\TestData;
@@ -312,15 +316,15 @@ class RedemptionTest extends TestCase
         $deviceId = Ids::uuid7();
         DB::table('device')->insert(['id' => Ids::toBinary($deviceId), 'organization_id' => Ids::toBinary($this->w['t']['org']), 'site_id' => Ids::toBinary($this->w['t']['site']), 'device_type' => 'TABLET', 'name' => 'Store tablet']);
         DB::table('device_binding')->insert(['id' => Ids::toBinary(Ids::uuid7()), 'device_id' => Ids::toBinary($deviceId), 'facility_unit_id' => Ids::toBinary($this->w['pool']->id)]);
-        $req = \Illuminate\Http\Request::create('/x');
-        $req->attributes->set(\App\Support\RequestContext::STAFF_ID, $staff->id);
-        $req->attributes->set(\App\Support\RequestContext::ORGANIZATION_ID, $this->w['t']['org']);
-        $req->attributes->set(\App\Support\RequestContext::SITE_ID, $this->w['t']['site']);
-        $req->attributes->set(\App\Support\RequestContext::DEVICE_ID, $deviceId);
+        $req = Request::create('/x');
+        $req->attributes->set(RequestContext::STAFF_ID, $staff->id);
+        $req->attributes->set(RequestContext::ORGANIZATION_ID, $this->w['t']['org']);
+        $req->attributes->set(RequestContext::SITE_ID, $this->w['t']['site']);
+        $req->attributes->set(RequestContext::DEVICE_ID, $deviceId);
         $this->app->instance('request', $req);
 
         $e = $this->ticket([$this->access(), ['kind' => 'RENTAL', 'name' => 'Racket', 'qty' => 1, 'facilityUnitId' => $this->w['store']->id]]);
-        $svc = app(\App\Domain\Ticketing\Services\RedemptionService::class);
+        $svc = app(RedemptionService::class);
 
         // the device is checked out at the POOL: ticket for the pool is VALID without passing facilityId; device id lands on the redemption
         $this->assertSame('VALID', $svc->redeem($e->qr_token)['result']);
@@ -330,7 +334,7 @@ class RedemptionTest extends TestCase
         try {
             $svc->release($e->id, [$e->items[1]->id]);
             $this->fail('expected facility_mismatch');
-        } catch (\App\Support\Http\ApiProblem $p) {
+        } catch (ApiProblem $p) {
             $this->assertSame('facility_mismatch', $p->problemCode);
         }
         $this->assertSame(0, DB::table('redemption')->where('action', 'RELEASE')->count());
@@ -347,7 +351,7 @@ class RedemptionTest extends TestCase
         $re = $this->postJson('/api/v1/entitlements', ['bookingId' => $held['id']], $this->idem($desk))->assertStatus(201)->json();
         $this->assertSame($conf['entitlementId'], $re['id']);
         $this->assertSame(1, DB::table('entitlement')->count());
-        $this->postJson('/api/v1/entitlements', ['orderId' => Ids::uuid7()], $this->idem($desk))->assertStatus(422); // Orders module not installed
+        $this->postJson('/api/v1/entitlements', ['orderId' => Ids::uuid7()], $this->idem($desk))->assertStatus(404); // unknown order
         $list = $this->getJson("/api/v1/entitlements?filter[bookingId]={$held['id']}", $this->idem($desk))->assertOk()->json();
         $this->assertCount(1, $list['items']);
     }

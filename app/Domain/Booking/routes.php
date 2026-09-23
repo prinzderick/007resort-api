@@ -16,6 +16,7 @@ Route::middleware('auth:staff')->prefix('bookings')->group(function () {
     Route::get('/', [BookingController::class, 'index'])->middleware('permission:booking.view');
     Route::get('{bookingId}', [BookingController::class, 'show'])->middleware('permission:booking.view');
     Route::post('{bookingId}/confirm', [BookingController::class, 'confirm'])->middleware(['permission:booking.create', 'idempotent']);
+    Route::post('{bookingId}/order', [BookingController::class, 'attachOrder'])->middleware(['permission:booking.create', 'idempotent']);
     Route::post('{bookingId}/cancel', [BookingController::class, 'cancel'])->middleware(['permission:booking.cancel', 'idempotent']);
     Route::post('{bookingId}/reschedule', [BookingController::class, 'reschedule'])->middleware(['permission:booking.reschedule', 'idempotent']);
 });

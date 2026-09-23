@@ -2,12 +2,12 @@
 
 namespace App\Domain\Ticketing\Services;
 
+use App\Domain\Booking\Support\Tx;
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Ticketing\Contracts\RentalStockHook;
 use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Models\EntitlementItem;
-use App\Domain\Booking\Support\Tx;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;

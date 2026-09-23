@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Booking;
 
+use App\Domain\Booking\Services\BookingRules;
 use App\Domain\Booking\Services\BookingService;
+use App\Support\Audit\Audit;
 use App\Support\Ids;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\BookingHelpers;
 use Tests\TestCase;
@@ -68,7 +71,7 @@ class BookingFlowTest extends TestCase
         // outbox + audit in the same transaction
         $this->assertTrue(DB::table('outbox_event')->where('event_type', 'BookingConfirmedLocally')->exists());
         $this->assertTrue(DB::table('audit_log')->where('action', 'booking.confirm')->exists());
-        $this->assertSame(1, \App\Support\Audit\Audit::verifyChain()->valid ? 1 : 0);
+        $this->assertSame(1, Audit::verifyChain()->valid ? 1 : 0);
     }
 
     public function test_second_hold_of_same_slot_is_409_slot_unavailable(): void
@@ -95,7 +98,7 @@ class BookingFlowTest extends TestCase
     {
         $r = $this->resource($this->w);
         [$s] = $this->slot();
-        $offGrid = [\Carbon\CarbonImmutable::parse($s)->addMinutes(30)->format('Y-m-d\TH:i:s\Z'), \Carbon\CarbonImmutable::parse($s)->addMinutes(90)->format('Y-m-d\TH:i:s\Z')];
+        $offGrid = [CarbonImmutable::parse($s)->addMinutes(30)->format('Y-m-d\TH:i:s\Z'), CarbonImmutable::parse($s)->addMinutes(90)->format('Y-m-d\TH:i:s\Z')];
         $this->hold($r->id, $offGrid)->assertStatus(422)->assertJsonPath('code', 'validation_failed');
         $this->hold($r->id, $this->slot(3))->assertStatus(422); // 03:00 local: before opening hours
         $this->hold($r->id, $this->slot(10, 1, 5))->assertStatus(422); // 5 slots > max 4
@@ -134,9 +137,9 @@ class BookingFlowTest extends TestCase
         $this->hold($r->id, $slot, ['wholeResource' => true])->assertStatus(409);
         $other = $this->slot(14);
         $whole = $this->hold($r->id, $other, ['wholeResource' => true])->assertStatus(201)->assertJsonPath('quantity', 3)->assertJsonPath('total', '6000.0000')->json();
-        $this->assertSame(3, DB::table('slot_allocation')->where('slot_start', \Carbon\CarbonImmutable::parse($other[0])->format('Y-m-d H:i:s.u'))->count());
+        $this->assertSame(3, DB::table('slot_allocation')->where('slot_start', CarbonImmutable::parse($other[0])->format('Y-m-d H:i:s.u'))->count());
         $this->hold($r->id, $other, ['quantity' => 1])->assertStatus(409); // whole-resource booking blocks per-unit booking
-        $this->assertNotNull($a['id'] . $whole['id']);
+        $this->assertNotNull($a['id'].$whole['id']);
     }
 
     public function test_multi_slot_booking_claims_every_slot_and_prices_them(): void
@@ -206,7 +209,7 @@ class BookingFlowTest extends TestCase
 
         // inside the cutoff a configured fee applies
         DB::table('booking_rule')->insert(['id' => Ids::toBinary(Ids::uuid7()), 'organization_id' => Ids::toBinary($this->w['t']['org']), 'resource_id' => Ids::toBinary($r->id), 'cancel_cutoff_minutes' => 100000, 'cancel_fee_percent' => '20.00']);
-        app(\App\Domain\Booking\Services\BookingRules::class)->forget();
+        app(BookingRules::class)->forget();
         $held2 = $this->hold($r->id, $this->slot(15))->assertStatus(201)->json();
         $conf2 = $this->confirm($held2)->assertOk()->json();
         $this->postJson("/api/v1/bookings/{$conf2['id']}/cancel", ['reason' => 'late'], $this->idem($this->token, ['If-Match' => '"v'.$conf2['rowVersion'].'"']))
@@ -231,7 +234,7 @@ class BookingFlowTest extends TestCase
         $this->assertSame($this->slot(11)[0], $moved['start']);
         $this->assertSame(1, (int) DB::table('booking')->where('id', Ids::toBinary($conf['id']))->value('reschedule_count'));
         $ent = $this->getJson("/api/v1/entitlements/{$conf['entitlementId']}", $this->idem($this->token))->json('items.0');
-        $this->assertSame(\Carbon\CarbonImmutable::parse($this->slot(11)[1])->format('Y-m-d\TH:i:s\Z'), $ent['validUntil']);
+        $this->assertSame(CarbonImmutable::parse($this->slot(11)[1])->format('Y-m-d\TH:i:s\Z'), $ent['validUntil']);
         $this->hold($r->id, $this->slot(10))->assertStatus(201); // the old slot was released
         $this->assertNotNull($blocker['id']);
 

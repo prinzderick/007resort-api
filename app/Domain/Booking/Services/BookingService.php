@@ -6,8 +6,8 @@ use App\Domain\Booking\Contracts\BookingPaymentGateway;
 use App\Domain\Booking\Contracts\CloudBookingAuthority;
 use App\Domain\Booking\Contracts\CloudUnreachableException;
 use App\Domain\Booking\Events\BookingHoldExpired;
-use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Models\Blackout;
+use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Models\BookingItem;
 use App\Domain\Booking\Support\AllocationPlan;
@@ -25,6 +25,7 @@ use App\Support\Tenancy\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Booking lifecycle (architecture/10): hold -> confirm (payment + entitlement) -> cancel / reschedule, plus hold expiry.
@@ -384,6 +385,56 @@ final class BookingService
             ], entityVersion: $fresh->row_version, organizationId: $b->organization_id, siteId: $b->site_id, facilityId: $b->facility_unit_id);
 
             return $fresh;
+        });
+    }
+
+    // --------------------------------------------------------------------------------------------- ATTACH ORDER
+
+    /**
+     * Reception flow: link the order that carries the slot fee (+ rentals + store items) to a live hold, so that when the
+     * order is paid (Payments -> `PaymentCaptured`) the booking is confirmed and ONE QR entitlement issued in that same
+     * transaction (ConfirmBookingsForPaidOrder). Extends the hold so the cashier has a full TTL to take payment.
+     */
+    public function attachOrder(string $bookingId, ?int $expectedRowVersion, string $orderId): Booking
+    {
+        return Tx::run(function () use ($bookingId, $expectedRowVersion, $orderId) {
+            $b = $this->lock($bookingId, $expectedRowVersion);
+            if (! in_array($b->status, [Booking::HELD, Booking::PENDING_PAYMENT], true) || ! $b->isHoldLive()) {
+                throw ApiProblem::conflict($b->status === Booking::EXPIRED || ! $b->isHoldLive() ? 'hold_expired' : 'booking_state_invalid', 'An order can only be attached to a live hold.');
+            }
+            if (! Schema::hasTable('order_line')) {
+                throw ApiProblem::unprocessable('validation_failed', 'Attaching an order requires the Orders module.', ['orderId' => ['orders module not installed']]);
+            }
+            $orderBin = Ids::toBinary($orderId);
+            $order = DB::table('order')->where('id', $orderBin)->lockForUpdate()->first();
+            if ($order === null || Ids::fromBinary($order->organization_id) !== $b->organization_id) {
+                throw ApiProblem::notFound('not_found', 'Order not found.');
+            }
+            if (in_array($order->status, ['VOIDED', 'PENDING_APPROVAL', 'SETTLED'], true)) {
+                throw ApiProblem::conflict('order_state_invalid', "An order that is {$order->status} cannot be attached to a booking.");
+            }
+            $taken = DB::table('booking')->where('order_id', $orderBin)->whereNotIn('status', ['CANCELLED', 'EXPIRED'])->where('id', '!=', Ids::toBinary($b->id))->exists();
+            if ($taken) {
+                throw ApiProblem::conflict('booking_state_invalid', 'That order is already attached to another booking.');
+            }
+            $resource = $b->resource;
+            if ($resource->product_id !== null) {
+                $fee = DB::table('order_line')->where('order_id', $orderBin)->where('product_id', Ids::toBinary($resource->product_id))->whereNotIn('status', ['VOIDED', 'REMOVED'])->sum('line_total');
+                if (Money::of((string) $fee)->compare(Money::of($b->total)) !== 0) {
+                    throw new ApiProblem(422, 'amount_mismatch', 'The order lines for this resource do not add up to the booking total.', 'Amount mismatch', ['meta' => ['expected' => Money::of($b->total)->amount, 'orderLines' => Money::of((string) $fee)->amount]]);
+                }
+            } elseif (Money::of($order->total)->compare(Money::of($b->total)) < 0) {
+                throw new ApiProblem(422, 'amount_mismatch', 'The order total is below the booking total.', 'Amount mismatch', ['meta' => ['expected' => Money::of($b->total)->amount, 'orderTotal' => Money::of($order->total)->amount]]);
+            }
+
+            $ttl = (int) $this->rules->for($resource)['hold_ttl_seconds'];
+            $expires = CarbonImmutable::now('UTC')->addSeconds($ttl)->format(self::FMT);
+            DB::table('booking')->where('id', Ids::toBinary($b->id))->update(['order_id' => $orderBin, 'status' => 'PENDING_PAYMENT', 'hold_expires_at' => $expires, 'row_version' => DB::raw('row_version + 1')]);
+            $itemIds = DB::table('booking_item')->where('booking_id', Ids::toBinary($b->id))->pluck('id')->all();
+            DB::table('slot_allocation')->whereIn('booking_item_id', $itemIds)->update(['hold_expires_at' => $expires]);
+            Audit::record('booking.order.attach', 'Booking', $b->id, ['orderId' => $b->order_id], ['orderId' => $orderId, 'status' => 'PENDING_PAYMENT'], organizationId: $b->organization_id, siteId: $b->site_id, facilityUnitId: $b->facility_unit_id);
+
+            return Booking::query()->with('resource')->findOrFail($b->id);
         });
     }
 
