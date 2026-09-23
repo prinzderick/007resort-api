@@ -142,7 +142,7 @@ class StaffAdminTest extends TestCase
         $it = DemoIds::staff('itadmin1');
 
         $m->put("/staff/{$owner}/credentials/pin", ['pin' => '1111'])->assertStatus(403)->assertJsonPath('code', 'permission_denied');
-        $m->put("/staff/{$it}/credentials/password", ['password' => 'Hijack-Passw0rd'])->assertStatus(403); // IT_ADMIN holds device/config perms the manager lacks
+        $m->put("/staff/{$it}/credentials/password", ['password' => str_repeat('h', 12)])->assertStatus(403); // IT_ADMIN holds device/config perms the manager lacks
         $ver = $m->get("/staff/{$owner}")->json('rowVersion');
         $m->patch("/staff/{$owner}", ['status' => 'SUSPENDED'], ['If-Match' => '"'.$ver.'"'])->assertStatus(403);
         $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PIN', 'identifier' => 'owner1', 'secret' => '1234'])->assertOk(); // untouched
