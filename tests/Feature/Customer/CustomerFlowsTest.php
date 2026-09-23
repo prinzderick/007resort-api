@@ -238,4 +238,15 @@ class CustomerFlowsTest extends TestCase
         $this->getJson("/api/v1/bookings/resources/{$r2}/availability?from=".urlencode(now()->addDay()->toIso8601String()).'&to='.urlencode(now()->addDays(2)->toIso8601String()), $this->bearer($this->serviceToken(), null))->assertStatus(404);
         $this->hold($a, $r2, $this->slot())->assertStatus(409)->assertJsonPath('code', 'capability_disabled');
     }
+
+    public function test_public_resource_listing_and_site_roll_up_child_facilities(): void
+    {
+        $arena = DemoIds::facility('SPORTS_ARENA');
+        $names = array_column($this->getJson("/api/v1/bookings/resources?facilityId={$arena}", $this->bearer($this->serviceToken(), null))->assertOk()->json('items'), 'name');
+        $this->assertContains('Lawn Tennis Court 1', $names);
+        $this->assertContains('Football Pitch 1', $names);
+        $byCode = collect($this->getJson('/api/v1/public/site')->json('facilities'))->keyBy('code');
+        $this->assertTrue($byCode['SPORTS_ARENA']['onlineBooking']);
+        $this->assertSame($arena, $byCode['LAWN_TENNIS']['parentId']);
+    }
 }
