@@ -28,12 +28,16 @@ abstract class TestCase extends BaseTestCase
         TestRoutes::register();
     }
 
-    /** One app instance serves many requests in a test: drop cached guard users like a fresh request would. */
+    /** One app instance serves many requests in a test: drop cached guard users and per-request headers like a fresh request would. */
     public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
     {
         $this->app['auth']->forgetGuards();
 
-        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+        try {
+            return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+        } finally {
+            $this->defaultHeaders = []; // headers (withToken/withHeaders) apply to ONE request, never leak into the next
+        }
     }
 
     protected function setUpTraits()

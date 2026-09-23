@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.17",
+        "laravel/reverb": "^1.12",
         "laravel/tinker": "^3.0",
         "predis/predis": "^3.6"
     },
@@ -65,6 +66,13 @@
         ],
         "fix": [
             "vendor/bin/pint"
+        ],
+        "local-node": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan r007:run --reverb"
+        ],
+        "demo": [
+            "@php artisan r007:demo-seed"
         ]
     },
     "extra": {

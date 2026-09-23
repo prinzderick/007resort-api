@@ -2,6 +2,7 @@
 
 use App\Domain\Identity\Http\Middleware\RequirePermission;
 use App\Domain\Identity\Http\Middleware\RequireStepUp;
+use App\Domain\System\Http\Controllers\SystemController;
 use App\Support\Http\ApiProblem;
 use App\Support\Http\CorrelationId;
 use App\Support\Http\OpenApiController;
@@ -18,9 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         apiPrefix: 'api/v1',
-        health: '/up',
         then: function () {
             // Dev-only API docs (404 in production).
+            // Probes (outside /api/v1): /up + /health/ready check DB and Redis (503 if down); /health/live never touches dependencies.
+            Route::get('/up', [SystemController::class, 'ready']);
+            Route::get('/health/ready', [SystemController::class, 'ready']);
+            Route::get('/health/live', [SystemController::class, 'live']);
             Route::get('/api/documentation', [OpenApiController::class, 'ui']);
             Route::get('/api/openapi.yaml', [OpenApiController::class, 'spec']);
         },

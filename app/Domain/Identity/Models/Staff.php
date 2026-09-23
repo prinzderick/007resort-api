@@ -29,6 +29,29 @@ class Staff extends Model
         return trim($this->first_name.' '.$this->last_name);
     }
 
+    /** ACTIVE | SUSPENDED (inactive) | TERMINATED (soft-deleted) */
+    public function status(): string
+    {
+        return $this->deleted_at !== null ? 'TERMINATED' : ($this->is_active ? 'ACTIVE' : 'SUSPENDED');
+    }
+
+    /** Contract `StaffMember` (+ a few extra fields). @return array<string, mixed> */
+    public function toMember(): array
+    {
+        return [
+            'id' => $this->id,
+            'displayName' => $this->displayName(),
+            'staffNumber' => $this->staff_number,
+            'status' => $this->status(),
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'rowVersion' => (int) $this->row_version,
+            'firstName' => $this->first_name,
+            'lastName' => $this->last_name,
+            'siteId' => $this->site_id,
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function toApi(): array
     {
