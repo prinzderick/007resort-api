@@ -156,7 +156,7 @@ class ValidationTest extends TestCase
 
         [, $noPerm] = $this->actorWith('nobody', ['order.create']);
         $this->scan($spa->id, ['qrToken' => $m['qrToken']], $noPerm)->assertStatus(403);
-        $this->postJson('/api/v1/memberships/validate', ['qrToken' => $m['qrToken']], ['Authorization' => 'Bearer '.$this->scanner])->assertStatus(400)->assertJsonPath('code', 'scope_required');
+        $this->postJson('/api/v1/memberships/validate', ['qrToken' => $m['qrToken']], ['Authorization' => 'Bearer '.$this->scanner])->assertStatus(400)->assertJsonPath('code', 'validation_failed');
         $this->postJson('/api/v1/memberships/validate', [], ['Accept' => 'application/json'])->assertStatus(401);
     }
 
