@@ -52,7 +52,7 @@ App code has no UPDATE/DELETE path on `payment_allocation`, `refund`, `reversal`
 `receipt_reprint`; `payment` only moves along its state machine. MySQL triggers (`2026_09_24_100400`) enforce it in the database
 (`R007_LEDGER_IMMUTABLE`). **Production must also** `REVOKE UPDATE, DELETE` on those tables from the app DB user (except UPDATE on
 `payment` and `cash_session`), and the migration user needs `TRIGGER` privilege. Test helper `TestData::wipe()` uses TRUNCATE for
-tables with delete-triggers.
+tables with delete-triggers. If the server has binary logging on and the migrating DB user lacks SUPER, set `log_bin_trust_function_creators=1` (or run migrations as an admin user) so the triggers can be created.
 
 ## Sensitive actions and approvals (reuses Orders' `ApprovalService`)
 
