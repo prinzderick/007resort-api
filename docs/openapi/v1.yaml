@@ -5354,6 +5354,20 @@ components:
       - ENTRANCE_SCANNER
       - ATTENDANCE_TERMINAL
       - SERVER
+    DeviceMode:
+      type: string
+      description: |-
+        Explicit client persona the device runs (additive to the v1 contract). ATTENDANT (waiter/bartender/cashier tablet),
+        SUPERVISOR (approvals tablet), SPORTS_ENTRANCE (QR scanner at the arena gate), SPORTS_STORE (equipment release/return),
+        POS, KDS, ATTENDANCE_TERMINAL. Set at registration (optional; defaults from `kind`) and returned by `GET /devices/{id}`.
+      enum:
+      - ATTENDANT
+      - SUPERVISOR
+      - SPORTS_ENTRANCE
+      - SPORTS_STORE
+      - POS
+      - KDS
+      - ATTENDANCE_TERMINAL
     Device:
       type: object
       properties:
@@ -5363,6 +5377,10 @@ components:
           type: string
         kind:
           $ref: '#/components/schemas/DeviceKind'
+        mode:
+          oneOf:
+          - $ref: '#/components/schemas/DeviceMode'
+          - type: 'null'
         status:
           type: string
           enum:
@@ -5405,6 +5423,8 @@ components:
           example: Tablet 04
         kind:
           $ref: '#/components/schemas/DeviceKind'
+        mode:
+          $ref: '#/components/schemas/DeviceMode'
         hardwareId:
           type: string
           description: Stable platform identifier (Android ID / install UUID).

@@ -53,6 +53,16 @@ class DevicesDemoSeeder implements DemoSeeder
         return $d;
     }
 
+    private function mode(string $code, string $kind): ?string
+    {
+        return match (true) {
+            str_starts_with($code, 'TABLET_SUPERVISOR') => 'SUPERVISOR',
+            $code === 'TABLET_SPORTS_ENTRANCE' => 'SPORTS_ENTRANCE',
+            $code === 'TABLET_SPORTS_STORE' => 'SPORTS_STORE',
+            default => Device::defaultMode($kind),
+        };
+    }
+
     public function run(DemoContext $ctx): void
     {
         $tokens = app(DeviceTokenService::class);
@@ -60,7 +70,7 @@ class DevicesDemoSeeder implements DemoSeeder
         foreach ($this->devices() as $code => [$name, $kind, $facility]) {
             $device = Device::query()->updateOrCreate(['id' => DemoIds::device($code)], [
                 'organization_id' => DemoIds::org(), 'site_id' => DemoIds::site(), 'facility_unit_id' => DemoIds::facility($facility),
-                'device_type' => Device::KIND_TO_TYPE[$kind], 'name' => $name, 'hardware_id' => 'demo-'.strtolower($code),
+                'device_type' => Device::KIND_TO_TYPE[$kind], 'mode' => $this->mode($code, $kind), 'name' => $name, 'hardware_id' => 'demo-'.strtolower($code),
                 'platform' => match ($kind) {
                     'POS_TERMINAL' => 'windows', 'MOBILE_TABLET' => 'android', 'KDS_SCREEN' => 'browser', default => 'embedded'
                 },
@@ -70,9 +80,9 @@ class DevicesDemoSeeder implements DemoSeeder
             if (! DB::table('device_registration')->where('token_hash', hash('sha256', $token))->exists()) {
                 $tokens->store($device, $token, null);
             }
-            $rows[] = [$device->id, $name, $kind, $facility, $token];
+            $rows[] = [$device->id, $name, $kind.'/'.$this->mode($code, $kind), $facility, $token];
         }
-        $ctx->table('DEV-ONLY devices (send the token as X-Device-Token)', ['id', 'name', 'kind', 'home facility', 'device token'], $rows);
+        $ctx->table('DEV-ONLY devices (send the token as X-Device-Token)', ['id', 'name', 'kind/mode', 'home facility', 'device token'], $rows);
         $ctx->info('  '.count($rows).' registered devices');
     }
 }

@@ -170,9 +170,9 @@ return new class extends Migration
   created_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   updated_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   CONSTRAINT uq_settlement_day UNIQUE (site_id, business_date, tender_type, provider),
-  CONSTRAINT fk_st_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_st_site FOREIGN KEY (site_id) REFERENCES site (id),
-  CONSTRAINT fk_st_by FOREIGN KEY (reconciled_by) REFERENCES staff (id)
+  CONSTRAINT fk_settle_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_settle_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_settle_by FOREIGN KEY (reconciled_by) REFERENCES staff (id)
 ) $t");
 
         DB::unprepared("CREATE TABLE settlement_line (

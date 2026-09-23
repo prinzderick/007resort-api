@@ -33,7 +33,7 @@ class TerminalService
                 DB::table('device')->insert([
                     'id' => Ids::toBinary($deviceId), 'organization_id' => Ids::toBinary($org), 'site_id' => Ids::toBinary($site),
                     'facility_unit_id' => empty($d['facilityId']) ? null : Ids::toBinary($d['facilityId']),
-                    'device_type' => 'BIOMETRIC_TERMINAL', 'name' => $d['name'],
+                    'device_type' => 'BIOMETRIC_TERMINAL', 'mode' => 'ATTENDANCE_TERMINAL', 'name' => $d['name'],
                 ]);
                 $dev = AttendanceDevice::create([
                     'organization_id' => $org, 'site_id' => $site, 'device_id' => $deviceId, 'facility_unit_id' => $d['facilityId'] ?? null,

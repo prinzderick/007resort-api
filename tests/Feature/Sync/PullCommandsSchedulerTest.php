@@ -108,8 +108,8 @@ class PullCommandsSchedulerTest extends TwoNodeTestCase
 
     public function test_the_scheduler_registers_the_right_jobs_per_node_role(): void
     {
-        $names = fn () => collect(app(Schedule::class)->events())->map(fn ($e) => $e->description)->filter()->values()->all();
-        // The suite boots as APP_NODE=local.
+        $names = fn () => collect(app(Schedule::class)->events())->map(fn ($e) => $e->description)->filter(fn ($d) => str_starts_with((string) $d, 'sync:'))->values()->all();
+        // The suite boots as APP_NODE=local. Other modules schedule their own jobs (e.g. site-health-keepalive): assert only the sync ones.
         $this->assertEqualsCanonicalizing(['sync:publish', 'sync:pull', 'sync:heartbeat', 'sync:reprocess-inbox'], $names());
     }
 }

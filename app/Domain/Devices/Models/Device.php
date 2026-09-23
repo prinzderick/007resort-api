@@ -19,6 +19,18 @@ class Device extends Model
         'SERVER' => 'OTHER',
     ];
 
+    /** Explicit client persona (contract `DeviceMode`). */
+    public const MODES = ['ATTENDANT', 'SUPERVISOR', 'SPORTS_ENTRANCE', 'SPORTS_STORE', 'POS', 'KDS', 'ATTENDANCE_TERMINAL'];
+
+    /** Default mode when a client does not send one (backfill rule too). */
+    public static function defaultMode(string $kind): ?string
+    {
+        return match ($kind) {
+            'MOBILE_TABLET' => 'ATTENDANT', 'POS_TERMINAL' => 'POS', 'KDS_SCREEN' => 'KDS',
+            'ENTRANCE_SCANNER' => 'SPORTS_ENTRANCE', 'ATTENDANCE_TERMINAL' => 'ATTENDANCE_TERMINAL', default => null,
+        };
+    }
+
     protected $table = 'device';
 
     protected array $uuidColumns = ['organization_id', 'site_id', 'facility_unit_id'];

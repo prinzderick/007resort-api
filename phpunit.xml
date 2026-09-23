@@ -24,11 +24,13 @@
         <env name="SITE_ID" value="" force="true"/>
         <env name="ORGANIZATION_ID" value="" force="true"/>
         <env name="DB_CONNECTION" value="mysql" force="true"/>
-        <env name="DB_DATABASE" value="r007_foundation_test" force="true"/>
+        <env name="DB_DATABASE" value="r007_integration_test" force="true"/>
         <env name="DB_URL" value=""/>
-        <env name="REDIS_DB" value="12" force="true"/>
-        <env name="REDIS_CACHE_DB" value="13" force="true"/>
-        <env name="REDIS_PREFIX" value="r007_foundation_test_" force="true"/>
+        <env name="REVERB_PORT" value="8081" force="true"/>
+        <env name="REVERB_HOST" value="127.0.0.1" force="true"/>
+        <env name="REDIS_DB" value="10" force="true"/>
+        <env name="REDIS_CACHE_DB" value="11" force="true"/>
+        <env name="REDIS_PREFIX" value="r007_integration_test_" force="true"/>
         <env name="CACHE_STORE" value="redis" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>

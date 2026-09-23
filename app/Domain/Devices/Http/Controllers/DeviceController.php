@@ -34,6 +34,7 @@ class DeviceController
         $d = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'kind' => ['required', 'in:'.implode(',', array_keys(Device::KIND_TO_TYPE))],
+            'mode' => ['nullable', 'in:'.implode(',', Device::MODES)],
             'hardwareId' => ['required', 'string', 'max:128'],
             'platform' => ['nullable', 'string', 'max:32'],
             'appVersion' => ['nullable', 'string', 'max:32'],

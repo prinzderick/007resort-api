@@ -49,12 +49,12 @@ class DeviceService
             if ($new) {
                 $device = Device::create([
                     'organization_id' => $orgId, 'site_id' => $siteId, 'facility_unit_id' => $homeFacility,
-                    'device_type' => Device::KIND_TO_TYPE[$d['kind']], 'name' => $d['name'], 'hardware_id' => $d['hardwareId'],
+                    'device_type' => Device::KIND_TO_TYPE[$d['kind']], 'mode' => $d['mode'] ?? Device::defaultMode($d['kind']), 'name' => $d['name'], 'hardware_id' => $d['hardwareId'],
                     'platform' => $d['platform'] ?? null, 'app_version' => $d['appVersion'] ?? null,
                 ]);
             } else {
                 $device->forceFill([
-                    'name' => $d['name'], 'device_type' => Device::KIND_TO_TYPE[$d['kind']], 'platform' => $d['platform'] ?? $device->platform,
+                    'name' => $d['name'], 'device_type' => Device::KIND_TO_TYPE[$d['kind']], 'mode' => $d['mode'] ?? $device->mode ?? Device::defaultMode($d['kind']), 'platform' => $d['platform'] ?? $device->platform,
                     'app_version' => $d['appVersion'] ?? $device->app_version, 'row_version' => $device->row_version + 1,
                 ] + ($homeFacility ? ['facility_unit_id' => $homeFacility] : []))->save();
             }
@@ -65,10 +65,10 @@ class DeviceService
 
             Audit::record(
                 $new ? 'device.register' : 'device.reregister', 'Device', $device->id,
-                new: ['deviceId' => $device->id, 'name' => $device->name, 'kind' => $d['kind'], 'hardwareId' => $d['hardwareId']],
+                new: ['deviceId' => $device->id, 'name' => $device->name, 'kind' => $d['kind'], 'mode' => $device->mode, 'hardwareId' => $d['hardwareId']],
                 organizationId: $orgId, siteId: $siteId, actorStaffId: $createdBy, facilityUnitId: $homeFacility, deviceId: $device->id,
             );
-            Outbox::record('DeviceRegistered', 'Device', $device->id, ['deviceId' => $device->id, 'name' => $device->name, 'kind' => $d['kind'], 'hardwareId' => $d['hardwareId']], (int) $device->row_version, $orgId, $siteId, $homeFacility);
+            Outbox::record('DeviceRegistered', 'Device', $device->id, ['deviceId' => $device->id, 'name' => $device->name, 'kind' => $d['kind'], 'mode' => $device->mode, 'hardwareId' => $d['hardwareId']], (int) $device->row_version, $orgId, $siteId, $homeFacility);
 
             return ['device' => $device->refresh(), 'token' => $token];
         });
@@ -113,6 +113,7 @@ class DeviceService
             'id' => $d->id,
             'name' => $d->name,
             'kind' => $d->kind(),
+            'mode' => $d->mode ?? Device::defaultMode($d->kind()),
             'status' => $d->status(),
             'facilityId' => $checkout && $checkout->checked_in_at === null ? $checkout->facility_unit_id : null,
             'homeFacilityId' => $d->facility_unit_id,

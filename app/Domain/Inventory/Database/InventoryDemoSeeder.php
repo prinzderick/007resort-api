@@ -20,13 +20,33 @@ class InventoryDemoSeeder
     /** location key => [name, kind, facility code|null, facility name] */
     private const LOCATIONS = [
         'MAIN' => ['Main Store', 'MAIN_STORE', null, null],
-        'RST' => ['Restaurant Store', 'FACILITY_STORE', 'restaurant', 'Restaurant'],
-        'KIT' => ['Main Kitchen Store', 'KITCHEN', 'main-kitchen', 'Main Kitchen'],
-        'BAR' => ['Bush Bar Store', 'BAR', 'bush-bar', 'Bush Bar'],
-        'SAL' => ['Salon Store', 'FACILITY_STORE', 'salon', 'Salon'],
-        'SUP' => ['Supermarket Shelf', 'FACILITY_STORE', 'supermarket', 'Supermarket'],
-        'SPT' => ['Sports Store', 'FACILITY_STORE', 'sports-store', 'Sports Store'],
+        'RST' => ['Restaurant Store', 'FACILITY_STORE', 'RESTAURANT', 'Restaurant'],
+        'KIT' => ['Main Kitchen Store', 'KITCHEN', 'MAIN_KITCHEN', 'Main Kitchen'],
+        'BAR' => ['Bush Bar Store', 'BAR', 'BUSH_BAR', 'Bush Bar'],
+        'PBR' => ['Pool Bar Store', 'BAR', 'POOL_BAR', 'Pool Bar'],
+        'CLB' => ['Indoor Club Store', 'BAR', 'INDOOR_CLUB', 'Indoor Club'],
+        'SAL' => ['Salon Store', 'FACILITY_STORE', 'SALON_FEMALE', 'Salon (Female)'],
+        'SUP' => ['Supermarket Shelf', 'FACILITY_STORE', 'SUPERMARKET', 'Supermarket'],
+        'SPT' => ['Sports Store', 'FACILITY_STORE', 'SPORTS_STORE', 'Sports Store'],
         'WST' => ['Waste / Write-off', 'WASTE', null, null],
+    ];
+
+    /**
+     * Catalog product SKU => [[inventory item SKU, quantity of the item consumed per unit sold], ...] (drinks 1:1, shots as a fraction of a bottle,
+     * grocery/toiletries 1:1, a few kitchen dishes as a portion of the raw ingredient). Written to `product_stock_link` when both sides exist.
+     */
+    private const PRODUCT_LINKS = [
+        'BR-STAR' => [['BEV-STAR-60', '1']], 'BR-GUIN' => [['BEV-GUIN-60', '1']], 'BR-HEIN' => [['BEV-HERO-60', '1']], 'BR-TROP' => [['BEV-TROP-50', '1']],
+        'BT-HEN-VS' => [['BEV-HENN-70', '1']], 'BT-SMIR' => [['BEV-SMIR-75', '1']],
+        'SP-HEN-SH' => [['BEV-HENN-70', '0.0500']], 'SP-JD-SH' => [['BEV-JACK-75', '0.0500']], 'SP-SMI-SH' => [['BEV-SMIR-75', '0.0500']],
+        'WN-RED-GL' => [['BEV-REDW-75', '0.2000']], 'WN-WHT-GL' => [['BEV-WHTW-75', '0.2000']],
+        'SD-COKE' => [['SFT-COKE-50', '1']], 'SD-FANT' => [['SFT-FANT-50', '1']], 'SD-SPRT' => [['SFT-SPRT-50', '1']], 'SD-WATR' => [['SFT-WATR-75', '1']],
+        'SD-OJ' => [['SFT-ORJC-1L', '0.2500']],
+        'GR-EGGS' => [['KIT-EGGS-30', '1']], 'GR-NOOD' => [['SUP-INDM-70', '1']], 'GR-BISC' => [['SUP-BISC-EA', '1']], 'BK-BRED' => [['SUP-BRED-EA', '1']],
+        'TL-SOAP' => [['SUP-SOAP-EA', '1']], 'TL-TISS' => [['SUP-TISS-EA', '1']], 'TL-TOOTH' => [['SUP-TOOT-EA', '1']],
+        'GOODS-TENNIS-BALLS' => [['SPT-TBAL-EA', '1']],
+        'FD-DODO' => [['KIT-PLTN-EA', '0.5000']], 'FD-GRL-TL' => [['KIT-TILA-KG', '0.4000']], 'FD-GRL-CF' => [['KIT-FISH-KG', '0.4000']],
+        'FD-SUY-BF' => [['KIT-BEEF-KG', '0.2500']], 'FD-SUY-CK' => [['KIT-CHKN-KG', '0.2500']],
     ];
 
     /**
@@ -148,14 +168,23 @@ class InventoryDemoSeeder
             }
         }
 
-        // --- link Catalog products to stock items where the SKUs match (1 unit per product unit) ---
+        // --- link Catalog products to stock items (explicit SKU map + any 1:1 SKU match) ---
         $linked = 0;
         if (Schema::hasTable('product_stock_link')) {
-            foreach ($itemIds as $sku => $itemId) {
-                $product = DB::table('product')->where('organization_id', $orgB)->where('sku', $sku)->first(['id']);
-                if ($product) {
+            $links = [];
+            foreach (self::PRODUCT_LINKS as $productSku => $items) {
+                foreach ($items as [$itemSku, $per]) {
+                    $links[] = [$productSku, $itemSku, $per];
+                }
+            }
+            foreach (array_keys($itemIds) as $sku) {
+                $links[] = [$sku, $sku, '1'];
+            }
+            foreach ($links as [$productSku, $itemSku, $per]) {
+                $product = DB::table('product')->where('organization_id', $orgB)->where('sku', $productSku)->first(['id']);
+                if ($product && isset($itemIds[$itemSku])) {
                     $linked += DB::table('product_stock_link')->insertOrIgnore([
-                        'id' => Ids::toBinary(Ids::uuid7()), 'product_id' => $product->id, 'stock_item_id' => Ids::toBinary($itemId), 'quantity_per_unit' => '1',
+                        'id' => Ids::toBinary(Ids::uuid7()), 'product_id' => $product->id, 'stock_item_id' => Ids::toBinary($itemIds[$itemSku]), 'quantity_per_unit' => $per,
                     ]);
                 }
             }
@@ -184,6 +213,11 @@ class InventoryDemoSeeder
                 $receiptLines[] = ['itemId' => $itemIds[$sku], 'quantity' => $mainQty, 'unitCost' => $cost];
                 foreach ($out as $key => $qty) {
                     $transfers[$key][] = ['itemId' => $itemIds[$sku], 'quantity' => $qty];
+                }
+                if (isset($out['BAR'])) { // Pool Bar and Indoor Club stock up with a quarter of the Bush Bar quantity
+                    $quarter = (string) max(1, intdiv((int) $out['BAR'], 4));
+                    $transfers['PBR'][] = ['itemId' => $itemIds[$sku], 'quantity' => $quarter];
+                    $transfers['CLB'][] = ['itemId' => $itemIds[$sku], 'quantity' => $quarter];
                 }
             }
             DB::transaction(function () use ($docs, $loc, $receiptLines, $transfers) {

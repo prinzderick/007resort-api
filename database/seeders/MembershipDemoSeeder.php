@@ -10,7 +10,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Demo membership plans: Gold (property-wide, unlimited), Silver (pool + gym + restaurant, 12 visits), Pool Pass (pool only, 8 visits).
+ * Demo membership plans: Gold (property-wide, unlimited), Silver (pool + indoor club + restaurant, 12 visits), Pool Pass (pool only, 8 visits).
  * Idempotent (keyed by plan code). Facilities are matched by code; if none of a plan's facilities exist yet the plan falls back to
  * property-wide so the demo still validates anywhere.
  *
@@ -34,11 +34,11 @@ class MembershipDemoSeeder extends Seeder
                 'booking_privileges' => ['priorityBooking' => true, 'extendedAdvanceDays' => 7]],
             ['code' => 'SILVER', 'name' => 'Silver Monthly', 'description' => '12 visits a month to the pool, gym and restaurant, 1 guest, 10% member discount.',
                 'price' => '80000.0000', 'duration_days' => 30, 'visit_limit' => 12, 'guest_allowance' => 1, 'member_discount_percent' => '10.00',
-                'booking_advance_days' => 3, 'grace_period_days' => 3, 'renewal_notice_days' => 7, 'facilities' => ['pool', 'gym', 'restaurant'],
+                'booking_advance_days' => 3, 'grace_period_days' => 3, 'renewal_notice_days' => 7, 'facilities' => ['POOL_AREA', 'INDOOR_CLUB', 'RESTAURANT'],
                 'booking_privileges' => ['priorityBooking' => false, 'extendedAdvanceDays' => 3]],
             ['code' => 'POOL_PASS', 'name' => 'Pool Pass', 'description' => '8 pool visits, no guests.',
                 'price' => '25000.0000', 'duration_days' => 30, 'visit_limit' => 8, 'guest_allowance' => 0, 'member_discount_percent' => '0.00',
-                'booking_advance_days' => 0, 'grace_period_days' => 0, 'renewal_notice_days' => 5, 'facilities' => ['pool'],
+                'booking_advance_days' => 0, 'grace_period_days' => 0, 'renewal_notice_days' => 5, 'facilities' => ['POOL_AREA'],
                 'booking_privileges' => []],
         ];
 

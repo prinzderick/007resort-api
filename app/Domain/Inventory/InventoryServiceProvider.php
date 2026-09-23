@@ -7,7 +7,6 @@ use App\Domain\Inventory\Console\DemoSeedCommand;
 use App\Domain\Inventory\Console\ReconcileCommand;
 use App\Domain\Inventory\Contracts\InventoryConsumption;
 use App\Domain\Inventory\Contracts\RentalGateway;
-use App\Domain\Inventory\Database\InventoryDemoSeeder;
 use App\Domain\Inventory\Listeners\OrderStockListener;
 use App\Domain\Inventory\Services\AdjustmentApprovalHandler;
 use App\Domain\Inventory\Services\AdjustmentService;
@@ -24,7 +23,6 @@ use App\Domain\Orders\Approvals\ApprovalService;
 use App\Domain\Orders\Events\OrderSent;
 use App\Domain\Orders\Events\OrderSettled;
 use App\Domain\Orders\Events\OrderVoided;
-use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -72,13 +70,6 @@ class InventoryServiceProvider extends ServiceProvider
             $schedule->command('r007:inventory:reconcile')
                 ->dailyAt((string) config('inventory.reconcile_at', '02:30'))->timezone('Africa/Lagos')
                 ->withoutOverlapping()->onOneServer();
-        });
-
-        // Hook into `php artisan r007:demo-seed` (owned elsewhere) without editing it: seed demo stock after it finishes.
-        Event::listen(CommandFinished::class, function (CommandFinished $e): void {
-            if ($e->command === 'r007:demo-seed' && $e->exitCode === 0) {
-                (new InventoryDemoSeeder)->run();
-            }
         });
     }
 }
