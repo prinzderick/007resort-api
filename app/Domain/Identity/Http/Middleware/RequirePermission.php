@@ -28,6 +28,9 @@ class RequirePermission
     {
         $staffId = RequestContext::staffId();
         if ($staffId === null) {
+            if (RequestContext::customerId() !== null || RequestContext::serviceTokenId() !== null) {
+                throw ApiProblem::permissionDenied(explode('|', $permission)[0]); // a customer / service credential holds no staff permission
+            }
             throw ApiProblem::unauthenticated();
         }
 

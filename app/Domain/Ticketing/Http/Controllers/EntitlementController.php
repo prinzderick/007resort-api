@@ -3,6 +3,7 @@
 namespace App\Domain\Ticketing\Http\Controllers;
 
 use App\Domain\Booking\Models\Booking;
+use App\Domain\Customer\Support\Owns;
 use App\Domain\Ticketing\Contracts\OrderLineSource;
 use App\Domain\Ticketing\Http\Presenters\EntitlementPresenter;
 use App\Domain\Ticketing\Models\Entitlement;
@@ -88,7 +89,10 @@ class EntitlementController
 
     public function show(string $entitlementId): JsonResponse
     {
-        return response()->json(EntitlementPresenter::entitlement($this->find($entitlementId)));
+        $e = $this->find($entitlementId);
+        Owns::entitlement($e);
+
+        return response()->json(EntitlementPresenter::entitlement($e));
     }
 
     public function byToken(string $qrToken): JsonResponse

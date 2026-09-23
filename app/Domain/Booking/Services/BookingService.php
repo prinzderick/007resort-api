@@ -59,6 +59,9 @@ final class BookingService
         if ($resource === null || (($org = Tenant::organizationId()) !== null && $resource->organization_id !== $org)) {
             throw ApiProblem::notFound('not_found', 'Bookable resource not found.');
         }
+        if ($cmd->channel === 'ONLINE' && ! $resource->online_bookable) {
+            throw ApiProblem::conflict('capability_disabled', 'This resource is not bookable online.');
+        }
         [$qty, $whole] = $this->normaliseQuantity($resource, $cmd);
         $rules = $this->rules->for($resource);
         $starts = $this->grid->slotStartsFor($resource, $cmd->start, $cmd->end);
@@ -104,6 +107,7 @@ final class BookingService
             'origin_node' => Node::isCloud() ? 'CLOUD' : 'LOCAL', 'allocation_pool' => $plan->pool,
             'start_at' => $cmd->start->format(self::FMT), 'end_at' => $cmd->end->format(self::FMT), 'quantity' => $qty, 'whole_resource' => $whole ? 1 : 0,
             'customer_name' => $cust['name'] ?? null, 'customer_phone' => $cust['phone'] ?? null, 'customer_email' => $cust['email'] ?? null,
+            'customer_id' => $cmd->customerId ? Ids::toBinary($cmd->customerId) : null,
             'membership_id' => isset($cust['membershipId']) ? Ids::toBinary($cust['membershipId']) : null,
             'currency' => $resource->currency, 'total' => $lineTotal, 'amount_paid' => '0.0000', 'hold_expires_at' => $expires->format(self::FMT),
             'created_by' => ($s = $cmd->staffId ?? RequestContext::staffId()) ? Ids::toBinary($s) : null,

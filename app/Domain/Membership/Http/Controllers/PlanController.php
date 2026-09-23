@@ -2,6 +2,7 @@
 
 namespace App\Domain\Membership\Http\Controllers;
 
+use App\Domain\Customer\Support\Actor;
 use App\Domain\Membership\Models\MembershipPlan;
 use App\Domain\Membership\Services\PlanService;
 use App\Support\Http\ApiProblem;
@@ -19,7 +20,9 @@ class PlanController
     public function index(Request $request): JsonResponse
     {
         $q = MembershipPlan::query()->with('coverage')->where('organization_id', Tenant::organizationId());
-        if ($request->query('active') !== null) {
+        if (Actor::isPublic()) {
+            $q->where('is_active', 1);
+        } elseif ($request->query('active') !== null) {
             $q->where('is_active', filter_var($request->query('active'), FILTER_VALIDATE_BOOLEAN));
         }
         $page = CursorPage::paginate($q, $request, 'id', 'asc');

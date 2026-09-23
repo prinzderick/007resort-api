@@ -6,6 +6,7 @@ use App\Domain\Booking\Http\Presenters\BookingPresenter;
 use App\Domain\Booking\Models\Blackout;
 use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Services\AvailabilityService;
+use App\Domain\Customer\Support\Actor;
 use App\Support\Api\Paged;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
@@ -25,6 +26,9 @@ class ResourceController
     public function index(Request $request): array
     {
         $q = BookableResource::query()->whereNull('deleted_at')->where('is_active', 1);
+        if (Actor::isPublic()) {
+            $q->where('online_bookable', 1);
+        }
         if ($org = Tenant::organizationId()) {
             $q->where('organization_id', $org);
         }
@@ -104,7 +108,7 @@ class ResourceController
     private function find(string $id): BookableResource
     {
         $r = Ids::isUuid($id) ? BookableResource::query()->whereKey(strtolower($id))->whereNull('deleted_at')->first() : null;
-        if ($r === null || (($org = Tenant::organizationId()) !== null && $r->organization_id !== $org)) {
+        if ($r === null || (Actor::isPublic() && ! $r->online_bookable) || (($org = Tenant::organizationId()) !== null && $r->organization_id !== $org)) {
             throw ApiProblem::notFound('not_found', 'Bookable resource not found.');
         }
 

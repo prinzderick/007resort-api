@@ -12,13 +12,16 @@ use Illuminate\Support\Facades\Route;
 // Provider webhooks: NO bearer auth - authenticated by the provider's HMAC signature (Cloud node is the public receiver).
 Route::post('payments/webhooks/{provider}', [WebhookController::class, 'receive']);
 
+// Online customers pay through Paystack too (ownership of the booking / membership / order is enforced in PaystackService).
+Route::middleware(['auth:staff,customer', 'device:optional', 'throttle:customer-api'])->group(function () {
+    Route::post('payments/paystack/initialize', [PaymentController::class, 'paystackInitialize'])->middleware(['permission.public:payment.take', 'idempotent']);
+    Route::get('payments/paystack/verify/{reference}', [PaymentController::class, 'paystackVerify']);
+});
+
 Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::post('payments', [PaymentController::class, 'store'])
         ->middleware(['permission:payment.take,facility=facilityId', 'idempotent']);
     Route::get('payments', [PaymentController::class, 'index'])->middleware('permission:payment.view');
-    Route::post('payments/paystack/initialize', [PaymentController::class, 'paystackInitialize'])
-        ->middleware(['permission:payment.take', 'idempotent']);
-    Route::get('payments/paystack/verify/{reference}', [PaymentController::class, 'paystackVerify']);
     Route::get('payments/{paymentId}', [PaymentController::class, 'show']);
     Route::post('payments/{paymentId}/refund', [PaymentController::class, 'refund'])
         ->middleware(['permission:refund.execute', 'idempotent']);

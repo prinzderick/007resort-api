@@ -2,6 +2,8 @@
 
 namespace App\Domain\Membership\Http\Controllers;
 
+use App\Domain\Customer\Support\Actor;
+use App\Domain\Customer\Support\Owns;
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Membership\Models\Membership;
@@ -44,6 +46,11 @@ class MembershipController
         if (! empty($d['facilityId'])) {
             $this->requireAt('membership.sell', $d['facilityId']);
         }
+        if (Actor::isCustomer()) { // online: the holder is the signed-in customer; no tenders (Paystack captures and activates)
+            $m = $this->memberships->purchase($d['planId'], $d['customer'], null, [], null, null, 'ONLINE', Actor::customerId());
+
+            return response()->json($m->toApi(withCards: true), 201);
+        }
         $m = $this->memberships->purchase($d['planId'], $d['customer'], $d['facilityId'] ?? null, $d['tenders'] ?? [], $d['paystackReference'] ?? null, RequestContext::staffId());
 
         return response()->json($m->toApi(withCards: true), 201);
@@ -70,7 +77,10 @@ class MembershipController
     /** GET /memberships/{id} */
     public function show(string $membership): JsonResponse
     {
-        return response()->json($this->find($membership)->toApi(withCards: true));
+        $m = $this->find($membership);
+        Owns::membership($m->customer_id);
+
+        return response()->json($m->toApi(withCards: true));
     }
 
     /** GET /memberships/{id}/history */

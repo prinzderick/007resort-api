@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payments\Services;
 
+use App\Domain\Customer\Support\Actor;
+use App\Domain\Customer\Support\Owns;
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Payments\Contracts\OrderPort;
@@ -47,8 +49,14 @@ class PaystackService
      * @param  array{orderIds?: list<string>, bookingId?: ?string, membershipId?: ?string, amount: string, email: string, callbackUrl?: ?string}  $in
      * @return array{paymentId: string, reference: string, authorizationUrl: string, accessCode: ?string}
      */
-    public function initialize(array $in, string $staffId): array
+    public function initialize(array $in, ?string $staffId): array
     {
+        $online = $staffId === null; // an online CUSTOMER (never staff): ownership replaces the payment.take permission
+        if ($online) {
+            $cid = Actor::requireCustomer();
+            $in['email'] = (string) DB::table('customer_account')->where('customer_id', Ids::toBinary($cid))->value('login_email');
+            self::assertCallbackAllowed($in['callbackUrl'] ?? null);
+        }
         $amount = Money::normalize($in['amount']);
         $subjects = array_filter([
             'orders' => ! empty($in['orderIds']),
@@ -59,7 +67,7 @@ class PaystackService
             throw ApiProblem::unprocessable('validation_failed', 'Provide exactly one of orderIds, bookingId, membershipId.', ['orderIds' => ['Provide exactly one of orderIds, bookingId, membershipId.']]);
         }
 
-        return DB::transaction(function () use ($in, $amount, $staffId, $subjects) {
+        return DB::transaction(function () use ($in, $amount, $staffId, $subjects, $online) {
             $intent = [];
             $subjectType = $subjectId = null;
             if (isset($subjects['orders'])) {
@@ -68,13 +76,14 @@ class PaystackService
                     if (! isset($orders[Ids::normalize($oid)])) {
                         throw ApiProblem::notFound('not_found', 'Order not found.');
                     }
+                    $online && Owns::order(Ids::normalize($oid));
                 }
                 $facilityIds = array_values(array_unique(array_map(fn ($o) => $o['facilityId'], $orders)));
                 if (count($facilityIds) !== 1) {
                     throw ApiProblem::conflict('facility_mismatch', 'All orders of one online payment must belong to the same facility.');
                 }
                 $facilityId = $facilityIds[0];
-                $this->authorize($staffId, $facilityId);
+                $online || $this->authorize($staffId, $facilityId);
                 $paid = Ledger::paidByOrder(array_keys($orders));
                 $due = '0.0000';
                 $allocs = [];
@@ -83,7 +92,7 @@ class PaystackService
                     if (bccomp($balance, '0', 4) <= 0) {
                         throw ApiProblem::conflict('balance_changed', 'An order has no balance due.', ['orderId' => $oid, 'balanceDue' => '0.0000']);
                     }
-                    $this->payments->assertPayable($o);
+                    $this->payments->assertPayable($o, $online);
                     $due = bcadd($due, $balance, 4);
                     $allocs[] = ['orderId' => $oid, 'amount' => $balance];
                 }
@@ -95,10 +104,16 @@ class PaystackService
             } else {
                 $subjectType = isset($subjects['booking']) ? 'BOOKING' : 'MEMBERSHIP';
                 $subjectId = Ids::normalize((string) ($in['bookingId'] ?? $in['membershipId']));
+                if ($online) {
+                    $ownerCol = $subjectType === 'BOOKING' ? 'booking' : 'membership';
+                    $owner = DB::table($ownerCol)->where('id', Ids::toBinary($subjectId))->value('customer_id');
+                    $ownerId = $owner === null ? null : Ids::fromBinary($owner);
+                    $subjectType === 'BOOKING' ? Owns::booking($ownerId) : Owns::membership($ownerId);
+                }
                 $subject = $this->subjects->resolve($subjectType, $subjectId)
                     ?? throw ApiProblem::unprocessable('payable_subject_unsupported', 'This node cannot take online payment for that '.strtolower($subjectType).'.');
                 $facilityId = Ids::normalize($subject['facilityId']);
-                $this->authorize($staffId, $facilityId);
+                $online || $this->authorize($staffId, $facilityId);
                 if (bccomp($amount, Money::normalize($subject['amountDue']), 4) !== 0) {
                     throw ApiProblem::unprocessable('amount_mismatch', "Amount must equal the amount due ({$subject['amountDue']}).", []);
                 }
@@ -115,7 +130,7 @@ class PaystackService
                 'facility_unit_id' => Ids::toBinary($facilityId), 'group_id' => Ids::toBinary($paymentId),
                 'tender_type' => 'CARD', 'provider' => 'PAYSTACK', 'provider_reference' => $reference, 'status' => 'AUTHORIZING',
                 'amount' => $amount, 'currency' => 'NGN', 'device_id' => Fmt::bin(RequestContext::deviceId()),
-                'taken_by_staff_id' => Ids::toBinary($staffId), 'customer_email' => $in['email'],
+                'taken_by_staff_id' => Fmt::bin($staffId), 'customer_email' => $in['email'],
                 'subject_type' => $subjectType, 'subject_id' => Fmt::bin($subjectId),
                 'intent' => json_encode($intent, JSON_THROW_ON_ERROR), 'created_at' => Fmt::now(),
             ]);
@@ -126,14 +141,16 @@ class PaystackService
     }
 
     /** `GET /payments/paystack/verify/{reference}`: ask Paystack, capture if confirmed (idempotent with the webhook). */
-    public function verify(string $reference, string $staffId): array
+    public function verify(string $reference, ?string $staffId): array
     {
         $row = DB::table('payment')->where('provider', 'PAYSTACK')->where('provider_reference', $reference)->first();
         if ($row === null) {
             throw ApiProblem::notFound('not_found', 'Unknown payment reference.');
         }
         $facility = Ids::fromBinary($row->facility_unit_id);
-        if (Fmt::uuid($row->taken_by_staff_id) !== $staffId && ! $this->permissions->can($staffId, 'payment.view', Scope::facility($facility))) {
+        if ($staffId === null) {
+            Owns::payment($row); // customer: only their own booking / membership / ticket-order payment (404 otherwise)
+        } elseif (Fmt::uuid($row->taken_by_staff_id) !== $staffId && ! $this->permissions->can($staffId, 'payment.view', Scope::facility($facility))) {
             throw ApiProblem::permissionDenied('payment.view');
         }
         $this->confirm($reference, null);
@@ -292,6 +309,17 @@ class PaystackService
         if (bccomp($unallocated, '0', 4) > 0) {
             // Real money arrived for something already settled another way: needs a refund decision by a human.
             Audit::securityEvent('payment.online_overpayment', 'WARNING', null, null, ['paymentId' => $paymentId, 'unallocated' => $unallocated]);
+        }
+    }
+
+    private static function assertCallbackAllowed(?string $url): void
+    {
+        $allowed = (array) config('customer.allowed_callback_hosts', []);
+        if ($url === null || $allowed === []) {
+            return;
+        }
+        if (! in_array(strtolower((string) parse_url($url, PHP_URL_HOST)), array_map('strtolower', $allowed), true)) {
+            throw ApiProblem::unprocessable('validation_failed', 'callbackUrl host is not allowed.', ['callbackUrl' => ['host not allowed']]);
         }
     }
 

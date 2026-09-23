@@ -4,6 +4,8 @@ namespace App\Domain\Booking\Http\Presenters;
 
 use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Models\Booking;
+use App\Domain\Booking\Services\BookingPolicyView;
+use App\Domain\Customer\Support\Actor;
 use App\Support\Money\Money;
 
 final class BookingPresenter
@@ -21,6 +23,7 @@ final class BookingPresenter
             'total' => Money::of($b->total)->amount, 'amountPaid' => Money::of($b->amount_paid)->amount, 'orderId' => $b->order_id, 'entitlementId' => $b->entitlement_id,
             'source' => $b->source, 'rowVersion' => $b->row_version, 'createdAt' => $b->created_at->format('Y-m-d\TH:i:s.v\Z'),
             'wholeResource' => $b->whole_resource, 'cancellationFee' => Money::of($b->cancellation_fee)->amount,
+            'customerId' => $b->customer_id, 'policy' => BookingPolicyView::for($b),
         ];
     }
 
@@ -32,7 +35,7 @@ final class BookingPresenter
             'productId' => $r->product_id, 'price' => Money::of($r->price)->amount, 'active' => $r->is_active,
             'code' => $r->code, 'allowWholeResource' => $r->allow_whole_resource, 'maxSlotsPerBooking' => $r->max_slots_per_booking, 'onlineBookable' => $r->online_bookable,
             'wholePrice' => $r->whole_price === null ? null : Money::of($r->whole_price)->amount,
-            'authority' => ['offlineStrategy' => $r->offline_strategy, 'localReserveUnits' => $r->local_reserve_units, 'onlineStaleAfterSeconds' => $r->online_stale_after_seconds],
+            'authority' => Actor::isPublic() ? null : ['offlineStrategy' => $r->offline_strategy, 'localReserveUnits' => $r->local_reserve_units, 'onlineStaleAfterSeconds' => $r->online_stale_after_seconds],
             'rowVersion' => $r->row_version,
         ];
     }

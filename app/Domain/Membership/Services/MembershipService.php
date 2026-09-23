@@ -2,6 +2,7 @@
 
 namespace App\Domain\Membership\Services;
 
+use App\Domain\Identity\Models\Customer;
 use App\Domain\Membership\Models\MemberCard;
 use App\Domain\Membership\Models\Membership;
 use App\Domain\Membership\Models\MembershipPlan;
@@ -29,18 +30,18 @@ class MembershipService
      * @param  array{name: string, phone?: ?string, email?: ?string}  $customer
      * @param  list<array{tenderType: string, amount: string, reference?: ?string}>  $tenders
      */
-    public function purchase(string $planId, array $customer, ?string $facilityId, array $tenders, ?string $paystackReference, ?string $staffId, string $channel = 'RECEPTION'): Membership
+    public function purchase(string $planId, array $customer, ?string $facilityId, array $tenders, ?string $paystackReference, ?string $staffId, string $channel = 'RECEPTION', ?string $customerId = null): Membership
     {
         $org = Tenant::organizationId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No organization in context.');
         $site = Tenant::siteId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No site in context.');
 
-        $membershipId = DB::transaction(function () use ($planId, $customer, $tenders, $paystackReference, $staffId, $channel, $org, $site): string {
+        $membershipId = DB::transaction(function () use ($planId, $customer, $tenders, $paystackReference, $staffId, $channel, $org, $site, $customerId): string {
             $plan = MembershipPlan::query()->where('organization_id', $org)->find($planId) ?? throw ApiProblem::notFound('plan_not_found', 'Membership plan not found.');
             if (! $plan->is_active) {
                 throw ApiProblem::conflict('plan_inactive', 'This membership plan is no longer on sale.');
             }
             $settlement = $this->settlement($plan->price, $tenders);
-            $holder = $this->customers->resolve($org, $customer);
+            $holder = $customerId !== null ? Customer::query()->where('organization_id', $org)->findOrFail($customerId) : $this->customers->resolve($org, $customer);
 
             $id = Ids::uuid7();
             $m = $this->insertMembership($id, $org, $site, $plan, $holder->id, $staffId, $channel, $paystackReference ?? $settlement);

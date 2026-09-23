@@ -7,6 +7,9 @@ use App\Domain\Booking\Http\Presenters\Preconditions;
 use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Services\BookingService;
 use App\Domain\Booking\Support\HoldCommand;
+use App\Domain\Customer\Support\Actor;
+use App\Domain\Customer\Support\Owns;
+use App\Domain\Identity\Models\Customer;
 use App\Support\Api\Paged;
 use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
@@ -34,6 +37,14 @@ class BookingController
             'customer.email' => ['nullable', 'email', 'max:255'],
             'customer.membershipId' => ['nullable', 'uuid'],
         ]);
+        $channel = 'STAFF';
+        $customerId = null;
+        if (Actor::isCustomer()) { // an online customer books as THEMSELVES: identity comes from the account, never from the body
+            $c = Customer::query()->findOrFail(Actor::customerId());
+            $data['customer'] = ['name' => $c->full_name, 'email' => $c->email, 'phone' => $data['customer']['phone'] ?? $c->phone];
+            $channel = 'ONLINE';
+            $customerId = $c->id;
+        }
         $booking = $this->bookings->hold(new HoldCommand(
             resourceId: strtolower($data['resourceId']),
             start: CarbonImmutable::parse($data['start'])->utc(),
@@ -41,6 +52,8 @@ class BookingController
             quantity: (int) ($data['quantity'] ?? 1),
             wholeResource: (bool) ($data['wholeResource'] ?? false),
             customer: $data['customer'] ?? null,
+            channel: $channel,
+            customerId: $customerId,
         ));
 
         return $this->respond($booking, 201);
@@ -86,6 +99,8 @@ class BookingController
             throw ApiProblem::notFound('not_found', 'Booking not found.');
         }
 
+        Owns::booking($booking->customer_id);
+
         return $this->respond($booking);
     }
 
@@ -100,6 +115,10 @@ class BookingController
             'cashSessionId' => ['nullable', 'uuid'],
             'paystackReference' => ['nullable', 'string', 'max:128'],
         ]);
+        $this->assertOwned($bookingId);
+        if (Actor::isCustomer() && (! empty($data['tenders']) || ! empty($data['cashSessionId']))) {
+            throw ApiProblem::forbidden('permission_denied', 'Online customers pay through Paystack; tenders are for staff.');
+        }
         $booking = $this->bookings->confirm($this->id($bookingId), Preconditions::rowVersion($request), $data['tenders'] ?? [], $data['cashSessionId'] ?? null, $data['paystackReference'] ?? null);
 
         return $this->respond($booking);
@@ -108,6 +127,7 @@ class BookingController
     public function cancel(Request $request, string $bookingId): JsonResponse
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:255']]);
+        $this->assertOwned($bookingId);
 
         return $this->respond($this->bookings->cancel($this->id($bookingId), Preconditions::rowVersion($request), $data['reason']));
     }
@@ -115,6 +135,7 @@ class BookingController
     public function reschedule(Request $request, string $bookingId): JsonResponse
     {
         $data = $request->validate(['start' => ['required', 'date'], 'end' => ['required', 'date', 'after:start'], 'reason' => ['nullable', 'string', 'max:255']]);
+        $this->assertOwned($bookingId);
         $booking = $this->bookings->reschedule($this->id($bookingId), Preconditions::rowVersion($request), CarbonImmutable::parse($data['start'])->utc(), CarbonImmutable::parse($data['end'])->utc(), $data['reason'] ?? null);
 
         return $this->respond($booking);
@@ -126,6 +147,15 @@ class BookingController
         $data = $request->validate(['orderId' => ['required', 'uuid']]);
 
         return $this->respond($this->bookings->attachOrder($this->id($bookingId), Preconditions::rowVersion($request), strtolower($data['orderId'])));
+    }
+
+    /** Customers may only touch their own bookings (404 otherwise); staff are gated by permission middleware. */
+    private function assertOwned(string $bookingId): void
+    {
+        if (! Actor::isStaff()) {
+            $owner = Ids::isUuid($bookingId) ? Booking::query()->whereKey(strtolower($bookingId))->value('customer_id') : null;
+            Owns::booking($owner);
+        }
     }
 
     private function id(string $id): string

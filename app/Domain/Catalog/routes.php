@@ -3,9 +3,12 @@
 use App\Domain\Catalog\Http\Controllers\CatalogController;
 use Illuminate\Support\Facades\Route;
 
+Route::middleware(['auth:staff,customer,service', 'device:optional', 'throttle:customer-api'])->group(function () {
+    Route::get('catalog/products', [CatalogController::class, 'products']);
+});
+
 Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::get('catalog/categories', [CatalogController::class, 'categories']);
-    Route::get('catalog/products', [CatalogController::class, 'products']);
     Route::get('catalog/products/{productId}', [CatalogController::class, 'product']);
     Route::get('catalog/availability', [CatalogController::class, 'availability']);
     Route::get('catalog/prep-routes', [CatalogController::class, 'prepRoutes']);
