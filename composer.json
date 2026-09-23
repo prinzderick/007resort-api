@@ -73,6 +73,10 @@
         ],
         "demo": [
             "@php artisan r007:demo-seed"
+        ],
+        "two-node": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan r007:two-node"
         ]
     },
     "extra": {

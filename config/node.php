@@ -3,7 +3,8 @@
 /*
  * Two-node model (ADR-0013). The same codebase runs as the on-premises Local node or the Cloud node.
  */
-$node = strtolower((string) env('APP_NODE', 'local'));
+// NODE_ROLE is accepted as an alias of APP_NODE (APP_NODE wins when both are set).
+$node = strtolower((string) (env('APP_NODE') ?: env('NODE_ROLE', 'local')));
 
 return [
     // 'local' | 'cloud'. Validated at boot (see App\Providers\AppServiceProvider).
