@@ -8,6 +8,7 @@ use App\Domain\Booking\Models\Blackout;
 use App\Domain\Booking\Services\AvailabilityService;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
+use App\Support\Api\Paged;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\RequestContext;
@@ -33,9 +34,7 @@ class ResourceController
             }
             $q->where('facility_unit_id', strtolower($fac));
         }
-        $page = CursorPage::paginate($q, $request, 'id', 'asc')->toArray(fn ($r) => BookingPresenter::resource($r));
-
-        return ['items' => $page['data'], 'nextCursor' => $page['page']['nextCursor']];
+        return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'asc'), fn ($r) => BookingPresenter::resource($r));
     }
 
     public function availability(Request $request, string $resourceId): array

@@ -8,6 +8,7 @@ use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Services\BookingService;
 use App\Domain\Booking\Support\HoldCommand;
 use App\Support\Http\ApiProblem;
+use App\Support\Api\Paged;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
@@ -74,9 +75,7 @@ class BookingController
             $like = '%'.addcslashes($term, '%_\\').'%';
             $q->where(fn ($w) => $w->where('number', 'like', $like)->orWhere('customer_name', 'like', $like)->orWhere('customer_phone', 'like', $like));
         }
-        $page = CursorPage::paginate($q, $request, 'id', 'desc')->toArray(fn ($b) => BookingPresenter::booking($b));
-
-        return ['items' => $page['data'], 'nextCursor' => $page['page']['nextCursor']];
+        return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'desc'), fn ($b) => BookingPresenter::booking($b));
     }
 
     public function show(string $bookingId): JsonResponse

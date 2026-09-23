@@ -9,6 +9,7 @@ use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Services\EntitlementService;
 use App\Domain\Ticketing\Services\RedemptionService;
 use App\Support\Http\ApiProblem;
+use App\Support\Api\Paged;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
@@ -39,9 +40,7 @@ class EntitlementController
                 $q->where($col, strtolower($f[$param]));
             }
         }
-        $page = CursorPage::paginate($q, $request, 'id', 'desc')->toArray(fn ($e) => EntitlementPresenter::entitlement($e));
-
-        return ['items' => $page['data'], 'nextCursor' => $page['page']['nextCursor']];
+        return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'desc'), fn ($e) => EntitlementPresenter::entitlement($e));
     }
 
     /** POST /entitlements — manual / re-issue. Idempotent per source. */
