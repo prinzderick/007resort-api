@@ -133,6 +133,9 @@ final class OrderService
             if (($e->errorInfo[1] ?? null) === 1062 && $clientId && ($existing = DB::table('order')->where('id', Ids::toBinary($clientId))->first())) {
                 return $this->replay($existing, $requestHash);
             }
+            if (($e->errorInfo[1] ?? null) === 1062 && str_contains($e->getMessage(), 'order_line')) {
+                throw ApiProblem::conflict('line_id_in_use', 'A line id in this request already belongs to another order.');
+            }
             throw $e;
         }
     }

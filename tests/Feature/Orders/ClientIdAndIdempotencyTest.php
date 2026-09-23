@@ -35,6 +35,16 @@ class ClientIdAndIdempotencyTest extends OrdersTestCase
         $this->assertSame('1', (string) DB::table('order_line')->value('quantity'));
     }
 
+    public function test_reusing_a_line_id_on_a_new_order_is_a_409_not_a_500(): void
+    {
+        $lineId = Ids::uuid7();
+        $mk = fn (string $oid) => ['id' => $oid, 'facilityId' => $this->f->restaurant->id, 'tableId' => $this->f->tables['T1'],
+            'lines' => [['id' => $lineId, 'productId' => $this->f->products['jollof'], 'quantity' => 1]]];
+        $this->api('waiter', 'POST', '/orders', $mk(Ids::uuid7()))->assertStatus(201);
+        $this->api('waiter', 'POST', '/orders', $mk(Ids::uuid7()))->assertStatus(409)->assertJsonPath('code', 'line_id_in_use');
+        $this->assertSame(1, DB::table('order')->count());
+    }
+
     public function test_client_id_must_be_a_uuid_v7(): void
     {
         $this->api('waiter', 'POST', '/orders', $this->body('not-a-uuid'))->assertStatus(422)->assertJsonPath('code', 'validation_failed');
