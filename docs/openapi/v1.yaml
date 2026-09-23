@@ -7928,6 +7928,512 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  # ---- Customer / public surface (module Customer; `x-additive: true`). Credentials: customerAuth (r7c_), serviceToken (r7s_, GET-only public.read), bearerAuth (staff r7a_). ----
+  # Existing contract paths ALSO admit customer tokens (ownership enforced -> 404 for others' data): POST /bookings/hold, GET /bookings/{id},
+  # POST /bookings/{id}/confirm|cancel|reschedule (customers cannot send tenders), POST /payments/paystack/initialize, GET /payments/paystack/verify/{reference},
+  # GET /entitlements/{id}, POST /memberships, GET /memberships/{id}; and customer OR service token: GET /bookings/resources[/{id}/availability] (online-bookable only, no authority
+  # config), GET /catalog/products (tickets only, additive `ticketCategory`; `facilityId` = the facility the ticket gives access to), GET /memberships/plans (active only).
+  /public/site:
+    get:
+      operationId: getPublicSite
+      tags:
+      - Public
+      summary: Public site information
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Unauthenticated. Name, contact, currency, opening hours and, per facility, whether online booking / tickets are available. `sameDayAvailable` / `siteAvailability.localNodeFresh` reflect the SiteAvailability heartbeat gate (Cloud node only): when the Local node is stale, same-day (immediate-fulfilment) ticket orders are refused with `409 site_offline` while the rest of the site stays available. Cached 15 s.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSite'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /public/ticket-orders:
+    post:
+      operationId: createTicketOrder
+      tags:
+      - Public
+      summary: Create an unpaid pool-ticket order
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Customer token required. The SERVER prices the lines; the owner is always the signed-in customer. Pay with `POST /payments/paystack/initialize {orderIds:[id], amount}`; one QR entitlement per person (valid on `visitDate`) is issued on `PaymentCaptured`. `409 site_offline` for same-day visits when the Local node heartbeat is stale (Cloud node).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketOrderRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketOrder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/register:
+    post:
+      operationId: customerRegister
+      tags:
+      - Customer
+      summary: Register a customer account
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Always answers 201 `{verificationRequired:true,email}` (no account enumeration). Sends a 6-digit code + link token by email (valid 30 min, 5 attempts). Naturally idempotent; does not use the Idempotency-Key table because the body carries a password. Rate limited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRegisterRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationRequired'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/verify:
+    post:
+      operationId: customerVerify
+      tags:
+      - Customer
+      summary: Verify email and sign in
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Body `{email, code}` or `{token}`. Returns tokens (`r7c_` access, `r7x_` refresh). Wrong/expired/attempt-exhausted: `422 invalid_verification`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerVerifyRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAuthResult'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/verify/resend:
+    post:
+      operationId: customerVerifyResend
+      tags:
+      - Customer
+      summary: Resend the verification code
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Always 202 (no enumeration); at most one code per minute per account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/login:
+    post:
+      operationId: customerLogin
+      tags:
+      - Customer
+      summary: Customer sign-in
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        `401 invalid_credentials`; `403 email_not_verified` (only after a correct password); `403 account_locked` after 5 failures (15 min).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerLoginRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAuthResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/refresh:
+    post:
+      operationId: customerRefresh
+      tags:
+      - Customer
+      summary: Rotate the refresh token
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Reuse of a rotated refresh token revokes the whole chain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAuthResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/logout:
+    post:
+      operationId: customerLogout
+      tags:
+      - Customer
+      summary: Sign out
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Revokes the presented token (`?all=true` every session).
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customer/auth/forgot:
+    post:
+      operationId: customerForgot
+      tags:
+      - Customer
+      summary: Request a password reset
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Always 202. Emails a single-use link token (60 min).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/reset:
+    post:
+      operationId: customerReset
+      tags:
+      - Customer
+      summary: Set a new password
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Consumes the reset token, revokes every session. `422 invalid_reset_token`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me:
+    get:
+      operationId: customerMe
+      tags:
+      - Customer
+      summary: Signed-in customer
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Customer tokens only; staff tokens get 401.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customer/bookings:
+    get:
+      operationId: customerBookings
+      tags:
+      - Customer
+      summary: My bookings
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Bookings of the signed-in customer (newest first), each with `policy`. `filter[status]`, cursor pagination. Ownership is enforced in the query, never by post-filtering.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customer/entitlements:
+    get:
+      operationId: customerEntitlements
+      tags:
+      - Customer
+      summary: My entitlements
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        QR entitlements the customer owns (directly, via their bookings or ticket orders). `bookingId` / `orderId` filters. Ownership is enforced in the query, never by post-filtering.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customer/memberships:
+    get:
+      operationId: customerMemberships
+      tags:
+      - Customer
+      summary: My memberships
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Memberships of the signed-in customer. Ownership is enforced in the query, never by post-filtering.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customer/orders/{orderId}:
+    get:
+      operationId: customerOrder
+      tags:
+      - Customer
+      summary: One of my ticket orders
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        `404` for any order the customer does not own (indistinguishable from a missing one).
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /service-tokens:
+    get:
+      operationId: listServiceTokens
+      tags:
+      - Public
+      summary: List website service tokens
+      x-additive: true
+      security:
+      - bearerAuth: []
+      description: |-
+        Required permission: `config.manage`. Hashes are never returned.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /service-tokens:
+    post:
+      operationId: createServiceToken
+      tags:
+      - Public
+      summary: Create a website service token (scope public.read)
+      x-additive: true
+      security:
+      - bearerAuth: []
+      description: |-
+        Required permission: `config.manage`. The plaintext `token` is returned ONCE; only its SHA-256 is stored.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTokenCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /service-tokens/{id}/rotate:
+    post:
+      operationId: rotateServiceToken
+      tags:
+      - Public
+      summary: Rotate a service token
+      x-additive: true
+      security:
+      - bearerAuth: []
+      description: |-
+        Issues a new token; the old one stays valid for `SERVICE_TOKEN_GRACE_HOURS` (default 24) unless `?immediate=true`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTokenCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /service-tokens/{id}/revoke:
+    post:
+      operationId: revokeServiceToken
+      tags:
+      - Public
+      summary: Revoke a service token
+      x-additive: true
+      security:
+      - bearerAuth: []
+      description: |-
+        Immediate.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -7935,6 +8441,16 @@ components:
       scheme: bearer
       bearerFormat: opaque or JWT
       description: Staff session access token from `/auth/staff/login`.
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque (r7c_...)
+      description: Online customer access token from `/customer/auth/verify|login|refresh`. Never valid on staff endpoints; staff tokens are never valid on customer endpoints.
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque (r7s_...)
+      description: Website read-only credential (scope `public.read`); GET on public read endpoints only.
     deviceToken:
       type: apiKey
       in: header
@@ -10696,6 +11212,11 @@ components:
     Booking:
       type: object
       properties:
+        customerId:
+          type: [string, 'null']
+          x-additive: true
+        policy:
+          $ref: '#/components/schemas/BookingPolicy'
         id:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -12822,3 +13343,162 @@ components:
       required:
       - items
       - nextCursor
+    PublicSite:
+      type: object
+      properties:
+        name: {type: string}
+        siteName: {type: [string, 'null']}
+        currency: {type: string, example: NGN}
+        timezone: {type: string}
+        contact:
+          type: object
+          properties: {phone: {type: string}, email: {type: string}, address: {type: string}, mapUrl: {type: string}}
+        openingHours: {type: [string, 'null']}
+        node: {type: string, enum: [local, cloud]}
+        siteAvailability:
+          type: object
+          properties: {localNodeFresh: {type: boolean}, immediateOrdering: {type: boolean}}
+        facilities:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {$ref: '#/components/schemas/Uuid'}
+              code: {type: string}
+              kind: {type: string}
+              name: {type: string}
+              description: {type: [string, 'null']}
+              openingHours: {type: [string, 'null']}
+              phone: {type: [string, 'null']}
+              onlineBookable: {type: boolean, description: online booking OR online tickets}
+              onlineBooking: {type: boolean}
+              onlineTickets: {type: boolean}
+              sameDayAvailable: {type: boolean}
+              onlineNotice: {type: [string, 'null']}
+      required: [name, currency, facilities]
+    Customer:
+      type: object
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string}
+        email: {type: string}
+        phone: {type: [string, 'null']}
+        emailVerified: {type: boolean}
+        createdAt: {type: string, format: date-time}
+      required: [id, name, email, emailVerified]
+    CustomerAuthResult:
+      type: object
+      properties:
+        accessToken: {type: string}
+        refreshToken: {type: string}
+        tokenType: {type: string, example: Bearer}
+        expiresInSeconds: {type: integer}
+        accessTokenExpiresAt: {type: string, format: date-time}
+        refreshTokenExpiresAt: {type: string, format: date-time}
+        customer: {$ref: '#/components/schemas/Customer'}
+      required: [accessToken, refreshToken, customer]
+    VerificationRequired:
+      type: object
+      properties: {verificationRequired: {type: boolean}, email: {type: string}}
+    StatusResult:
+      type: object
+      properties: {status: {type: string}}
+    CustomerRegisterRequest:
+      type: object
+      properties:
+        name: {type: string, minLength: 2, maxLength: 120}
+        email: {type: string, format: email}
+        phone: {type: string}
+        password: {type: string, minLength: 10, maxLength: 128}
+      required: [name, email, password]
+    CustomerVerifyRequest:
+      type: object
+      properties:
+        email: {type: string, format: email}
+        code: {type: string, pattern: '^[0-9]{6}$'}
+        token: {type: string}
+    CustomerLoginRequest:
+      type: object
+      properties: {email: {type: string, format: email}, password: {type: string}}
+      required: [email, password]
+    EmailRequest:
+      type: object
+      properties: {email: {type: string, format: email}}
+      required: [email]
+    RefreshRequest:
+      type: object
+      properties: {refreshToken: {type: string}}
+      required: [refreshToken]
+    ResetRequest:
+      type: object
+      properties: {token: {type: string}, password: {type: string, minLength: 10}}
+      required: [token, password]
+    TicketOrderRequest:
+      type: object
+      properties:
+        facilityId: {$ref: '#/components/schemas/Uuid'}
+        visitDate: {type: string, format: date}
+        lines:
+          type: array
+          items:
+            type: object
+            properties: {productId: {$ref: '#/components/schemas/Uuid'}, quantity: {type: integer, minimum: 1}}
+            required: [productId, quantity]
+        customer: {type: object, additionalProperties: true, description: ignored; the owner is the signed-in customer}
+      required: [facilityId, visitDate, lines]
+    TicketOrder:
+      type: object
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        number: {type: string}
+        facilityId: {$ref: '#/components/schemas/Uuid'}
+        status: {type: string}
+        channel: {type: string, example: ONLINE}
+        visitDate: {type: string, format: date}
+        currency: {type: string}
+        subtotal: {type: string}
+        total: {type: string, description: decimal string}
+        amountPaid: {type: string}
+        amountDue: {type: string}
+        paid: {type: boolean}
+        adultCount: {type: integer}
+        childCount: {type: integer}
+        lines: {type: array, items: {type: object, additionalProperties: true}}
+        entitlementIds: {type: array, items: {$ref: '#/components/schemas/Uuid'}}
+        createdAt: {type: string, format: date-time}
+      required: [id, total, paid]
+    BookingPolicy:
+      type: object
+      description: What the engine would allow right now (same rules as cancel/reschedule enforce).
+      properties:
+        canCancel: {type: boolean}
+        canReschedule: {type: boolean}
+        cancelBy: {type: [string, 'null'], format: date-time}
+        rescheduleBy: {type: [string, 'null'], format: date-time}
+        refundAmount: {type: string}
+        cancellationFee: {type: string}
+        reschedulesLeft: {type: integer}
+        note: {type: [string, 'null']}
+    BookingPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Booking'}}
+        nextCursor: {type: [string, 'null']}
+    EntitlementPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Entitlement'}}
+        nextCursor: {type: [string, 'null']}
+    MembershipPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Membership'}}
+        nextCursor: {type: [string, 'null']}
+    ServiceTokenCreated:
+      type: object
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        token: {type: string, description: shown once}
+        name: {type: string}
+        scope: {type: string, example: public.read}
+        oldTokenExpiresAt: {type: [string, 'null'], format: date-time}
