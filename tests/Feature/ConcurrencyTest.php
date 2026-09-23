@@ -30,7 +30,7 @@ class ConcurrencyTest extends ConcurrentTestCase
     {
         $t = TestData::tenant();
         TestData::staff($t, 'racer');
-        $token = $this->postJson('/api/v1/auth/staff/login', ['username' => 'racer', 'password' => TestData::PASSWORD])->json('accessToken');
+        $token = $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => 'racer', 'secret' => TestData::PASSWORD])->json('accessToken');
 
         $results = Concurrent::run(6, Workers::class, 'idempotentPost', [$token, 'race-key-1', 'RaceOrg']);
 

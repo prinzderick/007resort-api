@@ -16,14 +16,14 @@ use Throwable;
 /**
  * `idempotent[:scope]` route middleware (architecture/15 §1). Put AFTER auth middleware.
  *
- *  - Requires an `Idempotency-Key` header (400 idempotency_key_required).
+ *  - Requires an `Idempotency-Key` header (400 idempotency_key_missing).
  *  - First sighting of (scope, actor, key): runs the handler inside ONE DB transaction together with
  *    the INSERT of the idempotency_record, so the business effect and the stored response commit
  *    atomically. Only 2xx responses are stored; any >=400 response/exception rolls the whole thing back
  *    (a failed request has no effect and the client may retry with the same key).
  *  - Replay (same key + same request fingerprint): returns the stored status + body, marked
  *    `Idempotent-Replayed: true`, without executing the handler.
- *  - Same key with a DIFFERENT method/path/body: 422 idempotency_key_reuse.
+ *  - Same key with a DIFFERENT method/path/body: 422 idempotency_key_reused.
  *  - Concurrent duplicates are serialised by a Redis lock (best effort) and, authoritatively, by the
  *    (scope,key) primary key: the loser rolls back and replays the winner's response.
  * Keys are namespaced per actor (staff/device) so one user can never replay another's response.
@@ -36,10 +36,10 @@ class Idempotent
     {
         $key = trim((string) $request->header(self::HEADER, ''));
         if ($key === '') {
-            throw ApiProblem::badRequest('idempotency_key_required', 'The Idempotency-Key header is required for this request.');
+            throw ApiProblem::badRequest('idempotency_key_missing', 'The Idempotency-Key header is required for this request.');
         }
-        if (strlen($key) > 255 || preg_match('/[^\x20-\x7E]/', $key)) {
-            throw ApiProblem::badRequest('idempotency_key_invalid', 'Idempotency-Key must be printable ASCII, max 255 characters.');
+        if (strlen($key) > 128 || preg_match('/[^\x20-\x7E]/', $key)) {
+            throw ApiProblem::badRequest('validation_failed', 'Idempotency-Key must be printable ASCII, max 128 characters.');
         }
 
         $scope = $this->scope($request, $scope);
@@ -112,7 +112,7 @@ class Idempotent
             return null;
         }
         if (! hash_equals($row->request_hash, $requestHash)) {
-            throw ApiProblem::unprocessable('idempotency_key_reuse', 'This Idempotency-Key was already used with a different request.');
+            throw ApiProblem::unprocessable('idempotency_key_reused', 'This Idempotency-Key was already used with a different request.');
         }
 
         return response($row->response_body === 'null' ? '' : $row->response_body, (int) $row->response_status, [
