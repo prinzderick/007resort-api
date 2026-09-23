@@ -58,7 +58,7 @@ class NodeAuthTest extends TwoNodeTestCase
             $this->push([$this->envelope('X', Ids::uuid7(), 1, [])])->assertOk();
         }
         $r = $this->push([$this->envelope('X', Ids::uuid7(), 1, [])]);
-        $r->assertStatus(429)->assertJsonPath('code', 'too_many_requests');
+        $r->assertStatus(429)->assertJsonPath('code', 'rate_limited');
         $this->assertNotNull($r->headers->get('Retry-After'));
         $this->assertSame(3, DB::table('inbox_event')->count());
     }

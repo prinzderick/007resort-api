@@ -81,14 +81,14 @@ class SyncAdminApiTest extends TwoNodeTestCase
         $api = $this->as('itadmin');
 
         $api->getJson('/api/v1/sync/conflicts?status=OPEN&category=CONFIGURATION')->assertOk()
-            ->assertJsonPath('data.0.id', $id)->assertJsonPath('data.0.localPayload.name', 'On-site edit')
-            ->assertJsonPath('data.0.incomingPayload.changes.name', 'Remote')->assertJsonPath('page.hasMore', false);
-        $api->getJson('/api/v1/sync/conflicts?category=PERMISSION')->assertOk()->assertJsonCount(0, 'data');
+            ->assertJsonPath('items.0.id', $id)->assertJsonPath('items.0.localPayload.name', 'On-site edit')
+            ->assertJsonPath('items.0.incomingPayload.changes.name', 'Remote')->assertJsonPath('nextCursor', null);
+        $api->getJson('/api/v1/sync/conflicts?category=PERMISSION')->assertOk()->assertJsonCount(0, 'items');
         $api->getJson('/api/v1/sync/conflicts?status=BOGUS')->assertStatus(422);
         $api->getJson("/api/v1/sync/conflicts/{$id}")->assertOk()->assertJsonPath('category', 'CONFIGURATION');
         $api->getJson('/api/v1/sync/conflicts/'.Ids::uuid7())->assertStatus(404)->assertJsonPath('code', 'conflict_not_found');
 
-        $api->postJson("/api/v1/sync/conflicts/{$id}/resolve", ['resolution' => 'KEEP_LOCAL', 'note' => 'Manager confirmed on-site price'])->assertStatus(400)->assertJsonPath('code', 'idempotency_key_required');
+        $api->postJson("/api/v1/sync/conflicts/{$id}/resolve", ['resolution' => 'KEEP_LOCAL', 'note' => 'Manager confirmed on-site price'])->assertStatus(400)->assertJsonPath('code', 'idempotency_key_missing');
         $api->postJson("/api/v1/sync/conflicts/{$id}/resolve", ['resolution' => 'ACCEPT_INCOMING', 'note' => 'nope'], $this->idem())->assertStatus(422);
         $r = $api->postJson("/api/v1/sync/conflicts/{$id}/resolve", ['resolution' => 'KEEP_LOCAL', 'note' => 'Manager confirmed on-site price'], $this->idem())->assertOk();
         $this->assertSame('RESOLVED', $r->json('status'));
@@ -142,7 +142,7 @@ class SyncAdminApiTest extends TwoNodeTestCase
         DB::table('outbox_event')->whereIn('id', [Ids::toBinary($failed), Ids::toBinary($failed2)])->update(['sync_status' => 'FAILED', 'retry_count' => 8, 'last_error' => json_encode(['result' => 'FAILED', 'message' => 'boom'])]);
         $api = $this->as('itadmin');
 
-        $api->getJson('/api/v1/sync/outbox?status=FAILED')->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.lastError.message', 'boom');
+        $api->getJson('/api/v1/sync/outbox?status=FAILED')->assertOk()->assertJsonCount(2, 'items')->assertJsonPath('items.0.lastError.message', 'boom');
         $api->postJson("/api/v1/sync/outbox/{$failed}/retry", [], $this->idem())->assertOk()->assertJsonPath('syncStatus', 'QUEUED');
         $row = DB::table('outbox_event')->where('id', Ids::toBinary($failed))->first();
         $this->assertSame(['QUEUED', 0], [$row->sync_status, (int) $row->retry_count]);
@@ -161,8 +161,8 @@ class SyncAdminApiTest extends TwoNodeTestCase
         $this->applierRegistry()->register('Poison', new PoisonApplier);
         app(InboxProcessor::class)->receive(InboundEvent::fromEnvelope($e));
         $api = $this->as('itadmin');
-        $api->getJson('/api/v1/sync/inbox-events?result=FAILED')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.eventId', $e['eventId'])
-            ->assertJsonPath('data.0.lastError.message', fn ($m) => str_contains($m, 'boom'));
+        $api->getJson('/api/v1/sync/inbox-events?result=FAILED')->assertOk()->assertJsonCount(1, 'items')->assertJsonPath('items.0.eventId', $e['eventId'])
+            ->assertJsonPath('items.0.lastError.message', fn ($m) => str_contains($m, 'boom'));
         $api->postJson('/api/v1/sync/inbox-events/'.$e['eventId'].'/reprocess', [], $this->idem())->assertOk()->assertJsonPath('result', 'FAILED');
         $this->assertSame(2, (int) DB::table('inbox_event')->value('attempts'));
     }

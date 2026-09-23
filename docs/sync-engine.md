@@ -97,7 +97,7 @@ IT/Admin (staff bearer + permission `config.manage`, per the contract; mutations
 edit against the current version, per the conflict matrix).
 
 Error codes: `invalid_node_token` 401 (+ `security_event sync.node_auth_failed`), `node_mismatch`/`node_site_mismatch` 403,
-`too_many_requests` 429, `sync_inbox_disabled`/`sync_pull_disabled`/`sync_heartbeat_disabled` 404, `heartbeat_clock_skew` 422,
+`rate_limited` 429, `sync_inbox_disabled`/`sync_pull_disabled`/`sync_heartbeat_disabled` 404, `heartbeat_clock_skew` 422,
 `invalid_cursor` 400, `outbox_event_not_retryable`/`conflict_already_resolved` 409.
 
 ## Node credentials
