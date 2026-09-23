@@ -2,17 +2,23 @@
 
 namespace App\Domain\Ticketing;
 
+use App\Domain\Ticketing\Contracts\OrderLineSource;
+use App\Domain\Ticketing\Contracts\RentalStockHook;
+use App\Domain\Ticketing\Services\NullOrderLineSource;
+use App\Domain\Ticketing\Services\NullRentalStockHook;
+use App\Domain\Ticketing\Services\QrTokens;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Ticketing module. Auto-registered by App\Providers\ModuleServiceProvider (see docs/MODULES.md).
- * Optional siblings, all auto-loaded: routes.php (under /api/v1), Migrations/, config.php.
+ * Ticketing module. Seams: RentalStockHook (Inventory), OrderLineSource (Orders/Catalog) — no-op defaults via bindIf.
  */
 class TicketingServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(QrTokens::class);
+        $this->app->bindIf(RentalStockHook::class, NullRentalStockHook::class);
+        $this->app->bindIf(OrderLineSource::class, NullOrderLineSource::class);
     }
 
     public function boot(): void
