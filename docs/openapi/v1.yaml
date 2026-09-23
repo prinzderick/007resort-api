@@ -8486,6 +8486,20 @@ components:
           - $ref: '#/components/schemas/Uuid'
             description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
           - type: 'null'
+        homeFacility:
+          description: Summary of the home facility (additive), so a device-token-only client needs no protected lookup.
+          oneOf:
+          - type: object
+            properties:
+              id:
+                $ref: '#/components/schemas/Uuid'
+              code:
+                type: string
+              name:
+                type: string
+              kind:
+                type: string
+          - type: 'null'
         platform:
           type: string
           example: android

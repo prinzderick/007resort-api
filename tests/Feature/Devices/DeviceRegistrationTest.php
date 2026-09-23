@@ -44,6 +44,10 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSame('MOBILE_TABLET', $r->json('device.kind'));
         $this->assertSame('ACTIVE', $r->json('device.status'));
         $this->assertSame($this->facilityId('RECEPTION'), $r->json('device.homeFacilityId'));
+        $this->assertSame('ATTENDANT', $r->json('device.mode'));
+        $this->assertSame(['id' => $this->facilityId('RECEPTION'), 'code' => 'RECEPTION'], array_intersect_key($r->json('device.homeFacility'), array_flip(['id', 'code'])));
+        $this->assertNotEmpty($r->json('device.homeFacility.name'));
+        $this->assertNotEmpty($r->json('device.homeFacility.kind'));
         $this->assertNull($r->json('device.checkout'));
 
         // only the SHA-256 is stored; the plaintext token and the code are nowhere in the DB

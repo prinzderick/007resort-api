@@ -117,11 +117,23 @@ class DeviceService
             'status' => $d->status(),
             'facilityId' => $checkout && $checkout->checked_in_at === null ? $checkout->facility_unit_id : null,
             'homeFacilityId' => $d->facility_unit_id,
+            'homeFacility' => $this->homeFacility($d),
             'platform' => $d->platform,
             'appVersion' => $d->app_version,
             'lastSeenAt' => $d->last_seen_at?->utc()->format('Y-m-d\TH:i:s.v\Z'),
             'checkout' => $checkout?->toApi(),
             'rowVersion' => (int) $d->row_version,
         ];
+    }
+
+    /** Summary of the device's home facility (additive to v1) so a device-token-only client needs no protected lookup. @return array<string, mixed>|null */
+    private function homeFacility(Device $d): ?array
+    {
+        if ($d->facility_unit_id === null) {
+            return null;
+        }
+        $f = DB::table('facility_unit')->where('id', Ids::toBinary($d->facility_unit_id))->first();
+
+        return $f === null ? null : ['id' => $d->facility_unit_id, 'code' => $f->code, 'name' => $f->name, 'kind' => $f->kind ?? 'GENERAL'];
     }
 }
