@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class AuditController
 {
-    /** GET /audit?entityType=&entityId=&actorStaffId=&action=&limit=&cursor= (oldest first). */
+    /** GET /audit?entityType=&entityId=&actorStaffId=&action=&from=&to=&order=asc|desc&limit=&cursor= (oldest first unless order=desc; from/to are UTC dates or ISO instants, `to` inclusive for a bare date). */
     public function index(Request $request): JsonResponse
     {
         $q = DB::table('audit_log');
@@ -29,7 +29,19 @@ class AuditController
             $q->where('action', $v);
         }
 
-        $page = CursorPage::paginate($q, $request, 'seq', 'asc');
+        $request->validate(['order' => ['nullable', 'in:asc,desc'], 'from' => ['nullable', 'date'], 'to' => ['nullable', 'date']]);
+        // Both spellings are accepted: ?from= and the contract's filter[from]= convention.
+        $filter = (array) $request->query('filter', []);
+        if ($v = $request->query('from', $filter['from'] ?? null)) {
+            $q->where('occurred_at', '>=', CarbonImmutable::parse($v, 'UTC')->utc()->format('Y-m-d H:i:s.u'));
+        }
+        if ($v = $request->query('to', $filter['to'] ?? null)) {
+            $to = CarbonImmutable::parse($v, 'UTC')->utc();
+            $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? $to->addDay() : $to->addMicrosecond();
+            $q->where('occurred_at', '<', $to->format('Y-m-d H:i:s.u'));
+        }
+
+        $page = CursorPage::paginate($q, $request, 'seq', $request->query('order') === 'desc' ? 'desc' : 'asc');
 
         return response()->json($page->toArray(fn ($r) => [
             'id' => Ids::fromBinary($r->id),

@@ -4740,6 +4740,13 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
+      - name: order
+        in: query
+        required: false
+        description: Oldest first (`asc`, default) or newest first (`desc`). `from`/`to` are also accepted without the filter[] wrapper; a bare date `to` includes that whole day.
+        schema:
+          type: string
+          enum: [asc, desc]
       responses:
         '200':
           description: Success
