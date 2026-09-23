@@ -21,7 +21,7 @@ class PaymentEffects
      * @param  array<string, array<string, mixed>>  $orders  locked order snapshots keyed by id
      * @param  array<string, string>  $paidBefore  order id => amount paid before this capture
      * @param  array<string, string>  $allocatedNow  order id => amount allocated by this capture
-     * @return array<string, array{paid: string, settled: bool}>
+     * @return array<string, array{paid: string, settled: bool, status: string}>
      */
     public function syncOrders(array $orders, array $paidBefore, array $allocatedNow, string $groupId): array
     {
@@ -29,8 +29,8 @@ class PaymentEffects
         foreach ($allocatedNow as $orderId => $amount) {
             $paid = bcadd($paidBefore[$orderId], $amount, 4);
             $settled = bccomp($paid, $orders[$orderId]['total'], 4) >= 0;
-            $this->orders->applyPayment($orderId, $paid, $settled, $groupId);
-            $out[$orderId] = ['paid' => $paid, 'settled' => $settled];
+            $status = $this->orders->applyPayment($orderId, $amount, $paid, $settled, $groupId);
+            $out[$orderId] = ['paid' => $paid, 'settled' => $settled, 'status' => $status];
         }
 
         return $out;

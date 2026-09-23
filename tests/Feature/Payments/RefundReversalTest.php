@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Payments\Services\PaymentApprovalHandler;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\PaymentsWorld;
@@ -63,17 +62,26 @@ class RefundReversalTest extends TestCase
         $this->assertSame(0, DB::table('refund')->count());
         $this->assertSame('CAPTURED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
 
-        // supervisor approves (Orders' approval service flips the approval and calls the handler in the same transaction)
+        // the supervisor decides through Orders' approval endpoint; approving applies the refund in the same transaction
         $approvalId = $r->json('approvalId');
-        DB::table('approval')->where('id', Ids::toBinary($approvalId))->update(['status' => 'APPROVED', 'approved_by' => Ids::toBinary($this->supervisor->id), 'decided_at' => now('UTC')->format('Y-m-d H:i:s.u')]);
-        $done = app(PaymentApprovalHandler::class)->apply($approvalId, $this->supervisor->id);
-        $this->assertSame($r->json('id'), $done['id'], 'the refund is created with the id promised in the 202');
-        $this->assertSame('COMPLETED', $done['status']);
+        $this->getJson('/api/v1/approvals?scope=approvable', $this->auth($this->supervisorToken, null))->assertOk()->assertJsonPath('items.0.id', $approvalId);
+        $this->postJson("/api/v1/approvals/{$approvalId}/decision", ['decision' => 'APPROVE', 'note' => 'ok'], $this->auth($this->cashierToken))->assertForbidden(); // requester cannot decide
+        $this->postJson("/api/v1/approvals/{$approvalId}/decision", ['decision' => 'APPROVE', 'note' => 'ok'], $this->auth($this->supervisorToken))->assertOk()->assertJsonPath('status', 'APPROVED');
         $row = DB::table('refund')->first();
+        $this->assertSame($r->json('id'), Ids::fromBinary($row->id), 'the refund is created with the id promised in the 202');
         $this->assertSame($approvalId, Ids::fromBinary($row->approval_id));
         $this->assertSame($this->cashier->id, Ids::fromBinary($row->requested_by_staff_id));
         $this->assertSame($this->supervisor->id, Ids::fromBinary($row->executed_by_staff_id));
         $this->assertSame('PARTIALLY_REFUNDED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
+    }
+
+    public function test_a_rejected_refund_approval_changes_nothing(): void
+    {
+        $x = $this->paidOrder('4000.0000', 'TRANSFER');
+        $r = $this->postJson("/api/v1/payments/{$x['payment']}/refund", ['amount' => '1000.0000', 'reason' => 'Customer complaint'], $this->auth($this->cashierToken))->assertStatus(202);
+        $this->postJson('/api/v1/approvals/'.$r->json('approvalId').'/decision', ['decision' => 'REJECT', 'note' => 'no'], $this->auth($this->supervisorToken))->assertOk()->assertJsonPath('status', 'REJECTED');
+        $this->assertSame(0, DB::table('refund')->count());
+        $this->assertSame('CAPTURED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
     }
 
     public function test_step_up_token_lets_a_cashier_apply_a_refund_inline(): void
@@ -86,8 +94,9 @@ class RefundReversalTest extends TestCase
         $this->postJson("/api/v1/payments/{$x['payment']}/refund", ['amount' => '4000.0000', 'reason' => 'Full refund'], $h)
             ->assertCreated()->assertJsonPath('status', 'COMPLETED');
         $row = DB::table('refund')->first();
-        $this->assertNotNull($row->approval_id);
-        $this->assertSame('APPROVED', DB::table('approval')->where('id', $row->approval_id)->value('status'));
+        $this->assertSame($this->supervisor->id, Ids::fromBinary($row->executed_by_staff_id), 'the step-up approver is the executor of record');
+        $this->assertSame($this->cashier->id, Ids::fromBinary($row->requested_by_staff_id));
+        $this->assertSame(1, DB::table('audit_log')->where('action', 'staff.step_up')->count());
         $this->assertSame('REFUNDED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
     }
 
@@ -173,9 +182,8 @@ class RefundReversalTest extends TestCase
         $r = $this->postJson("/api/v1/payments/{$x['payment']}/reversal", ['reason' => 'Wrong tender'], $this->auth($this->cashierToken))
             ->assertStatus(202)->assertJsonPath('approval.action', 'payment.reversal')->assertJsonPath('approval.requiredPermission', 'payment.reversal.approve');
         $this->assertSame('CAPTURED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
-        DB::table('approval')->where('id', Ids::toBinary($r->json('approvalId')))->update(['status' => 'APPROVED', 'approved_by' => Ids::toBinary($this->supervisor->id)]);
-        $done = app(PaymentApprovalHandler::class)->apply($r->json('approvalId'), $this->supervisor->id);
-        $this->assertSame($r->json('id'), $done['id']);
+        $this->postJson('/api/v1/approvals/'.$r->json('approvalId').'/decision', ['decision' => 'APPROVE'], $this->auth($this->supervisorToken))->assertOk();
+        $this->assertSame($r->json('id'), Ids::fromBinary(DB::table('reversal')->value('id')));
         $this->assertSame('REVERSED', DB::table('payment')->where('id', Ids::toBinary($x['payment']))->value('status'));
         $this->assertSame('SERVED', $this->orderStatus($x['order']));
     }

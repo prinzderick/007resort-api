@@ -4,19 +4,16 @@ namespace App\Domain\Payments\Services;
 
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
-use App\Domain\Identity\Services\StepUpService;
-use App\Domain\Payments\Contracts\ApprovalPort;
+use App\Domain\Orders\Approvals\ApprovalService;
 use App\Domain\Payments\Contracts\OrderPort;
 use App\Domain\Payments\Support\FacilityRules;
 use App\Domain\Payments\Support\Fmt;
-use App\Domain\Payments\Support\Ledger;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\Sync\Outbox;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,8 +37,7 @@ class RefundService
 
     public function __construct(
         private readonly PermissionChecker $permissions,
-        private readonly StepUpService $stepUp,
-        private readonly ApprovalPort $approvals,
+        private readonly ApprovalService $approvals,
         private readonly FacilityRules $rules,
         private readonly OrderPort $orders,
         private readonly PaymentEffects $effects,
@@ -51,12 +47,12 @@ class RefundService
      * @param  array{amount: string, reason: string, tenderType?: ?string}  $in
      * @return array{status: int, body: array<string, mixed>}
      */
-    public function refund(string $paymentId, array $in, string $staffId, Request $request): array
+    public function refund(string $paymentId, array $in, string $staffId): array
     {
-        return DB::transaction(function () use ($paymentId, $in, $staffId, $request) {
+        return DB::transaction(function () use ($paymentId, $in, $staffId) {
             $p = $this->lockPayment($paymentId);
             $facilityId = Ids::fromBinary($p->facility_unit_id);
-            $decision = $this->decision(self::REFUND, 'refund.execute', 'refund.approve', $staffId, $facilityId, $paymentId, $in['amount'], $request);
+            $decision = $this->decision(self::REFUND, 'refund.execute', 'refund.approve', $staffId, $facilityId, $paymentId, Money::normalize($in['amount']));
 
             $amount = Money::normalize($in['amount']);
             $this->assertRefundable($p, $amount);
@@ -66,11 +62,10 @@ class RefundService
             $reservedId = Ids::uuid7();
 
             if ($decision['mode'] === 'PENDING') {
-                $approval = $this->approvals->request(
-                    self::REFUND, 'Payment', $paymentId, $facilityId, $amount, $in['reason'], 'refund.approve',
+                $approval = $this->requestApproval(
+                    self::REFUND, 'refund.approve', $paymentId, $facilityId, $amount, $in['reason'],
                     "Refund {$amount} of {$p->tender_type} payment", ['kind' => 'REFUND', 'amount' => $amount, 'reason' => $in['reason'], 'reservedId' => $reservedId],
                 );
-                Audit::record('payment.refund.requested', 'Payment', $paymentId, new: ['amount' => $amount, 'reason' => $in['reason']], facilityUnitId: $facilityId, approvalId: $approval['id']);
 
                 return ['status' => 202, 'body' => [
                     'id' => $reservedId, 'paymentId' => $paymentId, 'amount' => $amount, 'reason' => $in['reason'],
@@ -79,7 +74,7 @@ class RefundService
                 ]];
             }
 
-            $refund = $this->applyRefund($p, $amount, $in['reason'], $staffId, $staffId, $decision['approvalId'], $reservedId, $decision['approverId']);
+            $refund = $this->applyRefund($p, $amount, $in['reason'], $staffId, $decision['approverId'] ?? $staffId, null, $reservedId, $decision['approverId']);
 
             return ['status' => 201, 'body' => $refund];
         });
@@ -89,23 +84,22 @@ class RefundService
      * @param  array{reason: string}  $in
      * @return array{status: int, body: array<string, mixed>}
      */
-    public function reverse(string $paymentId, array $in, string $staffId, Request $request): array
+    public function reverse(string $paymentId, array $in, string $staffId): array
     {
-        return DB::transaction(function () use ($paymentId, $in, $staffId, $request) {
+        return DB::transaction(function () use ($paymentId, $in, $staffId) {
             $p = $this->lockPayment($paymentId);
             $facilityId = Ids::fromBinary($p->facility_unit_id);
-            $decision = $this->decision(self::REVERSAL, 'payment.reversal.execute', 'payment.reversal.approve', $staffId, $facilityId, $paymentId, Money::normalize((string) $p->amount), $request);
+            $decision = $this->decision(self::REVERSAL, 'payment.reversal.execute', 'payment.reversal.approve', $staffId, $facilityId, $paymentId, Money::normalize((string) $p->amount));
             $this->assertReversible($p);
             $reservedId = Ids::uuid7();
 
             if ($decision['mode'] === 'PENDING') {
                 $this->assertSessionOpen($p, false);
                 $amount = Money::normalize((string) $p->amount);
-                $approval = $this->approvals->request(
-                    self::REVERSAL, 'Payment', $paymentId, $facilityId, $amount, $in['reason'], 'payment.reversal.approve',
+                $approval = $this->requestApproval(
+                    self::REVERSAL, 'payment.reversal.approve', $paymentId, $facilityId, $amount, $in['reason'],
                     "Reverse {$p->tender_type} payment of {$amount}", ['kind' => 'REVERSAL', 'reason' => $in['reason'], 'reservedId' => $reservedId],
                 );
-                Audit::record('payment.reversal.requested', 'Payment', $paymentId, new: ['reason' => $in['reason']], facilityUnitId: $facilityId, approvalId: $approval['id']);
 
                 return ['status' => 202, 'body' => [
                     'id' => $reservedId, 'paymentId' => $paymentId, 'reason' => $in['reason'], 'status' => 'PENDING_APPROVAL',
@@ -113,7 +107,7 @@ class RefundService
                 ]];
             }
 
-            return ['status' => 201, 'body' => $this->applyReversal($p, $in['reason'], $staffId, $staffId, $decision['approvalId'], $reservedId, $decision['approverId'])];
+            return ['status' => 201, 'body' => $this->applyReversal($p, $in['reason'], $staffId, $decision['approverId'] ?? $staffId, null, $reservedId, $decision['approverId'])];
         });
     }
 
@@ -191,28 +185,31 @@ class RefundService
         }
     }
 
-    /** @return array{mode: 'APPLY'|'PENDING', approvalId: ?string, approverId: ?string} */
-    private function decision(string $action, string $executePerm, string $approvePerm, string $staffId, string $facilityId, string $paymentId, string $amount, Request $request): array
+    /**
+     * Orders' approval gate decides EXECUTE (caller holds the `.approve` permission, or presents a valid X-Step-Up-Token from a
+     * supervisor who does, or no approval is needed) versus REQUEST (PENDING approval, HTTP 202) versus 403.
+     * "No approval needed" = neither the caller's grant is flagged `requires_approval` nor the facility rule demands it.
+     *
+     * @return array{mode: 'APPLY'|'PENDING', approverId: ?string}
+     */
+    private function decision(string $action, string $executePerm, string $approvePerm, string $staffId, string $facilityId, string $paymentId, string $amount): array
     {
-        $scope = Scope::facility($facilityId);
-        $grant = $this->permissions->grant($staffId, $executePerm, $scope) ?? throw ApiProblem::permissionDenied($executePerm);
+        $grant = $this->permissions->grant($staffId, $executePerm, Scope::facility($facilityId));
+        $notNeeded = $grant !== null && ! $grant->requiresApproval && ! $this->rules->approvalRequired($facilityId, $action, $amount);
+        $gate = $this->approvals->gate($executePerm, $approvePerm, $facilityId, null, $paymentId, $notNeeded);
 
-        if ($this->permissions->can($staffId, $approvePerm, $scope)) {
-            return ['mode' => 'APPLY', 'approvalId' => null, 'approverId' => $staffId];
-        }
-        if (($approver = $this->stepUp->consume($request, $approvePerm, 'Payment', $paymentId)) !== null) {
-            if (! $this->permissions->can($approver, $approvePerm, $scope)) {
-                throw ApiProblem::forbidden('step_up_required', 'The approving supervisor has no authority at this facility.');
-            }
-            $approval = $this->approvals->request($action, 'Payment', $paymentId, $facilityId, $amount, 'Supervisor step-up', $approvePerm, "Step-up approved {$action}", ['viaStepUp' => true], $approver);
+        return ['mode' => $gate['mode'] === 'EXECUTE' ? 'APPLY' : 'PENDING', 'approverId' => $gate['approvedBy']];
+    }
 
-            return ['mode' => 'APPLY', 'approvalId' => $approval['id'], 'approverId' => $approver];
-        }
-        if ($grant->requiresApproval || $this->rules->approvalRequired($facilityId, $action, $amount)) {
-            return ['mode' => 'PENDING', 'approvalId' => null, 'approverId' => null];
-        }
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed> contract `Approval`
+     */
+    private function requestApproval(string $action, string $approvePerm, string $paymentId, string $facilityId, string $amount, string $reason, string $summary, array $payload): array
+    {
+        $row = $this->approvals->request($action, 'Payment', $paymentId, $facilityId, $approvePerm, $reason, $payload, $amount, $summary);
 
-        return ['mode' => 'APPLY', 'approvalId' => null, 'approverId' => null];
+        return $this->approvals->present($row);
     }
 
     /** @return array<string, mixed> */
@@ -267,8 +264,8 @@ class RefundService
         $now = Fmt::now();
 
         // Lock order: payment -> orders -> cash session (same relative order as a settlement: orders -> session).
-        $orderBins = DB::table('payment_allocation')->where('payment_id', $p->id)->sharedLock()->pluck('order_id')->all();
-        $locked = $this->orders->lockOrders(array_map(Ids::fromBinary(...), $orderBins));
+        $allocs = DB::table('payment_allocation')->where('payment_id', $p->id)->sharedLock()->get(['order_id', 'amount']);
+        $locked = $this->orders->lockOrders($allocs->map(fn ($a) => Ids::fromBinary($a->order_id))->all());
         $this->assertSessionOpen($p, true);
 
         DB::table('reversal')->insert([
@@ -279,9 +276,8 @@ class RefundService
         ]);
         DB::table('payment')->where('id', $p->id)->update(['status' => 'REVERSED', 'row_version' => DB::raw('row_version + 1')]);
 
-        $paid = Ledger::paidByOrder(array_keys($locked)); // the reversed payment no longer counts
-        foreach ($locked as $oid => $_) {
-            $this->orders->applyReversal($oid, $paid[$oid], Ids::fromBinary($p->group_id));
+        foreach ($allocs as $a) { // give the money back to the orders (Orders re-opens a SETTLED order as SERVED)
+            $this->orders->applyReversal(Ids::fromBinary($a->order_id), Money::normalize((string) $a->amount), Ids::fromBinary($p->group_id));
         }
 
         Audit::record('payment.reverse', 'Payment', $paymentId,

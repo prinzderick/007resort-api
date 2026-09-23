@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Services;
 
+use App\Domain\Orders\Services\OrderSettlementService;
 use App\Domain\Payments\Contracts\OrderPort;
 use App\Domain\Payments\Support\Fmt;
 use App\Support\Ids;
@@ -9,13 +10,9 @@ use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Default {@see OrderPort}: reads the Orders module's tables (locking reads for settlement) and applies the settlement
- * result to the order.
- *
- * TODO(orders-integration): the WRITE half below (applyPayment / applyReversal / markTabSettled) updates `order` / `tab`
- * directly because Orders' `OrderSettlementService::markSettled` had not landed when Payments was written. When it does,
- * replace the three write methods with calls into it (audit + outbox + table release are Orders' concern) - the
- * OrderPort interface and every caller stay unchanged.
+ * Default {@see OrderPort}: READS the Orders module's tables (locking reads for settlement, allowed as foreign-key style
+ * lookups per docs/MODULES.md) and WRITES only through Orders' `OrderSettlementService` (status, amount_paid, audit, outbox,
+ * realtime, table release are Orders' concern).
  */
 class DbOrderPort implements OrderPort
 {
@@ -88,27 +85,24 @@ class DbOrderPort implements OrderPort
         return $out;
     }
 
-    public function applyPayment(string $orderId, string $amountPaid, bool $settled, string $paymentGroupId): void
+    public function applyPayment(string $orderId, string $delta, string $paidAfter, bool $fullyPaid, string $paymentGroupId): string
     {
-        $set = ['amount_paid' => $amountPaid, 'row_version' => DB::raw('row_version + 1')];
-        if ($settled) {
-            $set += ['status' => 'SETTLED', 'settled_at' => Fmt::now()];
+        $settlement = app(OrderSettlementService::class);
+        $order = $settlement->applyPayment($orderId, $delta);
+        if ($fullyPaid) {
+            $order = $settlement->markSettled($orderId);
         }
-        DB::table('order')->where('id', Ids::toBinary($orderId))->update($set);
+
+        return (string) $order['status'];
     }
 
-    public function applyReversal(string $orderId, string $amountPaid, string $paymentGroupId): void
+    public function applyReversal(string $orderId, string $delta, string $paymentGroupId): string
     {
-        $bin = Ids::toBinary($orderId);
-        $set = ['amount_paid' => $amountPaid, 'row_version' => DB::raw('row_version + 1')];
-        if (DB::table('order')->where('id', $bin)->value('status') === 'SETTLED') {
-            $set += ['status' => 'SERVED', 'settled_at' => null];
-        }
-        DB::table('order')->where('id', $bin)->update($set);
+        return (string) app(OrderSettlementService::class)->applyRefund($orderId, $delta)['status'];
     }
 
     public function markTabSettled(string $tabId): void
     {
-        DB::table('tab')->where('id', Ids::toBinary($tabId))->update(['status' => 'SETTLED', 'settled_at' => Fmt::now(), 'row_version' => DB::raw('row_version + 1')]);
+        app(OrderSettlementService::class)->markTabSettled($tabId);
     }
 }

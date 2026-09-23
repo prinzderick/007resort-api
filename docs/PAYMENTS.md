@@ -54,20 +54,26 @@ App code has no UPDATE/DELETE path on `payment_allocation`, `refund`, `reversal`
 `payment` and `cash_session`), and the migration user needs `TRIGGER` privilege. Test helper `TestData::wipe()` uses TRUNCATE for
 tables with delete-triggers.
 
-## Sensitive actions and approvals
+## Sensitive actions and approvals (reuses Orders' `ApprovalService`)
 
-`refund.execute` / `payment.reversal.execute` are held by cashiers **with `requires_approval = 1`**. The action is applied at once if
-the caller holds the matching `.approve` permission at the facility, or presents an `X-Step-Up-Token` (`POST /auth/staff/step-up`
-for `refund.approve` / `payment.reversal.approve`, entity `Payment`). Otherwise a PENDING `approval` row (action `payment.refund` /
-`payment.reversal`, payload = request) is created and 202 returned. Facility rules can also require it (`require_approval_for`,
-`approval_threshold_amount`). When Orders' approval-decision service APPROVES such an approval it must call
-`PaymentApprovalHandler::apply($approvalId, $deciderStaffId)` in the decision transaction (see "Integration points").
+`refund.execute` / `payment.reversal.execute` are held by cashiers **with `requires_approval = 1`**. `ApprovalService::gate()`
+applies the action at once if the caller holds the matching `.approve` permission at the facility, or presents an
+`X-Step-Up-Token` (`POST /auth/staff/step-up` for `refund.approve` / `payment.reversal.approve`; the step-up approver becomes the
+executor of record); otherwise a PENDING `approval` row (action `payment.refund` / `payment.reversal`, payload = the request,
+`Approval.amount` = the money) is created via `ApprovalService::request()` and 202 is returned with the Refund/Reversal body
+(`status: PENDING_APPROVAL`, `id` = the id the refund will be created with, `approval` = the Approval). A supervisor decides through
+Orders' `POST /approvals/{id}/decision`; approving runs `PaymentApprovalHandler::approved()` (registered in
+`PaymentsServiceProvider::boot`) inside the decision transaction, which re-validates and creates the immutable refund/reversal row.
+Rejecting / cancelling changes nothing (nothing was applied while PENDING).
+
+An approval is skipped when neither the caller's grant is flagged `requires_approval` nor the facility rule demands it.
 
 ## Facility operating rules read by Payments (`operating_rule.rule_key`)
 
-`payment_timing` (`PAY_FIRST` | `PAY_ON_EXIT` | `PAY_AFTER_SERVICE` | `ANY`, default `ANY`; on-exit/after-service only settle SERVED
-orders), `require_cash_session` (default true), `require_approval_for` (comma list incl. `payment.refund`, `payment.reversal`),
-`approval_threshold_amount`.
+Read through Orders' `OperatingRules` so both modules agree: `payment_timing` (`PAY_FIRST` may settle from DRAFT; `PAY_AFTER_SERVICE`
+(default), `OPEN_TAB`, `PAY_ON_EXIT` only settle SERVED orders), `approval_threshold_amount` (refund/reversal <= threshold needs no
+approval for non-flagged callers; default 0), `require_approval_for` (list incl. `payment.refund`, `payment.reversal`: always).
+Payments' own key: `require_cash_session` (default true).
 
 ## Receipts
 
@@ -75,17 +81,19 @@ Immutable snapshot at issue time (`receipt.payload`), number `RCP-YYYYMMDD-NNNNN
 is 0 and no VAT line / TIN is emitted unless `organization_tax_setting.vat_enabled` was on at issue time. `printLines` = 48-column text
 for 80mm printers (`RECEIPT_COLUMNS=32` for 58mm). Reprints are counted in `receipt_reprint`, audited, and marked `duplicate`.
 
-## Integration points (ports)
+## Integration points
 
-* `Contracts\OrderPort` (default `Services\DbOrderPort`): locks/reads Orders' tables; the WRITE half (`applyPayment`, `applyReversal`,
-  `markTabSettled`) is the seam for Orders' `OrderSettlementService::markSettled` - swap the three methods, nothing else changes.
-* `Contracts\ApprovalPort` (default `Services\DbApprovalPort`) writes the shared `approval` table.
+* `Contracts\OrderPort` (default `Services\DbOrderPort`): READS Orders' tables with locking reads; WRITES only through Orders'
+  `OrderSettlementService` (`applyPayment` + `markSettled`, `applyRefund` for reversals, `markTabSettled`). Orders decides the resulting
+  status (a pay-first order that is fully paid but not yet served stays DRAFT/SENT; the response reports what Orders says).
+* `ApprovalService::registerHandler()` hook: `payment.refund`, `payment.reversal` (see above).
 * `Contracts\PayableSubjectResolver`: Booking / Membership bind it to take Paystack payments for a booking or membership; listen for
   `Events\PaymentCaptured` (carries `subjectType`/`subjectId`) to confirm/activate.
 * `Contracts\PaymentProviderAdapter`: Paystack today (`Provider\PaystackAdapter`); Flutterwave = one more class.
 * Outbox events: `PaymentCompleted` (in-person), `OnlinePaymentConfirmed` (provider), `PaymentReversed` (`kind` REFUND | REVERSAL),
-  `CashSessionOpened`, `CashSessionClosed`. Audit actions: `payment.capture`, `payment.capture.online`, `payment.refund(.requested)`,
-  `payment.reverse`, `payment.reversal.requested`, `payment.paystack.initialize`, `cash_session.open|close|movement`, `receipt.reprint`.
+  `CashSessionOpened`, `CashSessionClosed`. Audit actions: `payment.capture`, `payment.capture.online`, `payment.refund`,
+  `payment.reverse`, `payment.paystack.initialize`, `payment.failed`, `cash_session.open|close|movement`, `receipt.reprint`
+  (`payment.refund.request` / `payment.reversal.request` come from the approval service).
 
 ## Environment (placeholders in `.env.example`)
 

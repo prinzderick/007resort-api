@@ -38,14 +38,20 @@ interface OrderPort
     public function details(array $orderIds): array;
 
     /**
-     * Money has been allocated to the order. `$settled` = allocations now cover the whole total.
-     * Orders implements this as `OrderSettlementService::markSettled` (status -> SETTLED, amount_paid, audit, outbox).
+     * `$delta` was allocated to the order by a captured payment (`$paidAfter` = ledger total now). `$fullyPaid` = it now covers the
+     * whole total. Implemented with Orders' `OrderSettlementService::applyPayment` (+ `markSettled` when fully paid).
+     *
+     * @return string the order's status after the call (SETTLED once served and fully paid; pay-first orders stay DRAFT/SENT)
      */
-    public function applyPayment(string $orderId, string $amountPaid, bool $settled, string $paymentGroupId): void;
+    public function applyPayment(string $orderId, string $delta, string $paidAfter, bool $fullyPaid, string $paymentGroupId): string;
 
-    /** A payment was reversed: the order's paid amount drops to `$amountPaid` and, if it was SETTLED, it is re-opened. */
-    public function applyReversal(string $orderId, string $amountPaid, string $paymentGroupId): void;
+    /**
+     * A payment was reversed: `$delta` is taken back off the order (Orders re-opens a SETTLED order as SERVED).
+     *
+     * @return string the order's status after the call
+     */
+    public function applyReversal(string $orderId, string $delta, string $paymentGroupId): string;
 
-    /** Every order on the tab is settled. */
+    /** Every order on the tab is paid: close it (Orders settles the orders that are served, closes the tab, frees the table). */
     public function markTabSettled(string $tabId): void;
 }

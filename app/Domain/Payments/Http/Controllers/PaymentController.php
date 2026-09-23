@@ -116,7 +116,7 @@ class PaymentController
             'reason' => ['required', 'string', 'min:3', 'max:255'],
             'tenderType' => ['nullable', Rule::in(['CASH', 'CARD', 'TRANSFER', 'POS_TERMINAL'])],
         ]);
-        $r = $this->refunds->refund(Ids::normalize($paymentId), $in, $this->staffId(), $request);
+        $r = $this->refunds->refund(Ids::normalize($paymentId), $in, $this->staffId());
 
         return response()->json($r['body'], $r['status']);
     }
@@ -125,7 +125,7 @@ class PaymentController
     public function reverse(Request $request, string $paymentId): JsonResponse
     {
         $in = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:255']]);
-        $r = $this->refunds->reverse(Ids::normalize($paymentId), $in, $this->staffId(), $request);
+        $r = $this->refunds->reverse(Ids::normalize($paymentId), $in, $this->staffId());
 
         return response()->json($r['body'], $r['status']);
     }

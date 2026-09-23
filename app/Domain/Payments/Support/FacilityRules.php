@@ -2,76 +2,57 @@
 
 namespace App\Domain\Payments\Support;
 
+use App\Domain\Orders\Services\OperatingRules;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Reads the Payments-relevant operating rules of a facility (architecture/05: `operating_rule` key/value rows under the
- * facility's capabilities). Nothing here branches on a facility's name/code - behaviour is data.
+ * Payments-relevant operating rules of a facility (architecture/05: `operating_rule` key/value rows under the facility's
+ * capabilities). Nothing branches on a facility's name/code - behaviour is data. Timing and approval rules are read through
+ * Orders' {@see OperatingRules} so both modules interpret the same keys the same way:
  *
- * Rule keys (documented in docs/PAYMENTS.md):
- *   payment_timing            PAY_FIRST | PAY_ON_EXIT | PAY_AFTER_SERVICE | ANY (default ANY)
- *   require_cash_session      true|false (default true)
- *   require_approval_for      comma list, e.g. "order.void,payment.refund,payment.reversal" (default: refunds & reversals need approval)
- *   approval_threshold_amount decimal; refunds/reversals of at most this amount need no approval (default: none)
+ *   payment_timing            PAY_FIRST | PAY_AFTER_SERVICE (default) | OPEN_TAB | PAY_ON_EXIT (alias of OPEN_TAB)
+ *   approval_threshold_amount refunds/reversals of at most this amount need no approval (default 0 = always needs approval)
+ *   require_approval_for      comma list of action codes that ALWAYS need approval for non-approvers: `payment.refund`, `payment.reversal`
+ *   require_cash_session      true|false (default true) - cash needs an OPEN cash session (Payments' own key)
  */
 final class FacilityRules
 {
-    public const TIMING_ANY = 'ANY';
+    /** @var array<string, bool> */
+    private array $cashSession = [];
 
-    /** @var array<string, array<string, string>> */
-    private array $cache = [];
-
-    /** @return array<string, string> rule_key => rule_value */
-    public function all(string $facilityId): array
-    {
-        if (isset($this->cache[$facilityId])) {
-            return $this->cache[$facilityId];
-        }
-        $rows = DB::table('operating_rule as r')
-            ->join('facility_capability as c', 'c.id', '=', 'r.facility_capability_id')
-            ->where('c.facility_unit_id', Ids::toBinary($facilityId))
-            ->orderBy('r.updated_at')
-            ->get(['r.rule_key', 'r.rule_value']);
-        $out = [];
-        foreach ($rows as $r) {
-            $out[$r->rule_key] = (string) $r->rule_value;
-        }
-
-        return $this->cache[$facilityId] = $out;
-    }
-
-    public function forget(): void
-    {
-        $this->cache = [];
-    }
+    public function __construct(private readonly OperatingRules $orderRules) {}
 
     public function paymentTiming(string $facilityId): string
     {
-        $v = strtoupper($this->all($facilityId)['payment_timing'] ?? self::TIMING_ANY);
-
-        return in_array($v, ['PAY_FIRST', 'PAY_ON_EXIT', 'PAY_AFTER_SERVICE', 'ANY'], true) ? $v : self::TIMING_ANY;
+        return $this->orderRules->forFacility($facilityId)['paymentTiming'];
     }
 
     public function requireCashSession(string $facilityId): bool
     {
-        return ! in_array(strtolower($this->all($facilityId)['require_cash_session'] ?? 'true'), ['false', '0', 'no', 'off'], true);
+        if (isset($this->cashSession[$facilityId])) {
+            return $this->cashSession[$facilityId];
+        }
+        $v = DB::table('operating_rule as r')->join('facility_capability as c', 'c.id', '=', 'r.facility_capability_id')
+            ->where('c.facility_unit_id', Ids::toBinary($facilityId))->where('r.rule_key', 'require_cash_session')->orderByDesc('r.updated_at')->value('r.rule_value');
+
+        return $this->cashSession[$facilityId] = ! in_array(strtolower((string) ($v ?? 'true')), ['false', '0', 'no', 'off'], true);
     }
 
-    /** Does the facility rule demand supervisor approval for this sensitive payment action ("payment.refund" / "payment.reversal")? */
+    /** Does the facility rule demand supervisor approval for this sensitive action ("payment.refund" / "payment.reversal") from a non-approver? */
     public function approvalRequired(string $facilityId, string $action, string $amount): bool
     {
-        $rules = $this->all($facilityId);
-        if (isset($rules['require_approval_for'])) {
-            $list = array_map('trim', explode(',', $rules['require_approval_for']));
-            if (! in_array($action, $list, true)) {
-                return false;
-            }
-        }
-        if (isset($rules['approval_threshold_amount']) && preg_match('/^\d+(\.\d+)?$/', $rules['approval_threshold_amount'])) {
-            return bccomp($amount, $rules['approval_threshold_amount'], 4) > 0;
+        $r = $this->orderRules->forFacility($facilityId);
+        if (in_array($action, $r['requireApprovalFor'], true)) {
+            return true;
         }
 
-        return true;
+        return bccomp($amount, $r['approvalThresholdAmount'], 4) > 0;
+    }
+
+    public function forget(): void
+    {
+        $this->cashSession = [];
+        $this->orderRules->flush();
     }
 }

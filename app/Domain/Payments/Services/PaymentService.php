@@ -303,9 +303,10 @@ class PaymentService
         if (! in_array($order['status'], self::PAYABLE, true)) {
             throw ApiProblem::conflict('order_state_invalid', "An order in status {$order['status']} cannot be paid.", ['orderId' => $order['id'], 'status' => $order['status']]);
         }
-        $timing = $this->rules->paymentTiming($order['facilityId']);
-        if (in_array($timing, ['PAY_ON_EXIT', 'PAY_AFTER_SERVICE'], true) && $order['status'] !== 'SERVED') {
-            throw ApiProblem::conflict('order_state_invalid', "This facility takes payment after service; the order is {$order['status']}.", ['orderId' => $order['id'], 'status' => $order['status'], 'paymentTiming' => $timing]);
+        // Facility payment timing (Orders' OperatingRules): PAY_FIRST may pay from DRAFT; after-service / open-tab facilities only
+        // settle orders that have been SERVED (architecture/08 §1).
+        if ($this->rules->paymentTiming($order['facilityId']) !== 'PAY_FIRST' && $order['status'] !== 'SERVED') {
+            throw ApiProblem::conflict('order_state_invalid', "This facility takes payment after service; the order is {$order['status']}.", ['orderId' => $order['id'], 'status' => $order['status'], 'paymentTiming' => $this->rules->paymentTiming($order['facilityId'])]);
         }
     }
 
@@ -428,23 +429,19 @@ class PaymentService
     /**
      * @param  array<string, array<string, mixed>>  $orders
      * @param  array<string, string>  $paidBefore
-     * @param  array<string, array{paid: string, settled: bool}>  $synced
+     * @param  array<string, array{paid: string, settled: bool, status: string}>  $synced
      * @return array<string, mixed>
      */
     private function result(string $groupId, array $orders, array $paidBefore, array $synced, string $receiptId): array
     {
         $paid = $paidBefore;
-        $status = [];
         foreach ($synced as $oid => $s) {
             $paid[$oid] = $s['paid'];
-            $status[$oid] = $s['settled'] ? 'SETTLED' : null;
         }
         $payments = $this->presenter->group($groupId);
         $touched = array_intersect_key($orders, $synced);
-        foreach ($status as $oid => $st) {
-            if ($st !== null) {
-                $touched[$oid]['status'] = $st;
-            }
+        foreach ($synced as $oid => $s) {
+            $touched[$oid]['status'] = $s['status']; // what Orders says now (SETTLED only once served and fully paid)
         }
 
         return [
@@ -485,7 +482,7 @@ class PaymentService
     /**
      * @param  array<string, array<string, mixed>>  $orders
      * @param  array<string, string>  $paidBefore
-     * @param  array<string, array{paid: string, settled: bool}>  $synced
+     * @param  array<string, array{paid: string, settled: bool, status: string}>  $synced
      */
     private function tabFullySettled(array $tab, array $orders, array $paidBefore, array $synced): bool
     {

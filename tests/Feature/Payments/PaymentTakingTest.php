@@ -45,6 +45,7 @@ class PaymentTakingTest extends TestCase
 
         // ledger side effects in the same transaction: audit + outbox + receipt
         $this->assertSame(1, DB::table('audit_log')->where('action', 'payment.capture')->count());
+        $this->assertSame(1, DB::table('outbox_event')->where('event_type', 'OrderSettled')->count(), 'Orders settled the order through OrderSettlementService');
         $ob = DB::table('outbox_event')->where('event_type', 'PaymentCompleted')->first();
         $this->assertNotNull($ob);
         $this->assertSame('9000.0000', json_decode($ob->payload, true)['amount']);
@@ -191,19 +192,26 @@ class PaymentTakingTest extends TestCase
                 ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid')->assertJsonPath('status', $st);
         }
 
-        // pay-on-exit facility: a SENT order cannot be settled yet, a SERVED one can
-        $this->setRule('payment_timing', 'PAY_ON_EXIT');
+        // default (pay after service): a SENT order cannot be settled yet, a SERVED one can
         $sent = $this->makeOrder('1000.0000', 'SENT');
         $served = $this->makeOrder('1000.0000', 'SERVED');
         $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $sent, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'S1']]), $this->auth($this->cashierToken))
-            ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid');
+            ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid')->assertJsonPath('paymentTiming', 'PAY_AFTER_SERVICE');
         $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $served, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'S2']]), $this->auth($this->cashierToken))
             ->assertCreated();
 
-        // pay-first facility: a SENT order is payable
+        // pay-first facility: a SENT order is payable; fully paid it is not SETTLED until Orders says so (only served orders settle)
         $this->setRule('payment_timing', 'PAY_FIRST');
-        $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $sent, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'S3']]), $this->auth($this->cashierToken))
+        $r = $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $sent, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'S3']]), $this->auth($this->cashierToken))
             ->assertCreated();
+        $r->assertJsonPath('orders.0.status', 'SENT')->assertJsonPath('orders.0.balanceDue', '0.0000');
+        $this->assertSame('1000.0000', DB::table('order')->where('id', Ids::toBinary($sent))->value('amount_paid') ? bcadd((string) DB::table('order')->where('id', Ids::toBinary($sent))->value('amount_paid'), '0', 4) : '');
+
+        // pay-on-exit is Orders' alias of open-tab: SERVED orders only
+        $this->setRule('payment_timing', 'PAY_ON_EXIT');
+        $sent2 = $this->makeOrder('1000.0000', 'SENT');
+        $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $sent2, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'S4']]), $this->auth($this->cashierToken))
+            ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid');
     }
 
     public function test_order_of_another_facility_is_a_facility_mismatch(): void
