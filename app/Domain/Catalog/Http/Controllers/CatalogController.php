@@ -69,7 +69,7 @@ class CatalogController
         $items = $this->catalog->presentMany($page->items, $org, $facilityId);
         $arr = $page->toArray();
 
-        return Concurrency::cacheable($request, ['items' => $items, 'nextCursor' => $arr['page']['nextCursor']]);
+        return Concurrency::cacheable($request, ['items' => $items, 'nextCursor' => $arr['nextCursor']]);
     }
 
     public function product(Request $request, string $productId): JsonResponse
@@ -208,7 +208,7 @@ class CatalogController
     private function facility(mixed $facilityId): string
     {
         if (! is_string($facilityId) || ! Ids::isUuid($facilityId)) {
-            throw ApiProblem::unprocessable('validation_failed', 'facilityId is required.', [['field' => 'facilityId', 'code' => 'required', 'message' => 'facilityId is required.']]);
+            throw ApiProblem::unprocessable('validation_failed', 'facilityId is required.', ['facilityId' => ['facilityId is required.']]);
         }
         $facilityId = Ids::normalize($facilityId);
         if (! DB::table('facility_unit')->where('id', Ids::toBinary($facilityId))->where('organization_id', Ids::toBinary(Tenant::organizationId()))->exists()) {

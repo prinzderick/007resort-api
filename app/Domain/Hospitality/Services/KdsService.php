@@ -48,7 +48,7 @@ final class KdsService
 
         return ['items' => $items->map(fn ($s) => [
             'id' => Ids::fromBinary($s->id), 'facilityId' => Ids::fromBinary($s->facility_unit_id), 'name' => $s->name, 'kind' => $s->kind, 'active' => (bool) $s->is_active,
-        ])->all(), 'nextCursor' => $page->toArray()['page']['nextCursor']];
+        ])->all(), 'nextCursor' => $page->toArray()['nextCursor']];
     }
 
     /** @return array<string, mixed> */
@@ -63,7 +63,7 @@ final class KdsService
         }
         $page = CursorPage::paginate($q, $request);
 
-        return ['items' => $page->items->map(fn ($t) => $this->tickets->ticket($t))->all(), 'nextCursor' => $page->toArray()['page']['nextCursor']];
+        return ['items' => $page->items->map(fn ($t) => $this->tickets->ticket($t))->all(), 'nextCursor' => $page->toArray()['nextCursor']];
     }
 
     public function get(string $ticketId): object

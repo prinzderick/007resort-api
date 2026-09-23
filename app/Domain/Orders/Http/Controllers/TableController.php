@@ -22,7 +22,7 @@ class TableController
     {
         $fid = $request->query('facilityId');
         if (! is_string($fid) || ! Ids::isUuid($fid)) {
-            throw ApiProblem::unprocessable('validation_failed', 'facilityId is required.', [['field' => 'facilityId', 'code' => 'required', 'message' => 'facilityId is required.']]);
+            throw ApiProblem::unprocessable('validation_failed', 'facilityId is required.', ['facilityId' => ['facilityId is required.']]);
         }
         $fid = Ids::normalize($fid);
         if (! Authz::can('order.create', $fid) && ! Authz::can('order.view', $fid)) {

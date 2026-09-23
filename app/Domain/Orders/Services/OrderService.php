@@ -203,7 +203,7 @@ final class OrderService
         $facilityId = Ids::fromBinary($order->facility_unit_id);
         $product = DB::table('product')->where('id', Ids::toBinary($in['productId']))->where('organization_id', $order->organization_id)->whereNull('deleted_at')->first();
         if (! $product) {
-            throw ApiProblem::unprocessable('validation_failed', 'Unknown product.', [['field' => 'productId', 'code' => 'exists', 'message' => 'Unknown product.']]);
+            throw ApiProblem::unprocessable('validation_failed', 'Unknown product.', ['productId' => ['Unknown product.']]);
         }
         $pf = DB::table('product_facility')->where('product_id', $product->id)->where('facility_unit_id', $order->facility_unit_id)->first();
         if (! $pf) {

@@ -10,8 +10,6 @@ final class Paged
     /** @return array{items: list<mixed>, nextCursor: ?string} */
     public static function envelope(CursorPage $page, callable $map): array
     {
-        $arr = $page->toArray($map);
-
-        return ['items' => $arr['data'], 'nextCursor' => $arr['page']['nextCursor']];
+        return $page->toArray($map);
     }
 }

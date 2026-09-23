@@ -30,7 +30,7 @@ final class Authz
     public static function require(string $permission, ?string $facilityId = null): void
     {
         if (! self::can($permission, $facilityId)) {
-            throw ApiProblem::forbidden('permission_denied', "Missing permission: {$permission}.", ['permission' => $permission]);
+            throw ApiProblem::permissionDenied($permission);
         }
     }
 }

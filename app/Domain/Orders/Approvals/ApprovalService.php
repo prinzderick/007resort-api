@@ -4,6 +4,7 @@ namespace App\Domain\Orders\Approvals;
 
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
+use App\Domain\Identity\Services\StepUpService;
 use App\Domain\Orders\Broadcast\ApprovalDecided;
 use App\Domain\Orders\Broadcast\ApprovalRequested;
 use App\Support\Api\Authz;
@@ -48,15 +49,16 @@ final class ApprovalService
         $staff = Authz::staffId();
         $canApprove = Authz::can($approvePermission, $facilityId);
         if (! $canApprove && ! Authz::can($executePermission, $facilityId)) {
-            throw ApiProblem::forbidden('permission_denied', "Missing permission: {$executePermission}.", ['permission' => $executePermission]);
+            throw ApiProblem::permissionDenied($executePermission);
         }
         if ($canApprove) {
             return ['mode' => 'EXECUTE', 'approvedBy' => $staff, 'stepUp' => false];
         }
-        if ($stepUpToken !== null && $stepUpToken !== '') {
-            $approver = StepUpTokens::consume($stepUpToken, $approvePermission, $entityId);
-            if ($approver === null || ! Authz::can($approvePermission, $facilityId, $approver)) {
-                throw ApiProblem::forbidden('step_up_required', 'The step-up token is invalid, expired or not valid for this action.');
+        // inline authorisation: a supervisor authenticated on this device via POST /auth/staff/step-up (single-use token)
+        $approver = app(StepUpService::class)->consume(request(), $approvePermission, null, $entityId);
+        if ($approver !== null) {
+            if (! Authz::can($approvePermission, $facilityId, $approver)) {
+                throw ApiProblem::forbidden('step_up_required', 'The step-up approver does not hold the approve permission here.');
             }
 
             return ['mode' => 'EXECUTE', 'approvedBy' => $approver, 'stepUp' => true];
@@ -117,8 +119,12 @@ final class ApprovalService
                 throw ApiProblem::conflict('approval_expired', 'This approval request has expired. Ask for it again.');
             }
             if (! Authz::can($a->required_permission, $fid)) {
-                if ($stepUpToken === null || ($decider = StepUpTokens::consume($stepUpToken, $a->required_permission, Ids::fromBinary($a->entity_id))) === null || ! Authz::can($a->required_permission, $fid, $decider)) {
-                    throw ApiProblem::forbidden('permission_denied', "Missing permission: {$a->required_permission}.", ['permission' => $a->required_permission]);
+                if ($stepUpToken !== null && $stepUpToken !== '') {
+                    request()->headers->set('X-Step-Up-Token', $stepUpToken);
+                }
+                $decider = app(StepUpService::class)->consume(request(), $a->required_permission, null, Ids::fromBinary($a->entity_id));
+                if ($decider === null || ! Authz::can($a->required_permission, $fid, $decider)) {
+                    throw ApiProblem::permissionDenied($a->required_permission);
                 }
             }
             if (Ids::fromBinary($a->requested_by) === $decider) {
@@ -220,7 +226,7 @@ final class ApprovalService
         })->values();
         $arr = $page->toArray();
 
-        return ['items' => $items->map(fn ($a) => $this->present($a))->all(), 'nextCursor' => $arr['page']['nextCursor']];
+        return ['items' => $items->map(fn ($a) => $this->present($a))->all(), 'nextCursor' => $arr['nextCursor']];
     }
 
     /** @return array<string, mixed> */

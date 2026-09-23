@@ -12,7 +12,7 @@ final class Concurrency
 {
     public static function etag(int|string $rowVersion): string
     {
-        return '"v'.$rowVersion.'"';
+        return \App\Support\Http\Etag::make($rowVersion);
     }
 
     /** Parse `If-Match: "v3"` / `W/"v3"` / `3`. 428 when missing (and required), 412 when unparseable. */
