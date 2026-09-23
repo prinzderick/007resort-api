@@ -37,9 +37,9 @@ return new class extends Migration
   is_active          TINYINT(1) NOT NULL DEFAULT 1,
   row_version        INT UNSIGNED NOT NULL DEFAULT 1,
   $ts,
-  CONSTRAINT fk_tt_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_tt_site FOREIGN KEY (site_id) REFERENCES site (id),
-  CONSTRAINT fk_tt_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
+  CONSTRAINT fk_tkt_type_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_tkt_type_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_tkt_type_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
   CONSTRAINT uq_tt_code UNIQUE (site_id, code),
   INDEX ix_tt_product (product_id)
 ) $t");
@@ -60,8 +60,8 @@ return new class extends Migration
   cancelled_at      DATETIME(6) NULL,
   row_version       INT UNSIGNED NOT NULL DEFAULT 1,
   $ts,
-  CONSTRAINT fk_ent_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_ent_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_tkt_ent_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_tkt_ent_site FOREIGN KEY (site_id) REFERENCES site (id),
   CONSTRAINT uq_ent_token UNIQUE (qr_token),
   CONSTRAINT uq_ent_source UNIQUE (source_key),
   INDEX ix_ent_booking (booking_id),
@@ -86,11 +86,11 @@ return new class extends Migration
   valid_until       DATETIME(6) NULL,
   sort_order        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   $ts,
-  CONSTRAINT fk_ei_entitlement FOREIGN KEY (entitlement_id) REFERENCES entitlement (id) ON DELETE CASCADE,
-  CONSTRAINT chk_ei_redeemed CHECK (qty_redeemed >= 0 AND qty_redeemed <= qty),
-  CONSTRAINT chk_ei_returned CHECK (qty_returned >= 0 AND qty_returned <= qty_redeemed),
-  CONSTRAINT chk_ei_inside CHECK (qty_inside >= 0 AND qty_inside <= qty_redeemed),
-  CONSTRAINT chk_ei_window CHECK (valid_until IS NULL OR valid_from IS NULL OR valid_until > valid_from),
+  CONSTRAINT fk_tkt_item_entitlement FOREIGN KEY (entitlement_id) REFERENCES entitlement (id) ON DELETE CASCADE,
+  CONSTRAINT chk_tkt_item_redeemed CHECK (qty_redeemed >= 0 AND qty_redeemed <= qty),
+  CONSTRAINT chk_tkt_item_returned CHECK (qty_returned >= 0 AND qty_returned <= qty_redeemed),
+  CONSTRAINT chk_tkt_item_inside CHECK (qty_inside >= 0 AND qty_inside <= qty_redeemed),
+  CONSTRAINT chk_tkt_item_window CHECK (valid_until IS NULL OR valid_from IS NULL OR valid_until > valid_from),
   INDEX ix_ei_ent (entitlement_id),
   INDEX ix_ei_line (order_line_id)
 ) $t");
@@ -108,7 +108,7 @@ return new class extends Migration
   amount                DECIMAL(19,4) NULL,
   note                  VARCHAR(255) NULL,
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_rd_item FOREIGN KEY (entitlement_item_id) REFERENCES entitlement_item (id),
+  CONSTRAINT fk_tkt_red_item FOREIGN KEY (entitlement_item_id) REFERENCES entitlement_item (id),
   INDEX ix_rd_item (entitlement_item_id, action, created_at)
 ) $t");
 
@@ -125,7 +125,7 @@ return new class extends Migration
                           CHECK (result IN ('VALID','USED','EXPIRED','NOT_YET_VALID','WRONG_FACILITY','CANCELLED','PENDING_APPROVAL')),
   message               VARCHAR(255) NULL,
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_ve_entitlement FOREIGN KEY (entitlement_id) REFERENCES entitlement (id),
+  CONSTRAINT fk_tkt_ve_entitlement FOREIGN KEY (entitlement_id) REFERENCES entitlement (id),
   INDEX ix_ve_ent (entitlement_id, created_at),
   INDEX ix_ve_device (device_id, created_at)
 ) $t");

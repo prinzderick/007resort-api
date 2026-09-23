@@ -43,7 +43,7 @@ return new class extends Migration
                                           CHECK (offline_strategy IN ('A_OFFLINE_ALLOCATION','B_ONLINE_AUTHORITY_REQUIRED','C_DISABLE_ONLINE')),
   ADD COLUMN local_reserve_units        INT UNSIGNED NOT NULL DEFAULT 0,
   ADD COLUMN online_stale_after_seconds INT UNSIGNED NOT NULL DEFAULT 900,
-  ADD CONSTRAINT chk_br_reserve CHECK (local_reserve_units <= capacity)");
+  ADD CONSTRAINT chk_bkres_reserve CHECK (local_reserve_units <= capacity)");
         } else {
             DB::unprepared("CREATE TABLE bookable_resource (
   id                          BINARY(16) NOT NULL PRIMARY KEY,
@@ -72,11 +72,11 @@ return new class extends Migration
   deleted_at                  DATETIME(6) NULL,
   row_version                 INT UNSIGNED NOT NULL DEFAULT 1,
   $ts,
-  CONSTRAINT fk_br_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_br_site FOREIGN KEY (site_id) REFERENCES site (id),
-  CONSTRAINT fk_br_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
+  CONSTRAINT fk_bkres_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_bkres_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_bkres_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
   CONSTRAINT uq_br_code UNIQUE (site_id, code),
-  CONSTRAINT chk_br_reserve CHECK (local_reserve_units <= capacity),
+  CONSTRAINT chk_bkres_reserve CHECK (local_reserve_units <= capacity),
   INDEX ix_br_fac (facility_unit_id, is_active)
 ) $t");
         }
@@ -95,12 +95,12 @@ return new class extends Migration
   max_reschedules           INT UNSIGNED NULL,
   early_entry_minutes       INT UNSIGNED NULL,
   $ts,
-  CONSTRAINT fk_brule_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_brule_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
-  CONSTRAINT fk_brule_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
+  CONSTRAINT fk_bkrule_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_bkrule_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT fk_bkrule_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
   CONSTRAINT uq_brule_res UNIQUE (resource_id),
   CONSTRAINT uq_brule_fac UNIQUE (facility_unit_id),
-  CONSTRAINT chk_brule_scope CHECK ((resource_id IS NULL) <> (facility_unit_id IS NULL))
+  CONSTRAINT chk_bkrule_scope CHECK ((resource_id IS NULL) <> (facility_unit_id IS NULL))
 ) $t");
 
         // Weekly opening windows (local property time, ISO day 1=Mon..7=Sun). No rows => config('booking.default_hours').
@@ -113,8 +113,8 @@ return new class extends Migration
   valid_from   DATE NULL,
   valid_to     DATE NULL,
   $ts,
-  CONSTRAINT fk_as_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
-  CONSTRAINT chk_as_hours CHECK (close_time > open_time),
+  CONSTRAINT fk_bksched_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT chk_bksched_hours CHECK (close_time > open_time),
   INDEX ix_as_res (resource_id, day_of_week)
 ) $t");
 
@@ -128,11 +128,11 @@ return new class extends Migration
   reason            VARCHAR(255) NULL,
   created_by        BINARY(16) NULL,
   $ts,
-  CONSTRAINT fk_bo_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_bo_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
-  CONSTRAINT fk_bo_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
-  CONSTRAINT chk_bo_range CHECK (ends_at > starts_at),
-  CONSTRAINT chk_bo_scope CHECK (resource_id IS NOT NULL OR facility_unit_id IS NOT NULL),
+  CONSTRAINT fk_bkblack_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_bkblack_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT fk_bkblack_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
+  CONSTRAINT chk_bkblack_range CHECK (ends_at > starts_at),
+  CONSTRAINT chk_bkblack_scope CHECK (resource_id IS NOT NULL OR facility_unit_id IS NOT NULL),
   INDEX ix_bo_res (resource_id, starts_at),
   INDEX ix_bo_fac (facility_unit_id, starts_at)
 ) $t");
@@ -180,12 +180,12 @@ return new class extends Migration
   device_id             BINARY(16) NULL,
   row_version           INT UNSIGNED NOT NULL DEFAULT 1,
   $ts,
-  CONSTRAINT fk_bk_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_bk_site FOREIGN KEY (site_id) REFERENCES site (id),
-  CONSTRAINT fk_bk_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
-  CONSTRAINT fk_bk_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT fk_bkg_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_bkg_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_bkg_fac FOREIGN KEY (facility_unit_id) REFERENCES facility_unit (id),
+  CONSTRAINT fk_bkg_res FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
   CONSTRAINT uq_bk_number UNIQUE (number),
-  CONSTRAINT chk_bk_range CHECK (end_at > start_at),
+  CONSTRAINT chk_bkg_range CHECK (end_at > start_at),
   INDEX ix_bk_res_start (resource_id, start_at),
   INDEX ix_bk_status_hold (status, hold_expires_at),
   INDEX ix_bk_order (order_id),
@@ -203,9 +203,9 @@ return new class extends Migration
   unit_price    DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
   line_total    DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (line_total >= 0),
   $ts,
-  CONSTRAINT fk_bi_booking FOREIGN KEY (booking_id) REFERENCES booking (id) ON DELETE CASCADE,
-  CONSTRAINT fk_bi_resource FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
-  CONSTRAINT chk_bi_range CHECK (slot_end > slot_start),
+  CONSTRAINT fk_bkitem_booking FOREIGN KEY (booking_id) REFERENCES booking (id) ON DELETE CASCADE,
+  CONSTRAINT fk_bkitem_resource FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT chk_bkitem_range CHECK (slot_end > slot_start),
   INDEX ix_bi_booking (booking_id)
 ) $t");
 
@@ -224,12 +224,12 @@ return new class extends Migration
   status           VARCHAR(16) NOT NULL DEFAULT 'HELD' CHECK (status IN ('HELD','CONFIRMED','CANCELLED')),
   hold_expires_at  DATETIME(6) NULL,
   created_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_sa_org FOREIGN KEY (organization_id) REFERENCES organization (id),
-  CONSTRAINT fk_sa_site FOREIGN KEY (site_id) REFERENCES site (id),
-  CONSTRAINT fk_sa_resource FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
-  CONSTRAINT fk_sa_item FOREIGN KEY (booking_item_id) REFERENCES booking_item (id) ON DELETE CASCADE,
+  CONSTRAINT fk_bkslot_org FOREIGN KEY (organization_id) REFERENCES organization (id),
+  CONSTRAINT fk_bkslot_site FOREIGN KEY (site_id) REFERENCES site (id),
+  CONSTRAINT fk_bkslot_resource FOREIGN KEY (resource_id) REFERENCES bookable_resource (id),
+  CONSTRAINT fk_bkslot_item FOREIGN KEY (booking_item_id) REFERENCES booking_item (id) ON DELETE CASCADE,
   CONSTRAINT uq_slot UNIQUE (resource_id, unit_no, slot_start),
-  CONSTRAINT chk_sa_range CHECK (slot_end > slot_start),
+  CONSTRAINT chk_bkslot_range CHECK (slot_end > slot_start),
   INDEX ix_sa_item (booking_item_id),
   INDEX ix_sa_hold (status, hold_expires_at)
 ) $t");
@@ -266,7 +266,7 @@ return new class extends Migration
         }
         if (DB::table('migrations')->where('migration', '2026_09_22_120000_organization_extensions')->exists()) {
             // Organization owns the table: only remove the columns this migration added.
-            DB::unprepared('ALTER TABLE bookable_resource DROP CONSTRAINT chk_br_reserve');
+            DB::unprepared('ALTER TABLE bookable_resource DROP CONSTRAINT chk_bkres_reserve');
             DB::unprepared('ALTER TABLE bookable_resource DROP COLUMN product_id, DROP COLUMN ticket_type_id, DROP COLUMN mode, DROP COLUMN slot_minutes, DROP COLUMN max_slots_per_booking, DROP COLUMN price, DROP COLUMN whole_price, DROP COLUMN currency, DROP COLUMN allow_whole_resource, DROP COLUMN online_bookable, DROP COLUMN offline_strategy, DROP COLUMN local_reserve_units, DROP COLUMN online_stale_after_seconds');
         } else {
             DB::unprepared('DROP TABLE IF EXISTS bookable_resource');
