@@ -35,11 +35,14 @@ don't collide. Dev docs UI (non-production): `GET /api/documentation` (spec: `do
 
 ### Endpoints (foundation)
 
-`POST /api/v1/auth/staff/login | refresh | logout | step-up` · `POST /api/v1/auth/sessions/{id}/revoke` · `GET /api/v1/me` ·
+Follows the contract of record (`007resort-docs/api/openapi/v1.yaml`).
+`POST /api/v1/auth/staff/login | refresh | logout | step-up` · `POST /api/v1/auth/sessions/{id}/revoke` · `GET /api/v1/auth/me` (alias `/me`) ·
 `GET /api/v1/audit`, `GET /api/v1/audit/verify` · `GET /up`.
 
-Login body: `{"username": "...", "password": "..."}` **or** `{"username": "...", "pin": "1234"}` (+ optional `deviceId`). Use the returned
-`Authorization: Bearer <accessToken>`; refresh with `{"refreshToken": "..."}` on any 401. 5 failed logins lock an account for 15 minutes (423).
+Login body: `{"credentialType": "PASSWORD|PIN|NFC_CARD", "identifier": "<username or staff number | card uid>", "secret": "<password | PIN>"}`
+(NFC_CARD needs the PIN as secret — never NFC alone). Response = contract `AuthResult` (`accessToken`, `refreshToken`, `expiresInSeconds`, `staff{id,displayName,
+staffNumber,roles,permissions,facilityIds}`, `session{id,expiresAt,deviceId}`). Send `Authorization: Bearer <accessToken>`; refresh with
+`{"refreshToken": "..."}` on `token_expired`. 5 failed logins lock an account for 15 minutes (403 `account_locked`). Supervisor step-up returns a single-use `X-Step-Up-Token`.
 
 ### Conventions
 

@@ -15,7 +15,6 @@ final class TestRoutes
             Route::get('needs-device-register', fn () => ['ok' => true])->middleware('permission:device.register');
             Route::get('facilities/{facilityId}/settle', fn (string $facilityId) => ['ok' => $facilityId])
                 ->middleware('permission:order.settle,facility=facilityId');
-            Route::get('needs-step-up', fn () => ['ok' => true])->middleware('stepup');
 
             Route::post('orgs', function (Request $r) {
                 $data = $r->validate(['name' => ['required', 'string', 'max:100']]);

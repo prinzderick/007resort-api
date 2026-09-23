@@ -22,6 +22,10 @@ final class RequestContext
 
     public const DEVICE_ID = 'r007.device_id';
 
+    public const APPROVER_ID = 'r007.approver_id';
+
+    public const TOKEN_EXPIRED = 'r007.token_expired';
+
     public static function set(string $key, ?string $value): void
     {
         request()->attributes->set($key, $value);
@@ -57,6 +61,12 @@ final class RequestContext
     public static function siteId(): ?string
     {
         return self::get(self::SITE_ID);
+    }
+
+    /** Supervisor who authorised this request via X-Step-Up-Token (see `stepup:<permission>` middleware). */
+    public static function approverId(): ?string
+    {
+        return self::get(self::APPROVER_ID);
     }
 
     public static function deviceId(): ?string
