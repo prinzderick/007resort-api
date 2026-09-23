@@ -14,6 +14,7 @@ use App\Support\Sync\Outbox;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Entitlement issuance (architecture/11 §3). One model for "the holder of this code may do X":
@@ -79,6 +80,10 @@ final class EntitlementService
     {
         $out = [];
         $rentals = [];
+        // Online (website) ticket order: valid on the chosen visit day, owned by the ordering customer.
+        $online = Schema::hasTable('customer_order') ? DB::table('customer_order')->where('order_id', Ids::toBinary($orderId))->first() : null;
+        $custId = $online ? Ids::fromBinary($online->customer_id) : null;
+        $anchor = $online ? CarbonImmutable::parse($online->visit_date.' 12:00:00', config('booking.timezone', 'Africa/Lagos'))->utc() : CarbonImmutable::now('UTC');
         foreach ($lines as $line) {
             if ($line['kind'] === 'RENTAL') {
                 $rentals[] = [
@@ -93,17 +98,17 @@ final class EntitlementService
             }
             $type = TicketType::query()->where('product_id', $line['productId'])->where('is_active', 1)->first();
             $facility = $type?->facility_unit_id ?? $line['facilityId'];
-            [$from, $until] = $this->window($type, CarbonImmutable::now('UTC'));
+            [$from, $until] = $this->window($type, $anchor);
             $base = [
                 'kind' => EntitlementItem::ACCESS, 'name' => $line['name'], 'facilityUnitId' => $facility, 'ticketTypeId' => $type?->id,
                 'productId' => $line['productId'], 'orderLineId' => $line['lineId'], 'validFrom' => $from, 'validUntil' => $until,
             ];
             if (($type?->format ?? 'INDIVIDUAL') === 'COMBINED') {
                 $mode = $type?->validation_mode ?? 'MULTIPLE_ENTRY';
-                $out[] = $this->issue("order:{$orderId}:line:{$line['lineId']}", $organizationId, $siteId, [$base + ['qty' => $line['quantity'], 'validationMode' => $mode]], orderId: $orderId, holderName: $holderName, issuedBy: $issuedBy);
+                $out[] = $this->issue("order:{$orderId}:line:{$line['lineId']}", $organizationId, $siteId, [$base + ['qty' => $line['quantity'], 'validationMode' => $mode]], orderId: $orderId, customerId: $custId, holderName: $holderName, issuedBy: $issuedBy);
             } else {
                 for ($i = 1; $i <= $line['quantity']; $i++) {
-                    $out[] = $this->issue("order:{$orderId}:line:{$line['lineId']}:{$i}", $organizationId, $siteId, [$base + ['qty' => 1, 'validationMode' => $type?->validation_mode ?? 'SINGLE_USE']], orderId: $orderId, holderName: $holderName, issuedBy: $issuedBy);
+                    $out[] = $this->issue("order:{$orderId}:line:{$line['lineId']}:{$i}", $organizationId, $siteId, [$base + ['qty' => 1, 'validationMode' => $type?->validation_mode ?? 'SINGLE_USE']], orderId: $orderId, customerId: $custId, holderName: $holderName, issuedBy: $issuedBy);
                 }
             }
         }

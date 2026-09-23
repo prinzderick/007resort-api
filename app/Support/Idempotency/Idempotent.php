@@ -43,7 +43,7 @@ class Idempotent
         }
 
         $scope = $this->scope($request, $scope);
-        $actor = RequestContext::staffId() ?? RequestContext::deviceId() ?? 'anonymous';
+        $actor = RequestContext::staffId() ?? (RequestContext::customerId() ? 'c:'.RequestContext::customerId() : null) ?? RequestContext::deviceId() ?? 'anonymous';
         $storedKey = hash('sha256', $actor.'|'.$key);
         $requestHash = $this->fingerprint($request);
 

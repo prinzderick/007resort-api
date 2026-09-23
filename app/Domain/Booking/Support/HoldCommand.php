@@ -19,5 +19,6 @@ final class HoldCommand
         public readonly ?string $staffId = null,
         public readonly ?string $deviceId = null,
         public readonly ?string $bookingId = null,
+        public readonly ?string $customerId = null,
     ) {}
 }

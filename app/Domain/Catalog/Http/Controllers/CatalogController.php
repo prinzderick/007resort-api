@@ -4,6 +4,9 @@ namespace App\Domain\Catalog\Http\Controllers;
 
 use App\Domain\Catalog\Services\CatalogAdmin;
 use App\Domain\Catalog\Services\CatalogService;
+use App\Domain\Customer\Services\PublicCatalog;
+use App\Domain\Customer\Support\Actor;
+use App\Domain\Customer\Support\TicketCatalog;
 use App\Support\Api\Authz;
 use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
@@ -41,11 +44,17 @@ class CatalogController
     {
         $facilityId = $this->facility($request->query('facilityId'));
         $org = Tenant::organizationId();
+        if (Actor::isPublic()) {
+            return response()->json(app(PublicCatalog::class)->tickets($org, $facilityId));
+        }
         $q = $this->catalog->productQuery($org, $facilityId);
-        if (! filter_var($request->query('includeInactive'), FILTER_VALIDATE_BOOL)) {
+        if (Actor::isPublic() || ! filter_var($request->query('includeInactive'), FILTER_VALIDATE_BOOL)) {
             $q->where('p.is_active', 1);
         }
         $filter = (array) $request->query('filter', []);
+        if (Actor::isPublic()) {
+            $filter['kind'] = 'TICKET'; // the public catalogue is tickets only (memberships have /memberships/plans)
+        }
         if (! empty($filter['categoryId'])) {
             $q->where('p.category_id', Ids::toBinary($filter['categoryId']));
         }
@@ -66,6 +75,9 @@ class CatalogController
     private function productPage(Request $request, CursorPage $page, string $org, string $facilityId)
     {
         $items = $this->catalog->presentMany($page->items, $org, $facilityId);
+        if (Actor::isPublic()) {
+            $items = array_map(fn ($i) => TicketCatalog::publicView($i), $items);
+        }
         $arr = $page->toArray();
 
         return Concurrency::cacheable($request, ['items' => $items, 'nextCursor' => $arr['nextCursor']]);

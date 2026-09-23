@@ -143,13 +143,13 @@ class PaymentController
             'callbackUrl' => ['nullable', 'url', 'max:500'],
         ]);
 
-        return response()->json($this->paystack->initialize($in, $this->staffId()), 201);
+        return response()->json($this->paystack->initialize($in, RequestContext::staffId()), 201);
     }
 
     /** GET /payments/paystack/verify/{reference} */
     public function paystackVerify(string $reference): JsonResponse
     {
-        return response()->json($this->paystack->verify($reference, $this->staffId()));
+        return response()->json($this->paystack->verify($reference, RequestContext::staffId()));
     }
 
     // ----------------------------------------------------------------------------------------------------------------

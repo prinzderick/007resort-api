@@ -26,6 +26,13 @@ final class RequestContext
 
     public const TOKEN_EXPIRED = 'r007.token_expired';
 
+    /** Online customer (bearer `r7c_...`, guard `customer`) and website service credential (`r7s_...`, guard `service`). Never set together with STAFF_ID. */
+    public const CUSTOMER_ID = 'r007.customer_id';
+
+    public const CUSTOMER_ACCOUNT_ID = 'r007.customer_account_id';
+
+    public const SERVICE_TOKEN_ID = 'r007.service_token_id';
+
     public static function set(string $key, ?string $value): void
     {
         request()->attributes->set($key, $value);
@@ -67,6 +74,16 @@ final class RequestContext
     public static function approverId(): ?string
     {
         return self::get(self::APPROVER_ID);
+    }
+
+    public static function customerId(): ?string
+    {
+        return self::get(self::CUSTOMER_ID);
+    }
+
+    public static function serviceTokenId(): ?string
+    {
+        return self::get(self::SERVICE_TOKEN_ID);
     }
 
     public static function deviceId(): ?string

@@ -298,14 +298,14 @@ class PaymentService
     }
 
     /** Order state + facility payment-timing rule (architecture/08 §1: payment timing is configurable per facility). */
-    public function assertPayable(array $order): void
+    public function assertPayable(array $order, bool $online = false): void
     {
         if (! in_array($order['status'], self::PAYABLE, true)) {
             throw ApiProblem::conflict('order_state_invalid', "An order in status {$order['status']} cannot be paid.", ['orderId' => $order['id'], 'status' => $order['status']]);
         }
         // Facility payment timing (Orders' OperatingRules): PAY_FIRST may pay from DRAFT; after-service / open-tab facilities only
         // settle orders that have been SERVED (architecture/08 §1).
-        if ($this->rules->paymentTiming($order['facilityId']) !== 'PAY_FIRST' && $order['status'] !== 'SERVED') {
+        if (! $online && $this->rules->paymentTiming($order['facilityId']) !== 'PAY_FIRST' && $order['status'] !== 'SERVED') {
             throw ApiProblem::conflict('order_state_invalid', "This facility takes payment after service; the order is {$order['status']}.", ['orderId' => $order['id'], 'status' => $order['status'], 'paymentTiming' => $this->rules->paymentTiming($order['facilityId'])]);
         }
     }
