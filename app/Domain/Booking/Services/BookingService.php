@@ -216,7 +216,14 @@ final class BookingService
             $this->assertConfirmable($b);
             $paid = $this->payments->capture($b->id, $b->total, $tenders, $cashSessionId, $paystackReference);
 
-            return $this->finalizeConfirmation($b, $paid['amountPaid'], $paid['orderId'] ?? null, $extraItems);
+            // With the Payments module the capture itself fires PaymentCaptured, whose listener has ALREADY confirmed this booking
+            // (same transaction). Then there is nothing left to do but return it; otherwise (unlinked gateway) confirm it here.
+            $current = Booking::query()->with('resource')->findOrFail($b->id);
+            if ($current->status === Booking::CONFIRMED) {
+                return $current;
+            }
+
+            return $this->finalizeConfirmation($current, $paid['amountPaid'], $paid['orderId'] ?? null, $extraItems);
         });
     }
 

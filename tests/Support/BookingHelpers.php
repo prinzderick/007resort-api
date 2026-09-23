@@ -18,6 +18,10 @@ trait BookingHelpers
     /** @return array{t: array{org: string, site: string}, reception: FacilityUnit, arena: FacilityUnit, entrance: FacilityUnit, store: FacilityUnit, pool: FacilityUnit} */
     protected function world(): array
     {
+        // These tests exercise booking rules with stated tenders; the Orders+Payments gateway has its own integration test.
+        config(['booking.payment_gateway' => 'unlinked']);
+        putenv('BOOKING_PAYMENT_GATEWAY=unlinked'); // inherited by the child processes of Concurrent::run()
+        $_ENV['BOOKING_PAYMENT_GATEWAY'] = $_SERVER['BOOKING_PAYMENT_GATEWAY'] = 'unlinked';
         $t = TestData::tenant();
         $arena = TestData::facility($t, 'arena');
 

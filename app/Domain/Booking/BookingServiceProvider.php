@@ -12,9 +12,12 @@ use App\Domain\Booking\Services\BookingPayableSubjectResolver;
 use App\Domain\Booking\Services\BookingRules;
 use App\Domain\Booking\Services\ConfigConnectivityProbe;
 use App\Domain\Booking\Services\NullCloudBookingAuthority;
+use App\Domain\Booking\Services\PaymentsBookingGateway;
 use App\Domain\Booking\Services\UnboundPaymentGateway;
 use App\Domain\Booking\Services\UnlinkedPaymentGateway;
+use App\Domain\Orders\Services\OrderService;
 use App\Domain\Payments\Contracts\PayableSubjectResolver;
+use App\Domain\Payments\Services\PaymentService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -31,9 +34,16 @@ class BookingServiceProvider extends ServiceProvider
         $this->app->singleton(BookingRules::class);
         $this->app->bindIf(ConnectivityProbe::class, ConfigConnectivityProbe::class);
         $this->app->bindIf(CloudBookingAuthority::class, NullCloudBookingAuthority::class);
-        $this->app->bindIf(BookingPaymentGateway::class, fn () => config('booking.payment_gateway') === 'unlinked'
-            ? new UnlinkedPaymentGateway
-            : new UnboundPaymentGateway);
+        // 'auto' (default): the real Orders+Payments gateway when both modules exist, else dev-only 'unlinked' (never in production).
+        $this->app->bindIf(BookingPaymentGateway::class, function () {
+            $mode = config('booking.payment_gateway');
+            $available = class_exists(PaymentService::class) && class_exists(OrderService::class);
+            if ($mode === 'unlinked' || ($mode === 'auto' && ! $available && ! app()->isProduction())) {
+                return new UnlinkedPaymentGateway;
+            }
+
+            return $available ? new PaymentsBookingGateway : new UnboundPaymentGateway;
+        });
     }
 
     public function boot(): void

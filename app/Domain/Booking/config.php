@@ -27,10 +27,10 @@ return [
     // true  = two-node: Cloud decides while reachable; offline the resource's strategy (A/B/C) applies.
     'cloud_enabled' => (bool) env('BOOKING_CLOUD_ENABLED', false),
 
-    // How Reception confirms a booking's payment until the Payments module is bound:
-    //   'unlinked' = trust the tenders in the request (recorded on the booking + outbox only; DEV/DEMO ONLY)
-    //   'payments' = capture through the Payments module port (bound by that module)
-    'payment_gateway' => env('BOOKING_PAYMENT_GATEWAY', env('APP_ENV') === 'production' ? 'payments' : 'unlinked'),
+    // How `POST /bookings/{id}/confirm {tenders}` takes payment:
+    //   'auto'     = the real Orders+Payments gateway when those modules exist; else 'unlinked' (dev only; production refuses with 501)
+    //   'unlinked' = trust the tenders as stated (recorded on the booking + outbox only; NO payment ledger, DEV/DEMO ONLY)
+    'payment_gateway' => env('BOOKING_PAYMENT_GATEWAY', 'auto'),
 
     'sweeper' => ['batch' => 500],
 ];
