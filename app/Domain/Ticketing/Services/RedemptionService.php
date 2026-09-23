@@ -7,6 +7,7 @@ use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Ticketing\Contracts\RentalStockHook;
 use App\Domain\Ticketing\Models\Entitlement;
 use App\Domain\Ticketing\Models\EntitlementItem;
+use App\Domain\Booking\Support\Tx;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
@@ -55,7 +56,7 @@ final class RedemptionService
      */
     public function redeem(string $qrToken, ?string $facilityId = null, ?string $entitlementItemId = null, int $quantity = 1, bool $override = false): array
     {
-        return DB::transaction(function () use ($qrToken, $facilityId, $entitlementItemId, $quantity, $override) {
+        return Tx::run(function () use ($qrToken, $facilityId, $entitlementItemId, $quantity, $override) {
             $ent = $this->lookup($qrToken);
             $scanFacility = $this->requireFacility($facilityId, 'ticket.redeem');
             $now = CarbonImmutable::now('UTC');
@@ -83,7 +84,7 @@ final class RedemptionService
             if ($item->validation_mode === 'SINGLE_USE') {
                 // First successful scan consumes the whole item (qty may be >1 for a group ticket admitted by one scan).
                 $affected = DB::update('UPDATE entitlement_item SET qty_redeemed = qty, qty_inside = 0 WHERE id = ? AND qty_redeemed = 0', [$bin]);
-                $n = (string) $item->qty;
+                $n = $this->q($item->qty);
             } else {
                 $n = (string) max(1, $quantity);
                 $affected = DB::update(
@@ -110,7 +111,7 @@ final class RedemptionService
             ]);
             $fresh = EntitlementItem::query()->find($item->id);
             $this->refreshExhausted($ent);
-            Audit::record('ticket.redeem', 'EntitlementItem', $item->id, ['qtyRedeemed' => (string) $item->qty_redeemed], ['qtyRedeemed' => (string) $fresh->qty_redeemed, 'action' => 'ENTRY', 'qty' => $n],
+            Audit::record('ticket.redeem', 'EntitlementItem', $item->id, ['qtyRedeemed' => $this->q($item->qty_redeemed)], ['qtyRedeemed' => $this->q($fresh->qty_redeemed), 'action' => 'ENTRY', 'qty' => $n],
                 organizationId: $ent->organization_id, siteId: $ent->site_id, facilityUnitId: $scanFacility);
             Outbox::record('TicketRedeemed', 'EntitlementItem', $item->id, [
                 'entitlementId' => $ent->id, 'entitlementItemId' => $item->id, 'action' => 'ENTRY', 'qty' => $n, 'redemptionId' => $redemptionId,
@@ -130,7 +131,7 @@ final class RedemptionService
      */
     public function exit(string $qrToken, ?string $facilityId = null, ?string $entitlementItemId = null): array
     {
-        return DB::transaction(function () use ($qrToken, $facilityId, $entitlementItemId) {
+        return Tx::run(function () use ($qrToken, $facilityId, $entitlementItemId) {
             $ent = $this->lookup($qrToken);
             $scanFacility = $this->requireFacility($facilityId, 'ticket.redeem');
             $now = CarbonImmutable::now('UTC');
@@ -171,7 +172,7 @@ final class RedemptionService
      */
     public function release(string $entitlementId, array $itemIds, ?string $note = null, ?string $depositCollected = null): Entitlement
     {
-        return DB::transaction(function () use ($entitlementId, $itemIds, $note, $depositCollected) {
+        return Tx::run(function () use ($entitlementId, $itemIds, $note, $depositCollected) {
             [$ent, $items, $facility] = $this->rentalContext($entitlementId, $itemIds, 'ticket.release');
             $now = CarbonImmutable::now('UTC')->format('Y-m-d H:i:s.u');
             foreach ($items as $item) {
@@ -181,15 +182,15 @@ final class RedemptionService
                 }
                 $rid = Ids::uuid7();
                 DB::table('redemption')->insert([
-                    'id' => Ids::toBinary($rid), 'entitlement_item_id' => $bin, 'action' => 'RELEASE', 'qty' => (string) $item->qty,
+                    'id' => Ids::toBinary($rid), 'entitlement_item_id' => $bin, 'action' => 'RELEASE', 'qty' => $this->q($item->qty),
                     'device_id' => $this->bin(ScanContext::deviceId()), 'staff_id' => $this->bin(RequestContext::staffId()),
                     'facility_unit_id' => $this->bin($facility ?? $item->facility_unit_id), 'amount' => $depositCollected === null ? null : Money::of($depositCollected)->amount,
                     'note' => $note === null ? null : mb_substr($note, 0, 255), 'created_at' => $now,
                 ]);
-                $this->stock->rentalOut(['entitlementItemId' => $item->id, 'entitlementId' => $ent->id, 'productId' => $item->product_id, 'facilityUnitId' => $item->facility_unit_id, 'quantity' => (string) $item->qty, 'staffId' => RequestContext::staffId()]);
-                Audit::record('ticket.rental.release', 'EntitlementItem', $item->id, ['qtyRedeemed' => '0'], ['qtyRedeemed' => (string) $item->qty, 'note' => $note], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityUnitId: $facility ?? $item->facility_unit_id);
+                $this->stock->rentalOut(['entitlementItemId' => $item->id, 'entitlementId' => $ent->id, 'productId' => $item->product_id, 'facilityUnitId' => $item->facility_unit_id, 'quantity' => $this->q($item->qty), 'staffId' => RequestContext::staffId()]);
+                Audit::record('ticket.rental.release', 'EntitlementItem', $item->id, ['qtyRedeemed' => '0'], ['qtyRedeemed' => $this->q($item->qty), 'note' => $note], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityUnitId: $facility ?? $item->facility_unit_id);
                 Outbox::record('RentalReleased', 'EntitlementItem', $item->id, [
-                    'entitlementId' => $ent->id, 'entitlementItemId' => $item->id, 'productId' => $item->product_id, 'qty' => (string) $item->qty,
+                    'entitlementId' => $ent->id, 'entitlementItemId' => $item->id, 'productId' => $item->product_id, 'qty' => $this->q($item->qty),
                     'redemptionId' => $rid, 'deviceId' => ScanContext::deviceId(), 'staffId' => RequestContext::staffId(), 'at' => str_replace(' ', 'T', $now).'Z',
                 ], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityId: $facility ?? $item->facility_unit_id);
             }
@@ -210,7 +211,7 @@ final class RedemptionService
             throw ApiProblem::unprocessable('validation_failed', 'condition must be OK, DAMAGED or LOST.', ['condition' => ['invalid']]);
         }
 
-        return DB::transaction(function () use ($entitlementId, $itemIds, $condition, $note, $damageCharge) {
+        return Tx::run(function () use ($entitlementId, $itemIds, $condition, $note, $damageCharge) {
             [$ent, $items, $facility] = $this->rentalContext($entitlementId, $itemIds, 'ticket.release', requireActive: false);
             $now = CarbonImmutable::now('UTC')->format('Y-m-d H:i:s.u');
             foreach ($items as $item) {
@@ -222,15 +223,15 @@ final class RedemptionService
                 }
                 $rid = Ids::uuid7();
                 DB::table('redemption')->insert([
-                    'id' => Ids::toBinary($rid), 'entitlement_item_id' => $bin, 'action' => 'RETURN', 'qty' => (string) $item->qty,
+                    'id' => Ids::toBinary($rid), 'entitlement_item_id' => $bin, 'action' => 'RETURN', 'qty' => $this->q($item->qty),
                     'device_id' => $this->bin(ScanContext::deviceId()), 'staff_id' => $this->bin(RequestContext::staffId()),
                     'facility_unit_id' => $this->bin($facility ?? $item->facility_unit_id), 'item_condition' => $condition,
                     'amount' => $damageCharge === null ? null : Money::of($damageCharge)->amount, 'note' => $note === null ? null : mb_substr($note, 0, 255), 'created_at' => $now,
                 ]);
-                $this->stock->rentalIn(['entitlementItemId' => $item->id, 'entitlementId' => $ent->id, 'productId' => $item->product_id, 'facilityUnitId' => $item->facility_unit_id, 'quantity' => (string) $item->qty, 'condition' => $condition, 'staffId' => RequestContext::staffId()]);
-                Audit::record('ticket.rental.return', 'EntitlementItem', $item->id, ['qtyReturned' => '0'], ['qtyReturned' => (string) $item->qty, 'condition' => $condition, 'damageCharge' => $damageCharge], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityUnitId: $facility ?? $item->facility_unit_id);
+                $this->stock->rentalIn(['entitlementItemId' => $item->id, 'entitlementId' => $ent->id, 'productId' => $item->product_id, 'facilityUnitId' => $item->facility_unit_id, 'quantity' => $this->q($item->qty), 'condition' => $condition, 'staffId' => RequestContext::staffId()]);
+                Audit::record('ticket.rental.return', 'EntitlementItem', $item->id, ['qtyReturned' => '0'], ['qtyReturned' => $this->q($item->qty), 'condition' => $condition, 'damageCharge' => $damageCharge], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityUnitId: $facility ?? $item->facility_unit_id);
                 Outbox::record('RentalReturned', 'EntitlementItem', $item->id, [
-                    'entitlementId' => $ent->id, 'entitlementItemId' => $item->id, 'productId' => $item->product_id, 'qty' => (string) $item->qty, 'condition' => $condition,
+                    'entitlementId' => $ent->id, 'entitlementItemId' => $item->id, 'productId' => $item->product_id, 'qty' => $this->q($item->qty), 'condition' => $condition,
                     'damageCharge' => $damageCharge === null ? null : Money::of($damageCharge)->amount, 'redemptionId' => $rid, 'deviceId' => ScanContext::deviceId(),
                     'staffId' => RequestContext::staffId(), 'at' => str_replace(' ', 'T', $now).'Z',
                 ], organizationId: $ent->organization_id, siteId: $ent->site_id, facilityId: $facility ?? $item->facility_unit_id);
@@ -389,6 +390,11 @@ final class RedemptionService
               WHERE e.id = ? AND e.status = 'ACTIVE' AND NOT EXISTS (SELECT 1 FROM entitlement_item i WHERE i.entitlement_id = e.id AND i.qty_redeemed < i.qty)",
             [Ids::toBinary($ent->id)],
         );
+    }
+
+    private function q(float $qty): string
+    {
+        return number_format($qty, 3, '.', '');
     }
 
     private function bin(?string $uuid): ?string

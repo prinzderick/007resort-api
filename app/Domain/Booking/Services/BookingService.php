@@ -12,6 +12,7 @@ use App\Domain\Booking\Models\Booking;
 use App\Domain\Booking\Models\BookingItem;
 use App\Domain\Booking\Support\AllocationPlan;
 use App\Domain\Booking\Support\HoldCommand;
+use App\Domain\Booking\Support\Tx;
 use App\Domain\Ticketing\Services\EntitlementService;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
@@ -81,12 +82,13 @@ final class BookingService
             }
         }
 
-        return DB::transaction(fn () => $this->place($resource, $cmd, $plan, $starts, $qty, $whole, (int) $rules['hold_ttl_seconds']));
+        return Tx::run(fn () => $this->place($resource, $cmd, $plan, $starts, $qty, $whole, (int) $rules['hold_ttl_seconds']));
     }
 
     /** @param list<CarbonImmutable> $starts */
     private function place(BookableResource $resource, HoldCommand $cmd, AllocationPlan $plan, array $starts, int $qty, bool $whole, int $ttl): Booking
     {
+        $this->lockResource($resource->id); // BEFORE any insert that FK-references the resource (avoids S->X upgrade deadlocks)
         $now = CarbonImmutable::now('UTC');
         $bookingId = $cmd->bookingId ?? Ids::uuid7();
         $itemId = Ids::uuid7();
@@ -120,7 +122,12 @@ final class BookingService
     }
 
     /**
-     * The atomic reserve. Returns the unit numbers claimed. Throws 409 slot_unavailable when the capacity is gone.
+     * The atomic reserve. Returns the unit numbers claimed; throws 409 slot_unavailable when the capacity is gone.
+     *
+     * No "read free units, then write": each unit is CLAIMED by a single multi-row INSERT (all of its slots or none)
+     * and MySQL's UNIQUE (resource_id, unit_no, slot_start) decides the race — a duplicate-key error just means "that
+     * unit is taken, try the next". This is correct under any isolation level (a snapshot read can be stale; the index
+     * cannot). If fewer units than required were claimed the savepoint rolls the partial claim back.
      *
      * @param  list<CarbonImmutable>  $starts
      * @return list<int>
@@ -136,62 +143,60 @@ final class BookingService
         $range = range($plan->unitLo, $plan->unitHi);
         $unavailable = fn (string $why) => ApiProblem::conflict('slot_unavailable', 'That slot is no longer available.', ['meta' => ['reason' => $why]]);
 
-        for ($attempt = 0; $attempt < 8; $attempt++) {
-            $now = CarbonImmutable::now('UTC');
-            $rows = DB::table('slot_allocation as sa')->join('booking_item as bi', 'bi.id', '=', 'sa.booking_item_id')
-                ->where('sa.resource_id', $resourceBin)->whereIn('sa.slot_start', $slotKeys)
-                ->get(['sa.unit_no', 'sa.status', 'sa.hold_expires_at', 'bi.booking_id']);
+        $this->clearExpiredBlockers($resourceBin, $slotKeys); // ONE pass: stale unpaid holds must not block real customers
 
-            $expired = $rows->filter(fn ($r) => $r->status === 'HELD' && $r->hold_expires_at !== null && $r->hold_expires_at < $now->format(self::FMT))
-                ->pluck('booking_id')->unique();
-            if ($expired->isNotEmpty()) {
-                foreach ($expired as $bid) {
-                    $this->expireBooking(Ids::fromBinary($bid));
+        return (function () use ($resource, $plan, $itemId, $slotKeys, $slotEnds, $resourceBin, $range, $qty, $whole, $holdExpires, $unavailable) {
+            $need = $whole ? count($range) : $qty;
+            $chosen = [];
+            foreach ($range as $unit) {
+                if (count($chosen) >= $need) {
+                    break;
                 }
-                $attempt--; // clearing stale holds is not a contention retry
-                $rows = $rows->reject(fn ($r) => $expired->contains($r->booking_id));
-            }
-
-            $blockedUnits = $rows->pluck('unit_no')->map(fn ($u) => (int) $u)->unique()->all();
-            $free = array_values(array_diff($range, $blockedUnits));
-            if ($whole) {
-                if (count($free) !== count($range)) {
-                    throw $unavailable('whole_resource_in_use');
-                }
-                $chosen = $range;
-            } else {
-                if (count($free) < $qty) {
-                    throw $unavailable('capacity_exhausted');
-                }
-                $chosen = array_slice($free, 0, $qty);
-            }
-
-            $insert = [];
-            foreach ($chosen as $unit) {
+                $rows = [];
                 foreach ($slotKeys as $key) {
-                    $insert[] = [
+                    $rows[] = [
                         'id' => Ids::toBinary(Ids::uuid7()), 'organization_id' => Ids::toBinary($resource->organization_id), 'site_id' => Ids::toBinary($resource->site_id),
                         'resource_id' => $resourceBin, 'unit_no' => $unit, 'slot_start' => $key, 'slot_end' => $slotEnds[$key]->format(self::FMT),
                         'booking_item_id' => Ids::toBinary($itemId), 'pool' => $plan->pool, 'status' => 'HELD', 'hold_expires_at' => $holdExpires?->format(self::FMT),
                     ];
                 }
+                try {
+                    DB::table('slot_allocation')->insert($rows); // ONE statement: every slot of this unit, or none
+                    $chosen[] = $unit;
+                } catch (QueryException $e) {
+                    $code = $e->errorInfo[1] ?? null;
+                    if ($code === 1062) {
+                        if ($whole) {
+                            throw $unavailable('whole_resource_in_use');
+                        }
+
+                        continue; // this unit is taken (by a committed or racing booking): try the next
+                    }
+                    if (in_array($code, [1213, 1205], true)) {
+                        throw $unavailable('contention'); // deadlock victim / lock wait timeout: safe for the client to retry
+                    }
+                    throw $e;
+                }
             }
-            try {
-                DB::table('slot_allocation')->insert($insert); // ONE statement: all rows or none
-            } catch (QueryException $e) {
-                $code = $e->errorInfo[1] ?? null;
-                if ($code === 1062) {
-                    continue; // lost a race on a unit: re-read and pick again (or report unavailable)
-                }
-                if (in_array($code, [1213, 1205], true)) {
-                    throw $unavailable('contention'); // deadlock victim / lock wait: safe for the client to retry
-                }
-                throw $e;
+            if (count($chosen) < $need) {
+                throw $unavailable('capacity_exhausted');
             }
 
             return $chosen;
+        })();
+    }
+
+    /** Expire the (already past-TTL) unpaid holds that occupy any of these slots, once. @param list<string> $slotKeys */
+    private function clearExpiredBlockers(string $resourceBin, array $slotKeys): void
+    {
+        $now = CarbonImmutable::now('UTC')->format(self::FMT);
+        $bookingIds = DB::table('slot_allocation as sa')->join('booking_item as bi', 'bi.id', '=', 'sa.booking_item_id')
+            ->where('sa.resource_id', $resourceBin)->whereIn('sa.slot_start', $slotKeys)
+            ->where('sa.status', 'HELD')->whereNotNull('sa.hold_expires_at')->where('sa.hold_expires_at', '<', $now)
+            ->distinct()->pluck('bi.booking_id');
+        foreach ($bookingIds as $bid) {
+            $this->expireBooking(Ids::fromBinary($bid));
         }
-        throw $unavailable('contention');
     }
 
     // --------------------------------------------------------------------------------------------- CONFIRM
@@ -205,7 +210,7 @@ final class BookingService
      */
     public function confirm(string $bookingId, ?int $expectedRowVersion, array $tenders = [], ?string $cashSessionId = null, ?string $paystackReference = null, array $extraItems = []): Booking
     {
-        return DB::transaction(function () use ($bookingId, $expectedRowVersion, $tenders, $cashSessionId, $paystackReference, $extraItems) {
+        return Tx::run(function () use ($bookingId, $expectedRowVersion, $tenders, $cashSessionId, $paystackReference, $extraItems) {
             $b = $this->lock($bookingId, $expectedRowVersion);
             $this->assertConfirmable($b);
             $paid = $this->payments->capture($b->id, $b->total, $tenders, $cashSessionId, $paystackReference);
@@ -222,7 +227,7 @@ final class BookingService
      */
     public function confirmPaid(string $bookingId, string $amountPaid, ?string $orderId, array $extraItems = []): Booking
     {
-        return DB::transaction(function () use ($bookingId, $amountPaid, $orderId, $extraItems) {
+        return Tx::run(function () use ($bookingId, $amountPaid, $orderId, $extraItems) {
             $b = $this->lock($bookingId, null);
             if ($b->status === Booking::CONFIRMED) {
                 return $b;
@@ -278,7 +283,7 @@ final class BookingService
 
     public function cancel(string $bookingId, ?int $expectedRowVersion, string $reason): Booking
     {
-        return DB::transaction(function () use ($bookingId, $expectedRowVersion, $reason) {
+        return Tx::run(function () use ($bookingId, $expectedRowVersion, $reason) {
             $b = $this->lock($bookingId, $expectedRowVersion);
             if (! in_array($b->status, [Booking::HELD, Booking::PENDING_PAYMENT, Booking::CONFIRMED, Booking::RESCHEDULED], true)) {
                 throw ApiProblem::conflict('booking_state_invalid', "A {$b->status} booking cannot be cancelled.");
@@ -318,7 +323,10 @@ final class BookingService
     /** New slot is claimed and the old one released in ONE transaction: if the new slot is taken, nothing changes. */
     public function reschedule(string $bookingId, ?int $expectedRowVersion, CarbonImmutable $start, CarbonImmutable $end, ?string $reason = null): Booking
     {
-        return DB::transaction(function () use ($bookingId, $expectedRowVersion, $start, $end, $reason) {
+        return Tx::run(function () use ($bookingId, $expectedRowVersion, $start, $end, $reason) {
+            if (Ids::isUuid($bookingId) && ($rid = DB::table('booking')->where('id', Ids::toBinary($bookingId))->value('resource_id')) !== null) {
+                $this->lockResource(Ids::fromBinary($rid)); // lock order: resource before booking
+            }
             $b = $this->lock($bookingId, $expectedRowVersion);
             if (! in_array($b->status, [Booking::CONFIRMED, Booking::HELD], true)) {
                 throw ApiProblem::conflict('booking_state_invalid', "A {$b->status} booking cannot be rescheduled.");
@@ -388,7 +396,7 @@ final class BookingService
             ->where('hold_expires_at', '<', CarbonImmutable::now('UTC')->format(self::FMT))->orderBy('hold_expires_at')->limit($limit)->pluck('id');
         $n = 0;
         foreach ($ids as $bin) {
-            $n += DB::transaction(fn () => $this->expireBooking(Ids::fromBinary($bin))) ? 1 : 0;
+            $n += Tx::run(fn () => $this->expireBooking(Ids::fromBinary($bin))) ? 1 : 0;
         }
 
         return $n;
@@ -416,6 +424,16 @@ final class BookingService
     public function releaseAllocations(string $bookingId): void
     {
         SlotAllocations::release($bookingId);
+    }
+
+    /**
+     * Serialise allocation per resource with a row lock on the resource. The UNIQUE key stays the authoritative guard;
+     * this makes contenders queue instead of deadlocking on the (UUIDv7, append-only) primary-key gap that failed
+     * duplicate-key INSERTs leave locked. Lock order everywhere: resource, then booking, then allocation rows.
+     */
+    public function lockResource(string $resourceId): void
+    {
+        DB::table('bookable_resource')->where('id', Ids::toBinary($resourceId))->lockForUpdate()->value('id');
     }
 
     private function lock(string $bookingId, ?int $expectedRowVersion): Booking

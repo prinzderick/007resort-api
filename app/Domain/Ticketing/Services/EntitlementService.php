@@ -143,15 +143,15 @@ final class EntitlementService
 
         $id = Ids::uuid7();
         try {
-            DB::transaction(fn () => Entitlement::create([ // savepoint: a lost race on source_key must not poison the outer transaction
+            Entitlement::create([ // a lost race on source_key fails just this statement (MySQL statement-level rollback)
                 'id' => $id, 'organization_id' => $organizationId, 'site_id' => $siteId, 'qr_token' => $this->tokens->generate(),
                 'source_key' => $sourceKey, 'status' => 'ACTIVE', 'booking_id' => $bookingId, 'order_id' => $orderId,
                 'customer_id' => $customerId, 'holder_name' => $holderName, 'issued_by' => $issuedBy ?? RequestContext::staffId(),
                 'issued_at' => CarbonImmutable::now('UTC'),
-            ]));
+            ]);
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
-                return Entitlement::query()->where('source_key', $sourceKey)->firstOrFail()->load('items');
+                return Entitlement::query()->where('source_key', $sourceKey)->sharedLock()->firstOrFail()->load('items'); // current read: the winner just committed
             }
             throw $e;
         }

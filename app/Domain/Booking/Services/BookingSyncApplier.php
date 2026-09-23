@@ -50,6 +50,7 @@ final class BookingSyncApplier
             return $existing; // idempotent redelivery
         }
         $resource = BookableResource::query()->findOrFail($s['resourceId']);
+        DB::table('bookable_resource')->where('id', Ids::toBinary($resource->id))->lockForUpdate()->value('id'); // same lock order as BookingService
         $start = CarbonImmutable::parse($s['start'], 'UTC');
         $end = CarbonImmutable::parse($s['end'], 'UTC');
         $starts = $this->grid->slotStartsFor($resource, $start, $end) ?? throw ApiProblem::unprocessable('validation_failed', 'Snapshot slot is not on this resource\'s grid.');
