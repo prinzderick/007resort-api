@@ -35,3 +35,4 @@ secrets.json
 !.env.example
 .phpunit.cache
 .php-cs-fixer.cache
+/storage/local-node.*

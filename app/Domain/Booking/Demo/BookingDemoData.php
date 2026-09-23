@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * The demo data itself (idempotent), independent of HOW facilities/people are created:
- *  - standalone (this module alone): Booking\Seeders\BookingDemoSeeder creates RECEPTION / SPORTS-ARENA ... and calls this;
+ *  - standalone (this module alone): Booking\Seeders\BookingDemoSeeder creates RECEPTION / SPORTS_ARENA ... and calls this;
  *  - integrated (Organization + Identity + Devices demo seeders present): Booking\Demo\BookingDemoSeeder maps onto THEIR
  *    facility ids and resource ids and calls this.
  *

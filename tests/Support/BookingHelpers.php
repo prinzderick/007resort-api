@@ -22,6 +22,11 @@ trait BookingHelpers
         config(['booking.payment_gateway' => 'unlinked']);
         putenv('BOOKING_PAYMENT_GATEWAY=unlinked'); // inherited by the child processes of Concurrent::run()
         $_ENV['BOOKING_PAYMENT_GATEWAY'] = $_SERVER['BOOKING_PAYMENT_GATEWAY'] = 'unlinked';
+        // ...but never leak it into the next test (an integrated flow such as MvpSmokeTest needs the real Orders+Payments gateway).
+        $this->beforeApplicationDestroyed(function (): void {
+            putenv('BOOKING_PAYMENT_GATEWAY');
+            unset($_ENV['BOOKING_PAYMENT_GATEWAY'], $_SERVER['BOOKING_PAYMENT_GATEWAY']);
+        });
         $t = TestData::tenant();
         $arena = TestData::facility($t, 'arena');
 

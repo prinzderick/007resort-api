@@ -5,7 +5,7 @@ use App\Domain\Booking\Http\Controllers\ResourceController;
 use Illuminate\Support\Facades\Route;
 
 // Loaded under /api/v1 with the `api` middleware group.
-Route::middleware('auth:staff')->prefix('bookings')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->prefix('bookings')->group(function () {
     Route::get('resources', [ResourceController::class, 'index']);
     Route::post('resources', [ResourceController::class, 'store'])->middleware(['permission:booking.configure', 'idempotent']);
     Route::patch('resources/{resourceId}', [ResourceController::class, 'update'])->middleware(['permission:booking.configure', 'idempotent']);

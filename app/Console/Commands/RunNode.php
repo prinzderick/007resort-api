@@ -14,7 +14,7 @@ use Symfony\Component\Process\Process;
  */
 class RunNode extends Command
 {
-    protected $signature = 'r007:run {--host=127.0.0.1} {--port= : HTTP port (default API_PORT or 8007)} {--reverb : also start Laravel Reverb}';
+    protected $signature = 'r007:run {--host=127.0.0.1 : bind address for HTTP and Reverb (0.0.0.0 to serve the LAN)} {--port= : HTTP port (default API_PORT or 8007)} {--reverb : also start Laravel Reverb}';
 
     protected $description = 'Run serve + queue + scheduler (+ reverb) together for local development / the Local node';
 
@@ -28,13 +28,14 @@ class RunNode extends Command
             'schedule' => [$php, 'artisan', 'schedule:work'],
         ];
         if ($this->option('reverb')) {
-            $procs['reverb'] = [$php, 'artisan', 'reverb:start', '--host=127.0.0.1'];
+            $procs['reverb'] = [$php, 'artisan', 'reverb:start', '--host='.$this->option('host')];
         }
 
         /** @var array<string, Process> $running */
         $running = [];
         foreach ($procs as $name => $cmd) {
-            $p = new Process($cmd, base_path(), null, null, null);
+            // The PHP built-in server is single-threaded; several workers let tablets, KDS and long-polling clients overlap (macOS/Linux).
+            $p = new Process($cmd, base_path(), $name === 'serve' ? ['PHP_CLI_SERVER_WORKERS' => (string) (env('API_WORKERS') ?: 4)] : null, null, null);
             $p->start(fn ($type, $buffer) => $this->emit($name, $buffer));
             $running[$name] = $p;
         }

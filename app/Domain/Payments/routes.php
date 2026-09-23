@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Route;
 // Provider webhooks: NO bearer auth - authenticated by the provider's HMAC signature (Cloud node is the public receiver).
 Route::post('payments/webhooks/{provider}', [WebhookController::class, 'receive']);
 
-Route::middleware('auth:staff')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::post('payments', [PaymentController::class, 'store'])
         ->middleware(['permission:payment.take,facility=facilityId', 'idempotent']);
     Route::get('payments', [PaymentController::class, 'index'])->middleware('permission:payment.view');

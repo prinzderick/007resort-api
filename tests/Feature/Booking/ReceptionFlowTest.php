@@ -51,7 +51,7 @@ class ReceptionFlowTest extends TestCase
             DB::table('ticket_type')->insert(['id' => Ids::toBinary(Ids::uuid7()), 'organization_id' => $org, 'site_id' => Ids::toBinary($this->w['t']['site']), 'facility_unit_id' => Ids::toBinary($this->w['pool']->id),
                 'product_id' => Ids::toBinary($this->p[$k]), 'code' => $code, 'name' => $code, 'format' => 'INDIVIDUAL', 'validation_mode' => 'SINGLE_USE']);
         }
-        DB::table('facility_unit')->where('id', Ids::toBinary($this->w['store']->id))->update(['code' => 'SPORTS-STORE']);
+        DB::table('facility_unit')->where('id', Ids::toBinary($this->w['store']->id))->update(['code' => 'SPORTS_STORE']);
         [$staff, $this->token] = $this->staffWith($this->w, 'rita', self::BOOKING_PERMS);
         TestData::assign($staff, 'CASHIER', 'FACILITY_UNIT', $this->w['reception']->id);
     }

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 // Inventory module (contract: api/openapi/v1.yaml tag Inventory). `permission:` = held somewhere; controllers/services then
 // re-check it against the scope of the location(s) touched.
-Route::middleware('auth:staff')->prefix('inventory')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->prefix('inventory')->group(function () {
     // --- reads ---
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('items', [InventoryController::class, 'items']);

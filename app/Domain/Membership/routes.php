@@ -5,7 +5,7 @@ use App\Domain\Membership\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
 
 // Loaded under /api/v1 with the `api` middleware group.
-Route::middleware('auth:staff')->prefix('memberships')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->prefix('memberships')->group(function () {
     Route::get('plans', [PlanController::class, 'index']);
     Route::post('plans', [PlanController::class, 'store'])->middleware(['permission:membership.plan.manage', 'idempotent']);
     Route::patch('plans/{plan}', [PlanController::class, 'update'])->whereUuid('plan')->middleware(['permission:membership.plan.manage', 'idempotent']);

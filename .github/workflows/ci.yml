@@ -66,7 +66,7 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
-          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS r007_foundation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS r007_integration_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
 
       - name: Migrations apply to MySQL 8.4 (fresh)
         env:
@@ -78,6 +78,21 @@ jobs:
 
       - name: Tests (real MySQL + Redis)
         run: vendor/bin/phpunit --colors=always
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: End-to-end smoke (running Local node + Reverb, curl/jq + WebSocket)
+        env:
+          LOCAL_NODE_DB: r007_smoke
+          SMOKE_DB: r007_smoke
+          DB_HOST: 127.0.0.1
+        run: |
+          scripts/local-node.sh seed > /tmp/seed.log 2>&1 || { tail -50 /tmp/seed.log; exit 1; }
+          scripts/local-node.sh start
+          scripts/smoke-mvp.sh || { tail -80 storage/logs/local-node.log; exit 1; }
+          scripts/local-node.sh stop
 
   secret-scan:
     name: Secret scan (gitleaks)

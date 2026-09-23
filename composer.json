@@ -69,7 +69,7 @@
         ],
         "local-node": [
             "Composer\\Config::disableProcessTimeout",
-            "@php artisan r007:run --reverb"
+            "@php artisan r007:run --reverb --host=0.0.0.0 --port=8080"
         ],
         "demo": [
             "@php artisan r007:demo-seed"

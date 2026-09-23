@@ -87,7 +87,7 @@ Still to build in Sync: a Local->Cloud synchronous endpoint + client implementin
 
 ## Config / env
 
-`BOOKING_TIMEZONE` (Africa/Lagos), `BOOKING_CLOUD_ENABLED`, `BOOKING_PAYMENT_GATEWAY` (`auto`), `TICKET_QR_KEY`, `TICKET_STORE_FACILITY_CODE` (SPORTS-STORE).
+`BOOKING_TIMEZONE` (Africa/Lagos), `BOOKING_CLOUD_ENABLED`, `BOOKING_PAYMENT_GATEWAY` (`auto`), `TICKET_QR_KEY`, `TICKET_STORE_FACILITY_CODE` (SPORTS_STORE).
 Scheduler: `booking:expire-holds` every minute (also cleared lazily when a hold is what blocks a new request).
 
 ## Demo data
@@ -95,7 +95,7 @@ Scheduler: `booking:expire-holds` every minute (also cleared lazily when a hold 
 Integrated build (Organization/Identity/Devices/Catalog demo framework): `Booking\Demo\BookingDemoSeeder` (priority 110) enriches THEIR facilities/resources (Football Pitch 1, Lawn
 Tennis Court 1-2, Basketball Court 1 with hourly prices; Event Hall as per-seat capacity with an offline reserve), adds slot-fee / pool-ticket / rental / store-goods products, pool
 ticket types, the Reception `payment_timing=PAY_FIRST` rule and two sample QR entitlements; it adds no staff/roles (sign in as cashier1 at Reception, supervisor1/manager1 at the
-Sports Entrance and Pool gate, storekeeper1 at the Sports Store; PIN 1234). Standalone (this module alone) `php artisan r007:demo-seed` (idempotent; refuses in production): facilities RECEPTION / SPORTS-ARENA > SPORTS-ENTRANCE / SPORTS-STORE / POOL, resources Football Pitch,
+Sports Entrance and Pool gate, storekeeper1 at the Sports Store; PIN 1234). Standalone (this module alone) `php artisan r007:demo-seed` (idempotent; refuses in production): facilities RECEPTION / SPORTS_ARENA > SPORTS_ENTRANCE / SPORTS_STORE / POOL, resources Football Pitch,
 Lawn Tennis Court 1-2, Basketball Court (hourly, 07:00-21:00), Tennis Clinic (8 seats, whole-clinic allowed, 2 offline-reserve seats), pool ticket types (adult/child), Catalog
 products (slot fees, pool tickets, rentals, store goods) when the Catalog tables exist, users `reception` / `entrance` / `store` / `pool` (dev password `Demo-Pass-007!`),
 and two sample entitlements whose QR tokens are printed.

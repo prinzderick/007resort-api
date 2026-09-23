@@ -3,7 +3,7 @@
 use App\Domain\Catalog\Http\Controllers\CatalogController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:staff')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::get('catalog/categories', [CatalogController::class, 'categories']);
     Route::get('catalog/products', [CatalogController::class, 'products']);
     Route::get('catalog/products/{productId}', [CatalogController::class, 'product']);

@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Hash;
 /**
  * STANDALONE demo data (this module without the Organization/Identity/Devices demo seeders). Idempotent.
  *
- * Facilities:  RECEPTION, SPORTS-ARENA > SPORTS-ENTRANCE, SPORTS-STORE, POOL.
+ * Facilities:  RECEPTION, SPORTS_ARENA > SPORTS_ENTRANCE, SPORTS_STORE, POOL.
  * People:      users reception / entrance / store / pool (dev password below — NEVER use outside dev).
  * Everything else (resources, ticket types, catalog products, sample entitlements) comes from {@see BookingDemoData}, shared with the
  * integrated seeder (Booking\Demo\BookingDemoSeeder, used when `App\Console\Commands\DemoSeed` exists).
@@ -39,9 +39,9 @@ class BookingDemoSeeder extends Seeder
         }
         $t = ['org' => $site->organization_id, 'site' => $site->id];
         $reception = $this->facility($t, 'RECEPTION', 'Main Reception');
-        $arena = $this->facility($t, 'SPORTS-ARENA', 'Sports Arena');
-        $entrance = $this->facility($t, 'SPORTS-ENTRANCE', 'Sports Entrance', $arena->id);
-        $store = $this->facility($t, 'SPORTS-STORE', 'Sports Store');
+        $arena = $this->facility($t, 'SPORTS_ARENA', 'Sports Arena');
+        $entrance = $this->facility($t, 'SPORTS_ENTRANCE', 'Sports Entrance', $arena->id);
+        $store = $this->facility($t, 'SPORTS_STORE', 'Sports Store');
         $pool = $this->facility($t, 'POOL', 'Pool');
 
         $f = $t + ['reception' => $reception->id, 'arena' => $arena->id, 'store' => $store->id, 'pool' => $pool->id];

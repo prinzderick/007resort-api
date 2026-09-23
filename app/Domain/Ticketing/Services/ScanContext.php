@@ -23,6 +23,11 @@ final class ScanContext
         if ($device === null) {
             return null;
         }
+        // The Devices module's tablet checkout (staff + facility for the shift) is authoritative, then the legacy binding, then the device's home facility.
+        $checkout = DB::table('tablet_checkout')->where('device_id', Ids::toBinary($device))->whereNull('checked_in_at')->orderByDesc('checked_out_at')->first(['facility_unit_id']);
+        if ($checkout) {
+            return Ids::fromBinary($checkout->facility_unit_id);
+        }
         $binding = DB::table('device_binding')->where('device_id', Ids::toBinary($device))->whereNull('unbound_at')->orderByDesc('bound_at')->first(['facility_unit_id']);
         if ($binding) {
             return Ids::fromBinary($binding->facility_unit_id);
