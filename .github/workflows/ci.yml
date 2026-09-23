@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -13,50 +12,71 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-
 jobs:
-  build-test:
-    name: Build & test
+  laravel:
+    name: Lint, migrate & test (PHP 8.4, MySQL 8.4, Redis)
     runs-on: ubuntu-latest
-    # TODO(phase-1): integration tests against a real MySQL 8.4 are planned via Testcontainers
-    # (which needs no service container). If a service container is preferred instead:
-    # services:
-    #   mysql:
-    #     image: mysql:8.4
-    #     env:
-    #       MYSQL_DATABASE: r007_test
-    #       MYSQL_ROOT_PASSWORD: ${{ secrets.CI_MYSQL_ROOT_PASSWORD }}
-    #     ports: ["3306:3306"]
-    #     options: >-
-    #       --health-cmd="mysqladmin ping -h 127.0.0.1"
-    #       --health-interval=10s --health-timeout=5s --health-retries=10
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: r007_ci
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: r007_ci
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      REDIS_HOST: 127.0.0.1
+      REDIS_CLIENT: predis
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: shivammathur/setup-php@v2
         with:
-          global-json-file: global.json
+          php-version: "8.4"
+          extensions: bcmath, intl, pdo_mysql, sodium, mbstring
+          coverage: none
 
-      - name: Restore
-        run: dotnet restore R007.sln
+      - name: Get Composer cache dir
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
-      - name: Build
-        run: dotnet build R007.sln -c Release --no-restore
-
-      - name: Test
-        run: dotnet test R007.sln -c Release --no-build --logger trx --results-directory TestResults
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: actions/cache@v4
         with:
-          name: test-results
-          path: TestResults
-          if-no-files-found: ignore
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS r007_foundation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+
+      - name: Migrations apply to MySQL 8.4 (fresh)
+        run: php artisan migrate:fresh --force
+
+      - name: Lint (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Tests (real MySQL + Redis)
+        run: vendor/bin/phpunit --colors=always
 
   secret-scan:
     name: Secret scan (gitleaks)

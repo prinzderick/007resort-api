@@ -1,0 +1,81 @@
+openapi: 3.1.0
+info:
+  title: 007 Resort & Spa API
+  version: 0.1.0
+  description: >
+    Implemented surface of the Laravel API (foundation). Errors are RFC 7807 application/problem+json with a stable `code`.
+    Mutating endpoints marked idempotent require an `Idempotency-Key` header. Money is a decimal string. IDs are UUIDv7.
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string, description: stable machine-readable code }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items: { type: object, properties: { field: { type: string }, code: { type: string }, message: { type: string } } }
+    LoginRequest:
+      type: object
+      required: [username]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        pin: { type: string }
+        deviceId: { type: string, format: uuid }
+    TokenResponse:
+      type: object
+      properties:
+        tokenType: { type: string, example: Bearer }
+        accessToken: { type: string }
+        accessTokenExpiresAt: { type: string, format: date-time }
+        refreshToken: { type: string }
+        refreshTokenExpiresAt: { type: string, format: date-time }
+        sessionId: { type: string, format: uuid }
+        staffId: { type: string, format: uuid }
+        displayName: { type: string }
+paths:
+  /auth/staff/login:
+    post:
+      summary: Staff login (PASSWORD or PIN). Rate limited; 5 failures lock the account 15 minutes (423 account_locked).
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } } }
+        '401': { description: invalid_credentials }
+        '423': { description: account_locked }
+        '429': { description: too_many_requests }
+  /auth/staff/refresh:
+    post:
+      summary: Rotate refresh token (reuse of a rotated token revokes the whole chain).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { refreshToken: { type: string } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } } }
+        '401': { description: invalid_refresh_token | refresh_token_expired }
+  /auth/staff/logout:
+    post: { security: [{ bearer: [] }], summary: Revoke the current session, responses: { '204': { description: No content } } }
+  /auth/staff/step-up:
+    post:
+      security: [{ bearer: [] }]
+      summary: Re-verify password/PIN; opens a 5 minute step-up window.
+      responses: { '200': { description: verified }, '401': { description: invalid_credentials } }
+  /auth/sessions/{id}/revoke:
+    post:
+      security: [{ bearer: [] }]
+      summary: Revoke a session (own session, or any with permission session.revoke).
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '204': { description: Revoked }, '403': { description: permission_denied }, '404': { description: session_not_found } }
+  /me:
+    get: { security: [{ bearer: [] }], summary: Current staff + effective permissions, responses: { '200': { description: OK } } }
+  /audit:
+    get: { security: [{ bearer: [] }], summary: 'Audit log (permission audit.view), cursor paginated', responses: { '200': { description: OK } } }
+  /audit/verify:
+    get: { security: [{ bearer: [] }], summary: Recompute the audit hash chain (permission audit.view), responses: { '200': { description: '{valid, rowsChecked, brokenAtSeq, reason, tailHash}' } } }
