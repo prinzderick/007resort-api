@@ -340,6 +340,17 @@ class RedemptionTest extends TestCase
         $this->assertSame(0, DB::table('redemption')->where('action', 'RELEASE')->count());
     }
 
+    public function test_facility_match_is_subtree_aware_but_never_matches_siblings(): void
+    {
+        $tennis = TestData::facility($this->w['t'], 'lawn-tennis', $this->w['arena']->id);
+        $football = TestData::facility($this->w['t'], 'football', $this->w['arena']->id);
+        $e = $this->ticket([$this->access(['facilityUnitId' => $tennis->id, 'name' => 'Court 1 - 10:00'])]);
+
+        $this->redeem($e->qr_token, $football->id)->assertJsonPath('result', 'WRONG_FACILITY'); // sibling venue
+        $this->redeem($e->qr_token, $this->w['pool']->id)->assertJsonPath('result', 'WRONG_FACILITY');
+        $this->redeem($e->qr_token, $this->w['arena']->id)->assertJsonPath('result', 'VALID'); // the Sports Arena gate admits any venue inside it
+    }
+
     public function test_issue_by_booking_is_idempotent_and_rejects_unconfirmed_bookings(): void
     {
         $r = $this->resource($this->w);

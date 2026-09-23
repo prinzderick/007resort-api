@@ -145,6 +145,7 @@ return new class extends Migration
             'UNIT_SUPERVISOR' => ['ticket.issue', 'ticket.view', 'ticket.redeem', 'ticket.release', 'ticket.override'],
             'MANAGER' => ['ticket.issue', 'ticket.view', 'ticket.redeem', 'ticket.release', 'ticket.override'],
             'OWNER' => ['ticket.issue', 'ticket.view', 'ticket.redeem', 'ticket.release', 'ticket.override'],
+            'STOREKEEPER' => ['ticket.view', 'ticket.release'], // Sports Store window: look up a QR, release / take back rentals
             'IT_ADMIN' => ['ticket.view'],
         ];
         foreach ($bundle as $role => $codes) {

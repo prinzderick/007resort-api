@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Booking engine schema (architecture/10, 04 §3.1, sync/booking-authority-and-offline-allocation).
@@ -10,6 +11,10 @@ use Illuminate\Support\Facades\DB;
  * booking owns one row per (unit x slot) it occupies, and MySQL — not application code — rejects the loser.
  * A resource with `capacity` N has units 1..N ("one row per unit"); whole-resource bookings of a multi-unit
  * resource claim ALL units, so they collide with per-unit bookings by construction (the "combined" mode).
+ *
+ * `bookable_resource` may ALREADY exist (the Organization module creates the bare table for its demo/admin data: id, org, site,
+ * facility, code, name, capacity, is_active ...). Then this migration only ALTERs in the booking columns; otherwise it creates the full
+ * table. Either way the final shape is identical.
  *
  * No foreign keys to Catalog/Orders/Ticketing tables (product_id, order_id, ticket_type_id, entitlement_id are soft
  * references): those modules ship independently and must be able to migrate in any order.
@@ -21,7 +26,26 @@ return new class extends Migration
         $t = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci';
         $ts = "created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),\n  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)";
 
-        DB::unprepared("CREATE TABLE bookable_resource (
+        if (Schema::hasTable('bookable_resource')) {
+            // Owned by Organization (already migrated): add the booking columns.
+            DB::unprepared("ALTER TABLE bookable_resource
+  ADD COLUMN product_id                 BINARY(16) NULL,
+  ADD COLUMN ticket_type_id             BINARY(16) NULL,
+  ADD COLUMN mode                       VARCHAR(24) NOT NULL DEFAULT 'TIME_SLOT' CHECK (mode IN ('WHOLE_RESOURCE','INDIVIDUAL_CAPACITY','TIME_SLOT')),
+  ADD COLUMN slot_minutes               INT UNSIGNED NOT NULL DEFAULT 60 CHECK (slot_minutes BETWEEN 5 AND 1440),
+  ADD COLUMN max_slots_per_booking      INT UNSIGNED NOT NULL DEFAULT 4 CHECK (max_slots_per_booking >= 1),
+  ADD COLUMN price                      DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (price >= 0),
+  ADD COLUMN whole_price                DECIMAL(19,4) NULL CHECK (whole_price IS NULL OR whole_price >= 0),
+  ADD COLUMN currency                   CHAR(3) NOT NULL DEFAULT 'NGN' CHECK (currency IN ('NGN')),
+  ADD COLUMN allow_whole_resource       TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN online_bookable            TINYINT(1) NOT NULL DEFAULT 1,
+  ADD COLUMN offline_strategy           VARCHAR(32) NOT NULL DEFAULT 'A_OFFLINE_ALLOCATION'
+                                          CHECK (offline_strategy IN ('A_OFFLINE_ALLOCATION','B_ONLINE_AUTHORITY_REQUIRED','C_DISABLE_ONLINE')),
+  ADD COLUMN local_reserve_units        INT UNSIGNED NOT NULL DEFAULT 0,
+  ADD COLUMN online_stale_after_seconds INT UNSIGNED NOT NULL DEFAULT 900,
+  ADD CONSTRAINT chk_br_reserve CHECK (local_reserve_units <= capacity)");
+        } else {
+            DB::unprepared("CREATE TABLE bookable_resource (
   id                          BINARY(16) NOT NULL PRIMARY KEY,
   organization_id             BINARY(16) NOT NULL,
   site_id                     BINARY(16) NOT NULL,
@@ -55,6 +79,7 @@ return new class extends Migration
   CONSTRAINT chk_br_reserve CHECK (local_reserve_units <= capacity),
   INDEX ix_br_fac (facility_unit_id, is_active)
 ) $t");
+        }
 
         DB::unprepared("CREATE TABLE booking_rule (
   id                        BINARY(16) NOT NULL PRIMARY KEY,
@@ -236,8 +261,15 @@ return new class extends Migration
 
     public function down(): void
     {
-        foreach (['slot_allocation', 'booking_item', 'booking', 'booking_number_counter', 'blackout', 'availability_schedule', 'booking_rule', 'bookable_resource'] as $table) {
+        foreach (['slot_allocation', 'booking_item', 'booking', 'booking_number_counter', 'blackout', 'availability_schedule', 'booking_rule'] as $table) {
             DB::unprepared("DROP TABLE IF EXISTS {$table}");
+        }
+        if (DB::table('migrations')->where('migration', '2026_09_22_120000_organization_extensions')->exists()) {
+            // Organization owns the table: only remove the columns this migration added.
+            DB::unprepared('ALTER TABLE bookable_resource DROP CONSTRAINT chk_br_reserve');
+            DB::unprepared('ALTER TABLE bookable_resource DROP COLUMN product_id, DROP COLUMN ticket_type_id, DROP COLUMN mode, DROP COLUMN slot_minutes, DROP COLUMN max_slots_per_booking, DROP COLUMN price, DROP COLUMN whole_price, DROP COLUMN currency, DROP COLUMN allow_whole_resource, DROP COLUMN online_bookable, DROP COLUMN offline_strategy, DROP COLUMN local_reserve_units, DROP COLUMN online_stale_after_seconds');
+        } else {
+            DB::unprepared('DROP TABLE IF EXISTS bookable_resource');
         }
     }
 };

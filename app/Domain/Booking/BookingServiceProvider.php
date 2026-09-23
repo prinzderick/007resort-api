@@ -39,7 +39,11 @@ class BookingServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([ExpireHoldsCommand::class, DemoSeedCommand::class]);
+            $this->commands([ExpireHoldsCommand::class]);
+            // Standalone `r007:demo-seed`; the app-level command (Organization/Identity/Devices demo framework) supersedes it and discovers Booking\Demo\BookingDemoSeeder.
+            if (! class_exists('App\\Console\\Commands\\DemoSeed')) {
+                $this->commands([DemoSeedCommand::class]);
+            }
         }
         // Payments/Orders integration (referenced by name: not every build has those modules).
         foreach (['App\\Domain\\Payments\\Events\\PaymentCaptured', 'App\\Domain\\Orders\\Events\\OrderSettled'] as $event) {

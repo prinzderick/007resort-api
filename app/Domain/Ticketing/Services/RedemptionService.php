@@ -141,7 +141,7 @@ final class RedemptionService
             }
             $item = $ent->items->first(fn ($i) => $i->kind === 'ACCESS' && $i->validation_mode === 'ENTRY_EXIT'
                 && ($entitlementItemId === null || $i->id === $entitlementItemId)
-                && ($i->facility_unit_id === null || in_array($i->facility_unit_id, $this->facilityChain($scanFacility), true)));
+                && $this->covers($i->facility_unit_id, $scanFacility, $this->facilityChain($scanFacility)));
             if ($item === null) {
                 throw ApiProblem::conflict('ticket_invalid', 'This ticket has no entry/exit item for this facility.');
             }
@@ -258,7 +258,7 @@ final class RedemptionService
         if ($access->isEmpty()) {
             return ['result' => 'WRONG_FACILITY', 'message' => 'This ticket has no entry item', 'extra' => ['expectedFacilityId' => null]];
         }
-        $here = $access->filter(fn ($i) => $i->facility_unit_id === null || in_array($i->facility_unit_id, $chain, true))->values();
+        $here = $access->filter(fn ($i) => $this->covers($i->facility_unit_id, $scanFacility, $chain))->values();
         if ($here->isEmpty()) {
             $expected = $access->first();
 
@@ -279,9 +279,21 @@ final class RedemptionService
     }
 
     /**
-     * The scanning facility and its ancestors: an item bound to "Sports Arena" is valid at the "Sports Entrance" gate
-     * (a child of the arena) but not at the Pool. @return list<string>
+     * Does a device/scan at `$scanFacility` serve an item bound to `$itemFacility`? Yes when unbound, when the scan happens
+     * INSIDE the item's facility (an item for "Sports Arena" scans at a gate that is a child of the arena) or when the item's
+     * facility is inside the scan facility (a "Lawn Tennis" booking scans at the "Sports Arena" entrance). Siblings never match
+     * (Football ticket at the Lawn Tennis court, Sports Arena ticket at the Pool -> WRONG_FACILITY).
+     *
+     * @param  list<string>  $scanChain  scan facility and its ancestors
      */
+    private function covers(?string $itemFacility, string $scanFacility, array $scanChain): bool
+    {
+        return $itemFacility === null
+            || in_array($itemFacility, $scanChain, true)
+            || in_array($scanFacility, $this->facilityChain($itemFacility), true);
+    }
+
+    /** The facility and its ancestors, self first. @return list<string> */
     private function facilityChain(string $facilityId): array
     {
         return $this->permissions->resolve(Scope::facility($facilityId))[2];
@@ -374,7 +386,7 @@ final class RedemptionService
             if ($item->kind !== EntitlementItem::RENTAL) {
                 throw ApiProblem::unprocessable('validation_failed', "'{$item->name}' is not a rental item.", ['itemIds' => ['not a rental item']]);
             }
-            if ($facility !== null && $item->facility_unit_id !== null && $item->facility_unit_id !== $facility) {
+            if ($facility !== null && ! $this->covers($item->facility_unit_id, $facility, $this->facilityChain($facility))) {
                 throw ApiProblem::conflict('facility_mismatch', "'{$item->name}' is handled at a different facility.");
             }
         }
