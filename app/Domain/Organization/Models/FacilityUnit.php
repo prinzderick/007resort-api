@@ -29,4 +29,20 @@ class FacilityUnit extends Model
     {
         return $this->hasMany(self::class, 'parent_id');
     }
+
+    /** @param  list<string>  $capabilities enabled capability codes */
+    public function toApi(array $capabilities = []): array
+    {
+        return [
+            'id' => $this->id,
+            'siteId' => $this->site_id,
+            'parentId' => $this->parent_id,
+            'code' => $this->code,
+            'name' => $this->name,
+            'kind' => $this->kind ?? 'GENERAL',
+            'status' => $this->is_active ? 'ACTIVE' : 'INACTIVE',
+            'capabilities' => $capabilities,
+            'rowVersion' => (int) $this->row_version,
+        ];
+    }
 }

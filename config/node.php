@@ -15,6 +15,12 @@ return [
     'site_id' => env('SITE_ID') ?: null,
     'organization_id' => env('ORGANIZATION_ID') ?: null,
 
+    // Stable id of this node (UUID). Defaults to SITE_ID for a Local node.
+    'node_id' => env('NODE_ID') ?: null,
+
+    // Minimum supported client versions (semver), by client type; clients compare on start-up (GET /system/info).
+    'min_client_version' => ['mobile' => '0.1.0', 'pos' => '0.1.0', 'kds' => '0.1.0', 'admin' => '0.1.0'],
+
     'service' => '007resort-api',
     'version' => env('APP_VERSION', '0.1.0'),
     'api_version' => 'v1',

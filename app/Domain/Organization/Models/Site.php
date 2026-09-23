@@ -12,4 +12,17 @@ class Site extends Model
     protected $table = 'site';
 
     protected array $uuidColumns = ['organization_id'];
+
+    /** @return array<string, mixed> */
+    public function toApi(): array
+    {
+        return [
+            'id' => $this->id,
+            'organizationId' => $this->organization_id,
+            'name' => $this->name,
+            'timezone' => $this->time_zone,
+            'currency' => $this->currency ?? 'NGN',
+            'address' => $this->address,
+        ];
+    }
 }

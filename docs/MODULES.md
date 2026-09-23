@@ -24,6 +24,23 @@ Rules of the road
 - Business rules live in `Services/` (or domain classes), not in controllers. Controllers validate, authorize, call a service, shape JSON.
 - Never edit `database/sql/V0001__initial_schema.sql` or an already-merged migration. Change schema with a NEW migration in your module.
 
+## Devices, realtime, demo data, capabilities (chunk 2)
+
+- **Device auth** (module Devices): `device` / `device:optional` (validates `X-Device-Token`, sets `RequestContext::deviceId()`), `staff.device` (staff bearer AND
+  device; session must be used from the device it was created on), `auth.any` (staff OR device). Login/`/me` accept `device:optional`, which binds the session to the device.
+  Tablet checkout state: `tablet_checkout` (UNIQUE on generated `active_device_id` = one open checkout per device, DB-enforced).
+- **Realtime** (Reverb, contract `api/realtime.md`): publish with `RealtimeEvent::publish("facility.{$id}.orders", 'order.updated', [...])` (private channel, envelope
+  `{eventId, occurredAt, correlationId, data}`, after-commit). Register channel authorization for your channels in your provider: `Channels::define('kds.station.{stationId}', fn ($id) => ...)`;
+  `POST /broadcasting/auth` evaluates it (unknown channel = deny). The four contract channels are already defined by the Devices module.
+- **Facility behaviour is data**: `app(CapabilityService::class)->has($facilityId, 'OPEN_TAB')`, `->rules($facilityId)['approvalThresholdAmount']`, `->requireCapability(...)` (422 `capability_disabled`).
+  Never branch on facility names/codes. VAT: `TaxSettingService::get($orgId)` (ADR-0011).
+- **Demo data**: implement `App\Support\Demo\DemoSeeder` in `app/Domain/<Module>/Demo/` (priority 100+; use `DemoIds` + updateOrCreate); `php artisan r007:demo-seed` runs all of them.
+  Tests can call `Artisan::call('r007:demo-seed')` (see `tests/Support/DemoApi.php`: `loginAs('wait1')`, `api('manager1')->post(...)`).
+- Tables owned by core modules you can reference: organization, site, facility_unit(+kind), facility_capability, operating_rule, **operating_point** (counters/table areas/gates/KDS stations),
+  **bookable_resource** (Booking allocates slots on it — do not recreate it), organization_tax_setting, staff, user_account, credential, role(+public_id), role_assignment, session,
+  device, device_registration, tablet_checkout, device_command, audit_log, outbox_event, inbox_event, site_health, idempotency_record.
+- Anti-deadlock rule of thumb: for "insert unique row, else return existing" do a plain INSERT and handle duplicate-key (1062) with a *locking* re-read; a locking read *before* the insert deadlocks racing requests.
+
 ## Migrations
 
 Put them in `app/Domain/<Module>/Migrations/`. Laravel orders **all** migrations by filename across every path, so use a real
@@ -123,6 +140,10 @@ DB::transaction(function () use ($order, $facilityId) {
   Writers are serialised by a row lock on `audit_chain_head` (tail-row locking deadlocks — see ConcurrencyTest).
 - `Outbox::record` writes `outbox_event` (event types: `architecture/sync/event-catalogue.md`). The Sync module drains it.
 - Audit every sensitive action (`architecture/06`): voids/discounts/overrides/refunds/adjustments/role & device changes/login.
+
+> **Snapshot gotcha.** Inside an `idempotent` route (and any long transaction) MySQL runs at REPEATABLE READ: a plain `SELECT` keeps seeing the
+> snapshot from the transaction's first read, so after losing a race (duplicate-key error) a normal re-read will NOT see the winner's row.
+> Re-read with `->sharedLock()` / `->lockForUpdate()` (locking reads always see the latest committed data). Found by the role-grant race test.
 
 ## Scarce resources and concurrency (stock, slots, tickets, payments, checkouts)
 

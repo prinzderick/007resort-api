@@ -87,7 +87,7 @@ final class ProblemRenderer
         ], $extensions);
 
         if ($status >= 500 && config('app.debug')) {
-            $body['debug'] = ['exception' => $e::class, 'message' => $e->getMessage(), 'file' => $e->getFile().':'.$e->getLine()];
+            $body['debug'] = ['exception' => $e::class, 'message' => mb_scrub($e->getMessage()), 'file' => $e->getFile().':'.$e->getLine()];
         }
 
         $response = new JsonResponse($body, $status, $headers);
