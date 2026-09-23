@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
  * Keyset ("cursor") pagination, stable under concurrent inserts (architecture/15).
  *
  * Request: ?limit=50&cursor=<opaque>. Response shape (via toArray()):
- *   { "data": [...], "page": { "nextCursor": "..."|null, "hasMore": bool, "limit": 50 } }
+ *   { "items": [...], "nextCursor": "..."|null }
  *
  *   $page = CursorPage::paginate(Device::query()->where('site_id', $site), $request);
  *   return response()->json($page->toArray(fn ($d) => DeviceResource::make($d)->resolve()));
@@ -73,12 +73,12 @@ final class CursorPage
         return new self($items, $next, $hasMore, $limit);
     }
 
-    /** @return array{data: list<mixed>, page: array{nextCursor: ?string, hasMore: bool, limit: int}} */
+    /** Contract envelope: `{ items: [...], nextCursor: string|null }`. @return array{items: list<mixed>, nextCursor: ?string} */
     public function toArray(?callable $map = null): array
     {
         return [
-            'data' => ($map ? $this->items->map($map) : $this->items)->values()->all(),
-            'page' => ['nextCursor' => $this->nextCursor, 'hasMore' => $this->hasMore, 'limit' => $this->limit],
+            'items' => ($map ? $this->items->map($map) : $this->items)->values()->all(),
+            'nextCursor' => $this->nextCursor,
         ];
     }
 
@@ -92,7 +92,7 @@ final class CursorPage
     {
         $data = json_decode((string) base64_decode(strtr($cursor, '-_', '+/'), true), true);
         if (! is_array($data) || ! isset($data['i']) || ! Ids::isUuid($data['i']) || (isset($data['v']) && ! is_string($data['v']))) {
-            throw ApiProblem::badRequest('invalid_cursor', 'The pagination cursor is invalid.');
+            throw ApiProblem::badRequest('validation_failed', 'The pagination cursor is invalid.', ['errors' => ['cursor' => ['Invalid cursor.']]]);
         }
 
         return [$data['v'] ?? null, $data['i']];

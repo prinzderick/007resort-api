@@ -21,8 +21,8 @@ class IdempotencyTest extends TestCase
         $t = TestData::tenant();
         TestData::staff($t, 'idem1');
         TestData::staff($t, 'idem2');
-        $this->token = $this->postJson('/api/v1/auth/staff/login', ['username' => 'idem1', 'password' => TestData::PASSWORD])->json('accessToken');
-        $this->token2 = $this->postJson('/api/v1/auth/staff/login', ['username' => 'idem2', 'password' => TestData::PASSWORD])->json('accessToken');
+        $this->token = $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => 'idem1', 'secret' => TestData::PASSWORD])->json('accessToken');
+        $this->token2 = $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => 'idem2', 'secret' => TestData::PASSWORD])->json('accessToken');
     }
 
     private function create(string $name, ?string $key, ?string $token = null): TestResponse
@@ -44,13 +44,13 @@ class IdempotencyTest extends TestCase
     public function test_same_key_different_body_is_422(): void
     {
         $this->create('One', 'key-2')->assertStatus(201);
-        $this->create('Two', 'key-2')->assertStatus(422)->assertJsonPath('code', 'idempotency_key_reuse');
+        $this->create('Two', 'key-2')->assertStatus(422)->assertJsonPath('code', 'idempotency_key_reused');
         $this->assertSame(0, DB::table('organization')->where('name', 'Two')->count());
     }
 
     public function test_key_is_required(): void
     {
-        $this->create('X', null)->assertStatus(400)->assertJsonPath('code', 'idempotency_key_required');
+        $this->create('X', null)->assertStatus(400)->assertJsonPath('code', 'idempotency_key_missing');
     }
 
     public function test_failed_requests_are_not_stored_and_can_be_retried_with_the_same_key(): void

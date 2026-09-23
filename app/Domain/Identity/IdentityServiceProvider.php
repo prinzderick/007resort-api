@@ -5,6 +5,7 @@ namespace App\Domain\Identity;
 use App\Domain\Identity\Models\UserAccount;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Identity\Services\StaffAuthService;
+use App\Domain\Identity\Services\StepUpService;
 use App\Support\RequestContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class IdentityServiceProvider extends ServiceProvider
     {
         $this->app->singleton(PermissionChecker::class);
         $this->app->singleton(StaffAuthService::class);
+        $this->app->singleton(StepUpService::class);
     }
 
     public function boot(): void
@@ -44,7 +46,7 @@ class IdentityServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('staff-login', fn (Request $r) => [
-            Limit::perMinute(10)->by('login:'.$r->ip().'|'.strtolower((string) $r->input('username'))),
+            Limit::perMinute(10)->by('login:'.$r->ip().'|'.strtolower((string) ($r->input('identifier') ?? $r->input('username')))),
             Limit::perMinute(60)->by('login-ip:'.$r->ip()),
         ]);
         RateLimiter::for('auth-refresh', fn (Request $r) => Limit::perMinute(30)->by('refresh:'.$r->ip()));

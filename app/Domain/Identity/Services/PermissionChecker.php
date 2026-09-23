@@ -83,6 +83,40 @@ class PermissionChecker
     }
 
     /**
+     * Facilities (uuid list) this staff member can operate in: subtree of FACILITY_UNIT assignments plus every active
+     * facility of the site / organization for SITE / ORGANIZATION assignments. Used for the `facilityIds` UI hint only.
+     *
+     * @return list<string>
+     */
+    public function facilityIds(string $staffId): array
+    {
+        $rows = DB::table('role_assignment')->where('staff_id', Ids::toBinary($staffId))->where('is_active', 1)->whereNull('deleted_at')
+            ->get(['scope_level', 'organization_id', 'site_id', 'facility_unit_id']);
+        $ids = [];
+        foreach ($rows as $r) {
+            if ($r->scope_level === 'FACILITY_UNIT' && $r->facility_unit_id) {
+                foreach (DB::select(
+                    'WITH RECURSIVE sub (id) AS (SELECT id FROM facility_unit WHERE id = ? UNION ALL SELECT f.id FROM facility_unit f JOIN sub s ON f.parent_id = s.id)
+                     SELECT id FROM sub', [$r->facility_unit_id]) as $x) {
+                    $ids[Ids::fromBinary($x->id)] = true;
+                }
+            } elseif ($r->scope_level === 'SITE' && $r->site_id) {
+                foreach (DB::table('facility_unit')->where('site_id', $r->site_id)->whereNull('deleted_at')->pluck('id') as $id) {
+                    $ids[Ids::fromBinary($id)] = true;
+                }
+            } elseif ($r->scope_level === 'ORGANIZATION' && $r->organization_id) {
+                foreach (DB::table('facility_unit')->where('organization_id', $r->organization_id)->whereNull('deleted_at')->pluck('id') as $id) {
+                    $ids[Ids::fromBinary($id)] = true;
+                }
+            }
+        }
+        $out = array_keys($ids);
+        sort($out);
+
+        return $out;
+    }
+
+    /**
      * @return array{0: string, 1: ?string, 2: list<string>} organization id, site id, facility ancestor chain (self first)
      *
      * @throws ModelNotFoundException when the scope's resource doesn't exist

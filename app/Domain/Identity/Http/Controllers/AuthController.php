@@ -3,9 +3,11 @@
 namespace App\Domain\Identity\Http\Controllers;
 
 use App\Domain\Identity\Models\AuthSession;
+use App\Domain\Identity\Models\Credential;
 use App\Domain\Identity\Models\UserAccount;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Identity\Services\StaffAuthService;
+use App\Domain\Identity\Services\StepUpService;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\RequestContext;
@@ -16,18 +18,21 @@ use Illuminate\Support\Facades\DB;
 
 class AuthController
 {
-    public function __construct(private readonly StaffAuthService $auth, private readonly PermissionChecker $permissions) {}
+    public function __construct(
+        private readonly StaffAuthService $auth,
+        private readonly StepUpService $stepUp,
+        private readonly PermissionChecker $permissions,
+    ) {}
 
+    /**
+     * Contract body `{credentialType, identifier, secret}`. The pre-contract shape `{username, password|pin}` is still accepted.
+     * NFC_CARD: identifier = card uid, secret = the staff PIN.
+     */
     public function login(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'username' => ['required', 'string', 'max:100'],
-            'password' => ['nullable', 'string', 'max:255', 'required_without:pin'],
-            'pin' => ['nullable', 'string', 'max:32', 'required_without:password'],
-            'deviceId' => ['nullable', 'uuid'],
-        ]);
+        [$type, $identifier, $secret] = $this->credentialsFrom($request);
 
-        return response()->json($this->auth->login($data['username'], $data, $request->ip(), $request->userAgent()));
+        return response()->json($this->auth->login($type, $identifier, $secret, $request->ip(), $request->userAgent(), RequestContext::deviceId()));
     }
 
     public function refresh(Request $request): JsonResponse
@@ -39,45 +44,57 @@ class AuthController
 
     public function logout(Request $request): Response
     {
-        $this->auth->logout($this->currentSession($request));
+        $data = $request->validate(['allSessions' => ['nullable', 'boolean']]);
+        $this->auth->logout($this->currentSession(), (bool) ($data['allSessions'] ?? false));
 
         return response()->noContent();
     }
 
+    /** Supervisor step-up: verifies the APPROVER's credential + permission, returns a single-use X-Step-Up-Token. */
     public function stepUp(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'password' => ['nullable', 'string', 'max:255', 'required_without:pin'],
-            'pin' => ['nullable', 'string', 'max:32', 'required_without:password'],
+            'credentialType' => ['required', 'in:PASSWORD,PIN,NFC_CARD'],
+            'identifier' => ['nullable', 'string', 'max:100'],
+            'secret' => ['required', 'string', 'max:255'],
+            'permission' => ['required', 'string', 'max:96'],
+            'entityType' => ['nullable', 'string', 'max:64'],
+            'entityId' => ['nullable', 'uuid'],
         ]);
-        /** @var UserAccount $account */
-        $account = $request->user();
+        if (! DB::table('permission')->where('code', $data['permission'])->exists()) {
+            throw ApiProblem::unprocessable('validation_failed', 'Unknown permission.', ['permission' => ['Unknown permission code.']]);
+        }
 
-        return response()->json($this->auth->stepUp($account, $this->currentSession($request), $data, $request->ip()));
+        return response()->json($this->stepUp->issue(
+            $data['credentialType'], (string) ($data['identifier'] ?? ''), $data['secret'], $data['permission'],
+            $data['entityType'] ?? null, $data['entityId'] ?? null, $request->ip(),
+        ));
     }
 
     /** Own session: always allowed. Any other session: requires `session.revoke`. */
     public function revoke(Request $request, string $id): Response
     {
         if (! Ids::isUuid($id)) {
-            throw ApiProblem::notFound('session_not_found', 'Session was not found.');
+            throw ApiProblem::notFound('not_found', 'Session was not found.');
         }
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
         $id = Ids::normalize($id);
 
         if ($id !== RequestContext::sessionId() && ! $this->permissions->can(RequestContext::staffId(), 'session.revoke')) {
-            throw ApiProblem::forbidden('permission_denied', 'Missing permission: session.revoke.', ['permission' => 'session.revoke']);
+            throw ApiProblem::permissionDenied('session.revoke');
         }
         $this->auth->revokeSession($id, $data['reason'] ?? null);
 
         return response()->noContent();
     }
 
+    /** GET /auth/me (and alias /me): contract `{staff, session, device}` plus `username`, `grants`, `assignments`. */
     public function me(Request $request): JsonResponse
     {
         /** @var UserAccount $account */
         $account = $request->user();
         $staff = $account->staff;
+        $session = $this->currentSession();
         $grants = $this->permissions->effective($staff->id);
 
         $assignments = DB::table('role_assignment as ra')
@@ -92,11 +109,10 @@ class AuthController
             ])->values();
 
         return response()->json([
-            'staff' => $staff->toApi(),
+            'staff' => $this->auth->staffPayload($staff) + ['email' => $staff->email, 'phone' => $staff->phone, 'organizationId' => $staff->organization_id, 'siteId' => $staff->site_id],
+            'session' => ['id' => $session->id, 'expiresAt' => $session->expires_at->utc()->format('Y-m-d\TH:i:s.v\Z'), 'deviceId' => $session->device_id],
+            'device' => RequestContext::deviceId() ? ['id' => RequestContext::deviceId()] : null,
             'username' => $account->username,
-            'sessionId' => RequestContext::sessionId(),
-            'deviceId' => RequestContext::deviceId(),
-            'permissions' => $grants->pluck('permission')->unique()->sort()->values(),
             'grants' => $grants->map(fn ($g) => [
                 'permission' => $g->permission, 'requiresApproval' => $g->requiresApproval, 'scopeLevel' => $g->scopeLevel,
                 'organizationId' => $g->organizationId, 'siteId' => $g->siteId, 'facilityUnitId' => $g->facilityUnitId,
@@ -105,7 +121,31 @@ class AuthController
         ]);
     }
 
-    private function currentSession(Request $request): AuthSession
+    /** @return array{0: string, 1: string, 2: string} type, identifier, secret */
+    private function credentialsFrom(Request $request): array
+    {
+        if ($request->has('credentialType')) {
+            $d = $request->validate([
+                'credentialType' => ['required', 'in:PASSWORD,PIN,NFC_CARD'],
+                'identifier' => ['required', 'string', 'max:100'],
+                'secret' => ['required', 'string', 'max:255'],
+            ]);
+
+            return [$d['credentialType'], $d['identifier'], $d['secret']];
+        }
+        // legacy shape
+        $d = $request->validate([
+            'username' => ['required', 'string', 'max:100'],
+            'password' => ['nullable', 'string', 'max:255', 'required_without:pin'],
+            'pin' => ['nullable', 'string', 'max:32', 'required_without:password'],
+        ]);
+
+        return ! empty($d['password'])
+            ? [Credential::PASSWORD, $d['username'], $d['password']]
+            : [Credential::PIN, $d['username'], $d['pin']];
+    }
+
+    private function currentSession(): AuthSession
     {
         return AuthSession::query()->findOrFail(RequestContext::sessionId());
     }

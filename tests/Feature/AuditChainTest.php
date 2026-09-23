@@ -125,14 +125,14 @@ class AuditChainTest extends TestCase
         $itAdmin = TestData::staff($this->t, 'auditor');
         TestData::assign($itAdmin, 'IT_ADMIN', 'SITE');
         $nobody = TestData::staff($this->t, 'nobody');
-        $login = fn (string $u) => $this->postJson('/api/v1/auth/staff/login', ['username' => $u, 'password' => TestData::PASSWORD])->json('accessToken');
+        $login = fn (string $u) => $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => $u, 'secret' => TestData::PASSWORD])->json('accessToken');
         $good = $login('auditor'); // writes a staff.login audit row
         $bad = $login('nobody');
 
         $this->withToken($bad)->getJson('/api/v1/audit')->assertStatus(403)->assertJsonPath('code', 'permission_denied');
         $list = $this->withToken($good)->getJson('/api/v1/audit?action=staff.login&limit=1')->assertOk();
-        $this->assertSame('staff.login', $list->json('data.0.action'));
-        $this->assertTrue($list->json('page.hasMore'));
+        $this->assertSame('staff.login', $list->json('items.0.action'));
+        $this->assertNotNull($list->json('nextCursor'));
         $this->withToken($good)->getJson('/api/v1/audit/verify')->assertOk()->assertJsonPath('valid', true);
     }
 }

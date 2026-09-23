@@ -75,7 +75,7 @@ MenuItem::find($canonicalUuid); MenuItem::where('organization_id', $uuid)->get()
 Route::middleware('auth:staff')->group(function () {
     Route::post('orders', [OrderController::class, 'store'])
         ->middleware(['permission:order.create,facility=facilityId', 'idempotent']);   // body/route key `facilityId` scopes the check
-    Route::post('orders/{order}/void', ...)->middleware(['permission:order.void.execute', 'idempotent', 'stepup']);
+    Route::post('orders/{order}/void', ...)->middleware(['permission:order.void.execute', 'idempotent']);   // supervisor approval: see below
 });
 ```
 - `auth:staff` = opaque bearer access token (see Identity). Sets `RequestContext` (`staffId`, `organizationId`, `siteId`, `sessionId`, `deviceId`).
@@ -83,20 +83,30 @@ Route::middleware('auth:staff')->group(function () {
   check a role name/code anywhere. Programmatic check: `app(PermissionChecker::class)->can($staffId, 'order.void.approve', Scope::facility($id))`.
   New permission codes: add a migration that inserts into `permission` (+ `role_permission` bundles).
 - `idempotent` = `Idempotency-Key` header required on every non-idempotent mutating request. Effect + stored response commit in ONE transaction;
-  replay returns the original status/body (`Idempotent-Replayed: true`); same key with a different body -> 422 `idempotency_key_reuse`;
+  replay returns the original status/body (`Idempotent-Replayed: true`); same key with a different body -> 422 `idempotency_key_reused` (missing header -> 400 `idempotency_key_missing`);
   only 2xx responses are stored (any >=400 rolls the request back so the client can retry). Do not use on login.
+
+### Supervisor step-up (approvals)
+
+`POST /auth/staff/step-up` (supervisor PIN/password/NFC+PIN on the operator's device) returns a single-use `X-Step-Up-Token` bound to a permission
+(+ optional entity). In a controller: `$approverId = app(StepUpService::class)->consume($request, 'order.void.approve', 'Order', $order->id)`
+(null = no header -> create an approval / return 202 per the contract); or use route middleware `stepup:<permission>` (403 `step_up_required` without a valid
+token; sets `RequestContext::approverId()`). Record the approver in `Audit::record(..., approvalId:)` / the row you write.
 
 ## Errors
 
 Throw `ApiProblem` (RFC 7807, stable `code`; never rename a shipped code):
 `throw ApiProblem::conflict('slot_taken', 'That slot was just booked.', ['slotId' => $id]);`
-Factories: `badRequest, unauthenticated, forbidden, notFound, conflict, locked, unprocessable, tooManyRequests`. Validation errors
-(`$request->validate()`) automatically become 422 `validation_failed` with `errors[{field,code,message}]`. Unhandled -> 500 `internal_error` (no internals leaked).
+Factories: `badRequest, unauthenticated, forbidden, permissionDenied, notFound, conflict, locked, concurrencyConflict, unprocessable, tooManyRequests`. Validation errors
+(`$request->validate()`) automatically become 422 `validation_failed` with `errors: {field: [messages]}`. Unhandled -> 500 `server_error` (no internals leaked).
+Codes MUST come from the contract's `ProblemCode` enum where one fits (`007resort-docs/api/openapi/v1.yaml`), e.g. `insufficient_stock`, `slot_unavailable`,
+`order_state_invalid`, `capability_disabled`, `concurrency_conflict`; every response carries `correlationId` (echo of `X-Correlation-Id`).
+Optimistic concurrency: `Etag::json($body, $model->row_version)` on reads, `Etag::assertMatches($request, $model->row_version)` on updates (428/412 `concurrency_conflict`).
 
 ## Pagination
 
 `CursorPage::paginate($query, $request, orderBy: 'id'|'<indexed column>', direction: 'asc'|'desc')` -> `->toArray(fn ($m) => [...])` gives
-`{ data: [...], page: { nextCursor, hasMore, limit } }`. Query params `limit` (max 200) and `cursor`.
+`{ items: [...], nextCursor: string|null }` (contract envelope). Query params `limit` (max 200) and `cursor`.
 
 ## Audit and Outbox — inside the SAME transaction as the change
 

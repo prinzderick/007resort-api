@@ -22,7 +22,7 @@ class PermissionTest extends TestCase
 
     private function token(string $user): string
     {
-        return $this->postJson('/api/v1/auth/staff/login', ['username' => $user, 'password' => TestData::PASSWORD])->json('accessToken');
+        return $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => $user, 'secret' => TestData::PASSWORD])->json('accessToken');
     }
 
     public function test_role_named_manager_without_the_permission_is_denied(): void
