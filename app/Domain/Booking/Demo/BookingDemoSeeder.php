@@ -12,6 +12,7 @@ use App\Domain\Identity\Models\UserAccount;
 use App\Support\Demo\DemoContext;
 use App\Support\Demo\DemoIds;
 use App\Support\Demo\DemoSeeder;
+use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -48,6 +49,8 @@ class BookingDemoSeeder implements DemoSeeder
             $res('LAWN_TENNIS', 'CLINIC', 'Tennis Clinic', BookableResource::MODE_CAPACITY, 8, '3000.0000', 'FEE-TENNIS-CLINIC', true),
         ], fn (string $line) => $ctx->info($line));
 
+        $this->receptionPaysFirst($f['reception']);
+
         $attendant = Role::query()->where('code', 'SPORTS_ATTENDANT')->first() ?? Role::create(['code' => 'SPORTS_ATTENDANT', 'name' => 'Sports / pool attendant', 'description' => 'Scans tickets and releases/returns rental items']);
         foreach (['ticket.view', 'ticket.redeem', 'ticket.release', 'booking.view'] as $perm) {
             DB::statement('INSERT IGNORE INTO role_permission (role_id, permission_id) SELECT ?, id FROM permission WHERE code = ?', [$attendant->id, $perm]);
@@ -71,5 +74,19 @@ class BookingDemoSeeder implements DemoSeeder
         }
         $ctx->table('Booking demo logins (DEV-ONLY). Also: cashier1 (Reception: hold/confirm/issue), storekeeper1 (Sports Store: release/return), supervisor1/manager1 (everything)', ['username', 'staff no.', 'role', 'facility', 'PIN', 'password'], $rows);
         $ctx->table('Sample QR entitlements (arena + rental items at the Sports Store; pool ticket)', ['entitlement'], array_map(fn ($s) => [$s], $data->samples));
+    }
+
+    /**
+     * Reception takes payment BEFORE service (a counter): Orders' default is pay-after-service, under which Payments refuses to
+     * take money for a DRAFT order — that would block the whole Reception flow (slot fee + rentals paid at the counter).
+     */
+    private function receptionPaysFirst(string $receptionId): void
+    {
+        $bin = Ids::toBinary($receptionId);
+        $cap = DB::table('facility_capability')->where('facility_unit_id', $bin)->where('capability_code', 'POS')->value('id');
+        if ($cap === null) {
+            return;
+        }
+        DB::table('operating_rule')->updateOrInsert(['facility_capability_id' => $cap, 'rule_key' => 'payment_timing'], ['id' => Ids::toBinary(Ids::uuid7()), 'rule_value' => 'PAY_FIRST']);
     }
 }

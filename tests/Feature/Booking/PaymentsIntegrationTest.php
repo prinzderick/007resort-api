@@ -44,6 +44,10 @@ class PaymentsIntegrationTest extends TestCase
         $fc = OrdersFixture::insert('facility_capability', ['facility_unit_id' => Ids::toBinary($this->w['arena']->id), 'capability_code' => 'BOOKING', 'is_enabled' => 1]);
         OrdersFixture::insert('operating_rule', ['facility_capability_id' => Ids::toBinary($fc), 'rule_key' => 'payment_facility_unit_id', 'rule_value' => $this->w['reception']->id]);
 
+        // Reception is a pay-first counter (Orders' OperatingRules default is pay-after-service)
+        $pos = OrdersFixture::insert('facility_capability', ['facility_unit_id' => Ids::toBinary($this->w['reception']->id), 'capability_code' => 'POS', 'is_enabled' => 1]);
+        OrdersFixture::insert('operating_rule', ['facility_capability_id' => Ids::toBinary($pos), 'rule_key' => 'payment_timing', 'rule_value' => 'PAY_FIRST']);
+
         [$staff, $this->token] = $this->staffWith($this->w, 'rita', self::BOOKING_PERMS);
         TestData::assign($staff, 'CASHIER', 'FACILITY_UNIT', $this->w['reception']->id);
     }
