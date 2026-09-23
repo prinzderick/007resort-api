@@ -63,7 +63,7 @@ class InventoryApiTest extends TestCase
     public function test_mutations_require_an_idempotency_key(): void
     {
         $keeper = $this->as('keeper', 'STOREKEEPER');
-        $this->withToken($keeper)->postJson('/api/v1/inventory/wastage', [])->assertStatus(400)->assertJsonPath('code', 'idempotency_key_required');
+        $this->withToken($keeper)->postJson('/api/v1/inventory/wastage', [])->assertStatus(400)->assertJsonPath('code', 'idempotency_key_missing');
     }
 
     public function test_purchase_receipt_via_api_and_idempotent_replay_applies_once(): void
@@ -82,7 +82,7 @@ class InventoryApiTest extends TestCase
 
         // same key, different body -> 422
         $this->send($keeper, '/api/v1/inventory/purchase-receipts', ['locationId' => $this->main->id, 'lines' => [['itemId' => $this->beer->id, 'quantity' => '1']]], 'rcpt-1')
-            ->assertStatus(422)->assertJsonPath('code', 'idempotency_key_reuse');
+            ->assertStatus(422)->assertJsonPath('code', 'idempotency_key_reused');
     }
 
     public function test_validation_errors_are_problem_json(): void
@@ -171,13 +171,15 @@ class InventoryApiTest extends TestCase
         $r = $this->send($procurement, '/api/v1/inventory/items', ['sku' => 'GIN-1', 'name' => 'Gin 75cl', 'unit' => 'bottle', 'reorderLevel' => '6', 'category' => 'Spirits'])->assertStatus(201);
         $id = $r->json('id');
         $r->assertJsonPath('sku', 'GIN-1')->assertJsonPath('reorderLevel', '6.0000')->assertJsonPath('active', true)->assertJsonPath('rowVersion', 1);
-        $this->send($procurement, '/api/v1/inventory/items', ['sku' => 'GIN-1', 'name' => 'dup'])->assertStatus(409)->assertJsonPath('code', 'inventory_item_sku_taken');
+        $this->send($procurement, '/api/v1/inventory/items', ['sku' => 'GIN-1', 'name' => 'dup'])->assertStatus(422)->assertJsonPath('code', 'validation_failed')->assertJsonPath('errors.sku.0', 'An item with that SKU already exists.');
 
         $this->withToken($procurement)->getJson('/api/v1/inventory/items?q=gin')->assertOk()->assertJsonPath('items.0.id', $id)->assertJsonPath('nextCursor', null);
 
         $patch = fn (array $b, string $ifMatch) => $this->withToken($procurement)->withHeaders(['Idempotency-Key' => Ids::uuid7(), 'If-Match' => $ifMatch])->patchJson("/api/v1/inventory/items/{$id}", $b);
         $patch(['name' => 'Gin 1L'], '"1"')->assertOk()->assertJsonPath('name', 'Gin 1L')->assertJsonPath('rowVersion', 2)->assertHeader('ETag', '"2"');
-        $patch(['name' => 'stale'], '"1"')->assertStatus(409)->assertJsonPath('code', 'concurrency_conflict')->assertJsonPath('meta.currentRowVersion', 2);
+        $patch(['name' => 'stale'], '"1"')->assertStatus(412)->assertJsonPath('code', 'concurrency_conflict');
+        $this->withToken($procurement)->withHeaders(['Idempotency-Key' => Ids::uuid7(), 'If-Match' => ''])->patchJson("/api/v1/inventory/items/{$id}", ['name' => 'no header'])
+            ->assertStatus(428)->assertJsonPath('code', 'concurrency_conflict');
         $this->assertSame(2, DB::table('audit_log')->whereIn('action', ['inventory.item.create', 'inventory.item.update'])->count());
     }
 
@@ -190,9 +192,9 @@ class InventoryApiTest extends TestCase
         $r = $this->send($manager, '/api/v1/inventory/locations', ['name' => 'Pool Bar Store', 'kind' => 'BAR', 'facilityId' => $this->barFacility->id, 'allowNegative' => true])->assertStatus(201);
         $r->assertJsonPath('allowNegative', true)->assertJsonPath('kind', 'BAR');
         $this->send($manager, '/api/v1/inventory/locations', ['name' => 'Bad', 'kind' => 'MAIN_STORE', 'facilityId' => $this->barFacility->id])->assertStatus(422);
-        $this->send($manager, '/api/v1/inventory/locations', ['name' => 'Pool Bar Store', 'kind' => 'BAR', 'facilityId' => $this->barFacility->id])->assertStatus(409)->assertJsonPath('code', 'stock_location_name_taken');
+        $this->send($manager, '/api/v1/inventory/locations', ['name' => 'Pool Bar Store', 'kind' => 'BAR', 'facilityId' => $this->barFacility->id])->assertStatus(422)->assertJsonPath('code', 'validation_failed')->assertJsonPath('errors.name.0', 'A stock location with that name already exists.');
 
-        $this->withToken($manager)->withHeader('Idempotency-Key', Ids::uuid7())->patchJson('/api/v1/inventory/locations/'.$r->json('id'), ['allowNegative' => false])
+        $this->withToken($manager)->withHeaders(['Idempotency-Key' => Ids::uuid7(), 'If-Match' => '"1"'])->patchJson('/api/v1/inventory/locations/'.$r->json('id'), ['allowNegative' => false])
             ->assertOk()->assertJsonPath('allowNegative', false);
         $a = DB::table('audit_log')->where('action', 'inventory.location.update')->first();
         $this->assertNotNull($a);
@@ -237,8 +239,9 @@ class InventoryApiTest extends TestCase
         $this->assertSame($movements, DB::table('stock_movement')->count(), 'nothing on the ledger until approved');
         $this->assertSame('10.0000', InventoryData::onHand($this->bar->id, $this->beer->id));
         $this->assertNotNull($r->json('approval.id'));
-        $this->assertSame(1, DB::table('approval')->where('status', 'PENDING')->count());
-        $this->assertSame(1, DB::table('audit_log')->where('action', 'inventory.adjustment.request')->count());
+        $this->assertSame(1, DB::table('approval')->where('status', 'PENDING')->where('action', 'inventory.adjustment')->count());
+        $this->assertSame(1, DB::table('audit_log')->where('action', 'inventory.adjustment.create')->count());
+        $this->assertSame(1, DB::table('audit_log')->where('action', 'inventory.adjustment.request')->count(), 'the approval request itself is audited by the approval workflow');
     }
 
     public function test_supervisor_approves_a_pending_adjustment_and_it_posts_with_the_approval_link(): void
@@ -346,7 +349,7 @@ class InventoryApiTest extends TestCase
         $this->assertNotNull($p->json('postedAt'));
         $this->assertSame(1, DB::table('audit_log')->where('action', 'inventory.count.post')->count());
 
-        $this->send($keeper, '/api/v1/inventory/counts/'.$c->json('id').'/post', [])->assertStatus(409)->assertJsonPath('code', 'count_already_posted');
+        $this->send($keeper, '/api/v1/inventory/counts/'.$c->json('id').'/post', [])->assertStatus(409)->assertJsonPath('code', 'concurrency_conflict');
     }
 
     public function test_count_variance_above_threshold_becomes_a_pending_adjustment_then_posts_on_approval(): void
@@ -421,7 +424,7 @@ class InventoryApiTest extends TestCase
     {
         $buyer = $this->as('buyer', 'PROCUREMENT');
         $this->send($buyer, '/api/v1/inventory/suppliers', ['name' => 'Beta Foods', 'phone' => '0801', 'email' => 'b@example.com'])->assertStatus(201)->assertJsonPath('name', 'Beta Foods');
-        $this->send($buyer, '/api/v1/inventory/suppliers', ['name' => 'Beta Foods'])->assertStatus(409)->assertJsonPath('code', 'supplier_name_taken');
+        $this->send($buyer, '/api/v1/inventory/suppliers', ['name' => 'Beta Foods'])->assertStatus(422)->assertJsonPath('code', 'validation_failed');
         $this->withToken($buyer)->getJson('/api/v1/inventory/suppliers?q=beta')->assertOk()->assertJsonCount(1, 'items');
         $this->withToken($this->as('waiter', 'WAIT_STAFF'))->getJson('/api/v1/inventory/suppliers')->assertStatus(403);
     }

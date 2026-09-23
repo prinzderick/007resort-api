@@ -9,7 +9,6 @@ use App\Domain\Inventory\Services\StockDocuments;
 use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
-use App\Support\RequestContext;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,7 +74,7 @@ class StockOperationsController
 
         return response()->json([
             'status' => 'PENDING_APPROVAL',
-            'approval' => $this->approvalDto($res['approvalId'], $res['adjustmentId'], $d['locationId'], "{$d['reason']}: {$d['note']}"),
+            'approval' => $res['approval'],
             'movement' => $res['movement'],
         ], 202);
     }
@@ -153,12 +152,12 @@ class StockOperationsController
     public function postCount(string $count): JsonResponse
     {
         if (! Ids::isUuid($count)) {
-            throw ApiProblem::notFound('count_not_found', 'That stock count does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock count does not exist.');
         }
 
         $row = DB::table('stock_count')->where('id', Ids::toBinary($count))->first(['location_id']);
         if (! $row) {
-            throw ApiProblem::notFound('count_not_found', 'That stock count does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock count does not exist.');
         }
         $this->access->authorize('inventory.count.post', Ids::fromBinary($row->location_id));
 
@@ -168,7 +167,7 @@ class StockOperationsController
     public function getCount(string $count): JsonResponse
     {
         if (! Ids::isUuid($count)) {
-            throw ApiProblem::notFound('count_not_found', 'That stock count does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock count does not exist.');
         }
         $doc = $this->counts->find(Ids::normalize($count));
         $this->access->authorize('inventory.view', $doc['locationId']);
@@ -199,22 +198,9 @@ class StockOperationsController
     {
         $row = Ids::isUuid($id) ? DB::table('stock_adjustment')->where('id', Ids::toBinary($id))->first() : null;
         if (! $row) {
-            throw ApiProblem::notFound('adjustment_not_found', 'That adjustment does not exist.');
+            throw ApiProblem::notFound('not_found', 'That adjustment does not exist.');
         }
 
         return $row;
-    }
-
-    /** Minimal `Approval` shape (contract) — the Orders module owns the full approvals API. */
-    private function approvalDto(string $approvalId, string $adjustmentId, string $locationId, string $reason): array
-    {
-        $loc = $this->access->locationRow($locationId);
-
-        return [
-            'id' => $approvalId, 'action' => 'inventory.adjustment', 'entityType' => 'stockAdjustment', 'entityId' => $adjustmentId,
-            'facilityId' => $loc->facility_unit_id ? Ids::fromBinary($loc->facility_unit_id) : null, 'status' => 'PENDING',
-            'requestedByStaffId' => RequestContext::staffId(), 'requestedAt' => now('UTC')->format('Y-m-d\TH:i:s.v\Z'), 'reason' => $reason,
-            'requiredPermission' => AdjustmentService::APPROVE, 'decidedByStaffId' => null, 'decidedAt' => null, 'decisionNote' => null,
-        ];
     }
 }

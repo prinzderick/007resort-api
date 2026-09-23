@@ -234,7 +234,7 @@ class StockDocuments
     {
         if ($supplierId !== null) {
             if (! DB::table('supplier')->where('id', Ids::toBinary($supplierId))->where('organization_id', Ids::toBinary($org))->exists()) {
-                throw ApiProblem::notFound('supplier_not_found', 'That supplier does not exist.');
+                throw ApiProblem::notFound('not_found', 'That supplier does not exist.');
             }
 
             return $supplierId;

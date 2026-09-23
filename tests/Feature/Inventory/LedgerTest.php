@@ -192,7 +192,7 @@ class LedgerTest extends TestCase
             app(InventoryConsumption::class)->consume($facility->id, [new ConsumptionLine($this->beer->id, '1', Ids::uuid7())], 'order', Ids::uuid7());
             $this->fail('expected stock_location_not_configured');
         } catch (ApiProblem $e) {
-            $this->assertSame('stock_location_not_configured', $e->problemCode);
+            $this->assertSame('validation_failed', $e->problemCode);
         }
     }
 

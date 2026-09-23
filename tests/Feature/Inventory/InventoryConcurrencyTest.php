@@ -181,7 +181,7 @@ class InventoryConcurrencyTest extends ConcurrentTestCase
         $codes = $this->codes(Concurrent::run(6, InventoryWorkers::class, 'issueAsset', ['RKT-01']));
 
         $this->assertSame(1, count(array_keys($codes, 'OK')), json_encode($codes));
-        $this->assertSame(5, count(array_filter($codes, fn ($c) => str_starts_with($c, 'rental_asset_unavailable'))));
+        $this->assertSame(5, count(array_filter($codes, fn ($c) => str_starts_with($c, 'concurrency_conflict'))));
         $this->assertSame('ISSUED', DB::table('rental_asset')->value('status'));
     }
 }

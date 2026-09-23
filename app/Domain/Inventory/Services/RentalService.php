@@ -33,7 +33,7 @@ class RentalService implements RentalGateway
             if ($cur->status === 'ISSUED' && $cur->issued_reference_type === $referenceType && $cur->issued_reference_id === Ids::toBinary($referenceId)) {
                 return $this->dto($cur, true);
             }
-            throw ApiProblem::conflict('rental_asset_unavailable', "Asset {$asset->asset_tag} is not available ({$cur->status}).", ['meta' => ['assetId' => Ids::fromBinary($asset->id), 'status' => $cur->status]]);
+            throw ApiProblem::conflict('concurrency_conflict', "Asset {$asset->asset_tag} is not available ({$cur->status}).", ['meta' => ['assetId' => Ids::fromBinary($asset->id), 'status' => $cur->status]]);
         }
 
         return $this->dto(DB::table('rental_asset')->where('id', $asset->id)->first(), false);
@@ -53,7 +53,7 @@ class RentalService implements RentalGateway
             if (in_array($cur->status, ['AVAILABLE', 'MAINTENANCE'], true)) {
                 return $this->dto($cur, true); // already returned
             }
-            throw ApiProblem::conflict('rental_asset_not_issued', "Asset {$asset->asset_tag} is not currently issued ({$cur->status}).", ['meta' => ['status' => $cur->status]]);
+            throw ApiProblem::conflict('concurrency_conflict', "Asset {$asset->asset_tag} is not currently issued ({$cur->status}).", ['meta' => ['status' => $cur->status]]);
         }
 
         return $this->dto(DB::table('rental_asset')->where('id', $asset->id)->first(), false);
@@ -85,7 +85,7 @@ class RentalService implements RentalGateway
         $q = DB::table('rental_asset');
         $row = Ids::isUuid($idOrTag) ? $q->where('id', Ids::toBinary($idOrTag))->first() : $q->where('asset_tag', $idOrTag)->first();
         if (! $row) {
-            throw ApiProblem::notFound('rental_asset_not_found', 'That rental asset does not exist.');
+            throw ApiProblem::notFound('not_found', 'That rental asset does not exist.');
         }
 
         return $row;

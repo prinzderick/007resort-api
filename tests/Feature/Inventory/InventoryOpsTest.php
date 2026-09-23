@@ -91,6 +91,20 @@ class InventoryOpsTest extends TestCase
         $this->assertSame($r['items'], DB::table('inventory_item')->count());
     }
 
+    public function test_demo_seeder_links_catalog_products_with_matching_skus(): void
+    {
+        $catId = Ids::uuid7();
+        DB::table('product_category')->insert(['id' => Ids::toBinary($catId), 'organization_id' => Ids::toBinary($this->t['org']), 'name' => 'Drinks']);
+        $pid = Ids::uuid7();
+        DB::table('product')->insert(['id' => Ids::toBinary($pid), 'organization_id' => Ids::toBinary($this->t['org']), 'category_id' => Ids::toBinary($catId), 'sku' => 'BEV-STAR-60', 'name' => 'Star 60cl', 'kind' => 'GOOD']);
+
+        $r = (new InventoryDemoSeeder)->run();
+
+        $this->assertSame(1, $r['productLinks']);
+        $this->assertSame(1, DB::table('product_stock_link')->where('product_id', Ids::toBinary($pid))->count());
+        $this->assertSame(0, (new InventoryDemoSeeder)->run()['productLinks'], 're-running does not duplicate links');
+    }
+
     public function test_demo_seed_command_output_and_hook_event(): void
     {
         $this->assertSame(0, Artisan::call('r007:inventory:demo-seed'));
@@ -124,7 +138,7 @@ class InventoryOpsTest extends TestCase
             $rentals->issueAsset('RKT-01', 'entitlement_item', Ids::uuid7());
             $this->fail('second customer must be refused');
         } catch (ApiProblem $e) {
-            $this->assertSame('rental_asset_unavailable', $e->problemCode);
+            $this->assertSame('concurrency_conflict', $e->problemCode);
             $this->assertSame(409, $e->status);
         }
 
@@ -140,7 +154,7 @@ class InventoryOpsTest extends TestCase
             $rentals->issueAsset('NOPE', 'x', Ids::uuid7());
             $this->fail();
         } catch (ApiProblem $e) {
-            $this->assertSame('rental_asset_not_found', $e->problemCode);
+            $this->assertSame('not_found', $e->problemCode);
         }
     }
 

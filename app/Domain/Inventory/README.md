@@ -26,14 +26,20 @@ because a plain SELECT would still see the transaction's old REPEATABLE READ sna
 
 ## Calling Inventory from other modules
 
-* **Orders** — `App\Domain\Inventory\Contracts\InventoryConsumption`: `consume(facilityId, ConsumptionLine[], 'order', orderId)` inside your own
-  transaction (deducts from the facility's default sale location, walking up parent facilities; throws `insufficient_stock` 409 so the line is rejected;
-  idempotent per `lineRef` = order-line UUID), `reverse('order', orderId, [lineRefs])` for voids, `shortages()` as an advisory pre-check, and
-  `ConsumptionService::timingFor(facilityId)` for the facility rule `stock_consumption_timing` (`SEND` | `SETTLE`, default `SEND`).
+* **Orders (wired in this branch)** — `Listeners\OrderStockListener` handles `Orders\Events\OrderSent / OrderSettled / OrderVoided` synchronously inside Orders'
+  transaction, resolving product -> stock item(s) x `quantity_per_unit` through Catalog's `product_stock_link` (`Services\ProductStockLinks`) and calling
+  `Contracts\InventoryConsumption`. Facility rule `stock_consumption_timing` (`SEND` default | `SETTLE`, on the facility's INVENTORY capability):
+  SEND consumes on `OrderSent`, SETTLE on `OrderSettled`; `OrderVoided` always restores what the lines had consumed (no-op otherwise). Idempotent per order line.
+  A shortfall at a location that disallows negative stock throws `insufficient_stock` (409, `meta.itemId/productId/lineId/availableQuantity`) which rolls the send back.
+  The sale location is the facility's own store (default-flagged first), walking up parent facilities. Products without links consume nothing.
+  Other callers use `Contracts\InventoryConsumption` directly: `consume(facilityId, ConsumptionLine[], 'order', orderId)`, `reverse(...)`, `shortages(...)`.
+* **Catalog** — `Services\InventoryStockLevelProvider` replaces Catalog's `StockLevelProvider`: availability / `OUT_OF_STOCK` / `quantityOnHand` = the tightest
+  linked item (on hand / quantity_per_unit) at the facility's sale location. Inventory adds the FK `product_stock_link.stock_item_id -> inventory_item`.
 * **Ticketing** — `Contracts\RentalGateway`: `issueAsset/returnAsset` (tagged, atomic) and `issueQuantity/returnQuantity` (pooled, ledger).
-* **Approvals** — `Contracts\ApprovalRequests` (default: minimal `approval` row). When Orders' approval service exists it re-binds this contract and its
-  `POST /approvals/{id}/decision` must call `AdjustmentService::decide($adjustmentId, $approve, $note, $deciderStaffId)` for `entityType = StockAdjustment`.
-  Until then `POST /inventory/adjustments/{id}/decision` decides directly.
+* **Approvals** — manual adjustments and count variances use Orders' `ApprovalService` (action `inventory.adjustment`, required permission
+  `inventory.adjustment.approve`): the request appears in `GET /approvals` and is decided through `POST /approvals/{id}/decision` (alias:
+  `POST /inventory/adjustments/{id}/decision`); `Services\AdjustmentApprovalHandler` posts the ledger legs in the same transaction, or closes the request on
+  reject/cancel/expiry. The handler re-checks the approve permission at the *location's* scope (site-wide for the Main Store).
 
 ## Endpoints (all `auth:staff`; mutating ones take `Idempotency-Key`)
 

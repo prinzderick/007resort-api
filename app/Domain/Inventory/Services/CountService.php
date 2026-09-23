@@ -56,7 +56,7 @@ class CountService
                     throw ApiProblem::unprocessable('validation_failed', 'Counted quantity cannot be negative.');
                 }
                 if (! DB::table('inventory_item')->where('id', Ids::toBinary($l['itemId']))->where('organization_id', $location->organization_id)->exists()) {
-                    throw ApiProblem::notFound('inventory_item_not_found', 'That inventory item does not exist.');
+                    throw ApiProblem::notFound('not_found', 'That inventory item does not exist.');
                 }
                 DB::table('stock_count_line')->insert([
                     'id' => Ids::toBinary(Ids::uuid7()), 'count_id' => Ids::toBinary($id), 'item_id' => Ids::toBinary($l['itemId']),
@@ -78,11 +78,11 @@ class CountService
         return DB::transaction(function () use ($countId, $actor) {
             $count = DB::table('stock_count')->where('id', Ids::toBinary($countId))->lockForUpdate()->first();
             if (! $count) {
-                throw ApiProblem::notFound('count_not_found', 'That stock count does not exist.');
+                throw ApiProblem::notFound('not_found', 'That stock count does not exist.');
             }
             $locationId = Ids::fromBinary($count->location_id);
             if ($count->status !== 'DRAFT') {
-                throw ApiProblem::conflict('count_already_posted', 'This stock count was already posted.');
+                throw ApiProblem::conflict('concurrency_conflict', 'This stock count was already posted.', ['meta' => ['status' => 'POSTED']]);
             }
             $location = $this->ledger->location($locationId);
             $facility = $location->facility_unit_id ? Ids::fromBinary($location->facility_unit_id) : null;
@@ -150,7 +150,7 @@ class CountService
     {
         $c = DB::table('stock_count')->where('id', Ids::toBinary($countId))->first();
         if (! $c) {
-            throw ApiProblem::notFound('count_not_found', 'That stock count does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock count does not exist.');
         }
         $lines = DB::table('stock_count_line')->where('count_id', $c->id)->orderBy('id')->get()->map(fn ($l) => [
             'itemId' => Ids::fromBinary($l->item_id),

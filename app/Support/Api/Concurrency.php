@@ -3,6 +3,7 @@
 namespace App\Support\Api;
 
 use App\Support\Http\ApiProblem;
+use App\Support\Http\Etag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,7 +13,7 @@ final class Concurrency
 {
     public static function etag(int|string $rowVersion): string
     {
-        return \App\Support\Http\Etag::make($rowVersion);
+        return Etag::make($rowVersion);
     }
 
     /** Parse `If-Match: "v3"` / `W/"v3"` / `3`. 428 when missing (and required), 412 when unparseable. */

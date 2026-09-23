@@ -2,10 +2,10 @@
 
 namespace App\Domain\Inventory\Services;
 
-use App\Domain\Inventory\Contracts\ApprovalRequests;
 use App\Domain\Inventory\Support\MovementDocument;
 use App\Domain\Inventory\Support\MovementSpec;
 use App\Domain\Inventory\Support\Qty;
+use App\Domain\Orders\Approvals\ApprovalService;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
@@ -17,10 +17,12 @@ use Illuminate\Support\Facades\DB;
  * Manual stock adjustments and count-variance corrections (architecture/06 §3 approval workflow).
  *
  *  - The requester holds `inventory.adjustment.approve` at the location's scope  -> posted immediately (status POSTED).
- *  - Otherwise a PENDING_APPROVAL `stock_adjustment` + `approval` row is written and NOTHING touches the ledger.
- *  - A different staff member holding `inventory.adjustment.approve` decides; APPROVE posts the ledger legs (guarded:
- *    a shortfall keeps it pending with `insufficient_stock`), REJECT closes it. Decisions lock the row, so two racing
- *    decisions cannot double-post. Requester != decider (`permission_denied`).
+ *  - Otherwise a PENDING_APPROVAL `stock_adjustment` + an Orders `approval` row (action `inventory.adjustment`) are written and
+ *    NOTHING touches the ledger.
+ *  - A different staff member holding `inventory.adjustment.approve` decides through `POST /approvals/{id}/decision` (or the
+ *    Inventory alias `POST /inventory/adjustments/{id}/decision`); {@see AdjustmentApprovalHandler} then posts the ledger legs
+ *    in the same transaction (guarded: a shortfall keeps it pending with `insufficient_stock`) or closes it on reject/cancel/expiry.
+ *    The approval row is locked by ApprovalService::decide, so two racing decisions cannot double-post.
  */
 class AdjustmentService
 {
@@ -29,12 +31,12 @@ class AdjustmentService
     public function __construct(
         private readonly StockLedger $ledger,
         private readonly InventoryAccess $access,
-        private readonly ApprovalRequests $approvals,
+        private readonly ApprovalService $approvals,
     ) {}
 
     /**
      * @param  list<array{itemId: string, quantityDelta: string}>  $lines
-     * @return array{status: string, movement: array<string, mixed>, approvalId: ?string, adjustmentId: string}
+     * @return array{status: string, movement: array<string, mixed>, approvalId: ?string, adjustmentId: string, approval?: array<string, mixed>}
      */
     public function request(string $locationId, array $lines, string $reason, string $note, string $kind = 'ADJUSTMENT', ?string $stockCountId = null, ?string $actor = null): array
     {
@@ -73,7 +75,7 @@ class AdjustmentService
                     'id' => Ids::toBinary(Ids::uuid7()), 'adjustment_id' => Ids::toBinary($id), 'item_id' => Ids::toBinary($l['itemId']), 'qty_delta' => $delta,
                 ]);
             }
-            Audit::record('inventory.adjustment.request', 'StockAdjustment', $id, null, [
+            Audit::record('inventory.adjustment.create', 'StockAdjustment', $id, null, [
                 'locationId' => $locationId, 'kind' => $kind, 'reason' => $reason, 'note' => $note, 'lines' => $norm,
             ], facilityUnitId: $facility);
 
@@ -83,11 +85,15 @@ class AdjustmentService
                 return ['status' => 'POSTED', 'movement' => $doc, 'approvalId' => null, 'adjustmentId' => $id];
             }
 
-            $approvalId = $this->approvals->request('inventory.adjustment', 'StockAdjustment', $id, $facility, self::APPROVE, $actor, "{$reason}: {$note}");
-            DB::table('stock_adjustment')->where('id', Ids::toBinary($id))->update(['approval_id' => Ids::toBinary($approvalId)]);
+            $approval = $this->approvals->request(
+                'inventory.adjustment', 'StockAdjustment', $id, $this->approvalFacility($location), self::APPROVE, "{$reason}: {$note}",
+                ['adjustmentId' => $id], null, $this->summary($kind, $norm, $reason),
+            );
+            $approvalId = Ids::fromBinary($approval->id);
+            DB::table('stock_adjustment')->where('id', Ids::toBinary($id))->update(['approval_id' => $approval->id]);
 
             return [
-                'status' => 'PENDING_APPROVAL', 'approvalId' => $approvalId, 'adjustmentId' => $id,
+                'status' => 'PENDING_APPROVAL', 'approvalId' => $approvalId, 'adjustmentId' => $id, 'approval' => $this->approvals->present($approval),
                 'movement' => MovementDocument::make($kind === 'COUNT_VARIANCE' ? 'COUNT_VARIANCE' : 'ADJUSTMENT', $id, 'PENDING_APPROVAL', $approvalId,
                     array_map(fn ($l) => ['itemId' => $l['itemId'], 'locationId' => $locationId, 'quantityDelta' => $l['quantityDelta']], $norm)),
             ];
@@ -95,51 +101,80 @@ class AdjustmentService
     }
 
     /**
-     * @return array<string, mixed> the resulting adjustment as a StockMovement document
+     * Decide through the Orders approval workflow (permission at the approval's facility, requester != decider, row lock, audit,
+     * realtime) — it calls back into {@see applyApproved()} / {@see discard()}. @return array<string, mixed> the adjustment as a StockMovement document
      */
-    public function decide(string $adjustmentId, bool $approve, ?string $note = null, ?string $decider = null): array
+    public function decide(string $adjustmentId, bool $approve, ?string $note = null): array
     {
-        $decider ??= RequestContext::staffId();
-        if ($decider === null) {
-            throw ApiProblem::unauthenticated();
+        $adj = DB::table('stock_adjustment')->where('id', Ids::toBinary($adjustmentId))->first();
+        if (! $adj) {
+            throw ApiProblem::notFound('not_found', 'That adjustment does not exist.');
+        }
+        if ($adj->approval_id === null) {
+            throw ApiProblem::conflict('order_state_invalid', 'This adjustment is not waiting for an approval.', ['meta' => ['status' => $adj->status]]);
+        }
+        $this->approvals->decide(Ids::fromBinary($adj->approval_id), $approve ? 'APPROVE' : 'REJECT', $note);
+
+        return $this->find($adjustmentId);
+    }
+
+    /** Called by the approval handler INSIDE the decision transaction (permission + requester checks were done by ApprovalService). */
+    public function applyApproved(string $adjustmentId, string $approverStaffId, string $approvalId): void
+    {
+        $adj = DB::table('stock_adjustment')->where('id', Ids::toBinary($adjustmentId))->lockForUpdate()->first();
+        if (! $adj) {
+            throw ApiProblem::notFound('not_found', 'That adjustment does not exist.');
+        }
+        if ($adj->status !== 'PENDING_APPROVAL') {
+            throw ApiProblem::conflict('order_state_invalid', 'This adjustment has already been decided.', ['meta' => ['status' => $adj->status]]);
+        }
+        // ApprovalService checked the permission at the approval's (routing) facility; the authority that matters is the LOCATION's scope
+        // (site-wide for the Main Store), so re-check it here — a facility supervisor cannot approve a Main Store adjustment.
+        if (! $this->access->can(self::APPROVE, $this->access->locationRow(Ids::fromBinary($adj->location_id)), $approverStaffId)) {
+            throw ApiProblem::permissionDenied(self::APPROVE);
+        }
+        $this->post($adjustmentId, $approverStaffId, $approvalId);
+    }
+
+    /** Reject / cancel / expiry of the approval: nothing was ever posted, just close the request. */
+    public function discard(string $adjustmentId, string $approvalStatus): void
+    {
+        $adj = DB::table('stock_adjustment')->where('id', Ids::toBinary($adjustmentId))->lockForUpdate()->first();
+        if (! $adj || $adj->status !== 'PENDING_APPROVAL') {
+            return;
+        }
+        $status = $approvalStatus === 'REJECTED' ? 'REJECTED' : 'CANCELLED';
+        DB::table('stock_adjustment')->where('id', $adj->id)->update(['status' => $status, 'decided_by' => RequestContext::staffId() ? Ids::toBinary((string) RequestContext::staffId()) : null,
+            'decided_at' => now('UTC')->format('Y-m-d H:i:s.u'), 'row_version' => $adj->row_version + 1]);
+        $location = $this->access->locationRow(Ids::fromBinary($adj->location_id));
+        Audit::record('inventory.adjustment.'.strtolower($status), 'StockAdjustment', $adjustmentId, ['status' => 'PENDING_APPROVAL'], ['status' => $status],
+            facilityUnitId: $location->facility_unit_id ? Ids::fromBinary($location->facility_unit_id) : null, approvalId: $adj->approval_id ? Ids::fromBinary($adj->approval_id) : null);
+    }
+
+    /**
+     * The approval workflow is facility-scoped. A facility store uses its own facility; the Main Store (site scope) uses the site's
+     * top-level facility, so only staff whose approve permission covers that facility (site/org-wide holders) can decide.
+     */
+    private function approvalFacility(object $location): string
+    {
+        if ($location->facility_unit_id !== null) {
+            return Ids::fromBinary($location->facility_unit_id);
+        }
+        $root = DB::table('facility_unit')->where('site_id', $location->site_id)->whereNull('parent_id')->orderBy('id')->first(['id']);
+        if (! $root) {
+            throw ApiProblem::unprocessable('validation_failed', 'The site has no facility to route the approval to.', ['locationId' => ['no approval scope']]);
         }
 
-        return DB::transaction(function () use ($adjustmentId, $approve, $note, $decider) {
-            $adj = DB::table('stock_adjustment')->where('id', Ids::toBinary($adjustmentId))->lockForUpdate()->first();
-            if (! $adj) {
-                throw ApiProblem::notFound('adjustment_not_found', 'That adjustment does not exist.');
-            }
-            $location = $this->access->locationRow(Ids::fromBinary($adj->location_id));
-            if (! $this->access->can(self::APPROVE, $location, $decider)) {
-                throw ApiProblem::forbidden('permission_denied', 'Missing permission: '.self::APPROVE.' for this stock location.', ['permission' => self::APPROVE]);
-            }
-            if (Ids::fromBinary($adj->requested_by) === Ids::normalize($decider)) {
-                throw ApiProblem::forbidden('permission_denied', 'You cannot decide your own adjustment request.', ['permission' => self::APPROVE]);
-            }
-            if ($adj->status !== 'PENDING_APPROVAL') {
-                throw ApiProblem::conflict('approval_already_decided', 'This adjustment has already been decided.', ['meta' => ['status' => $adj->status]]);
-            }
+        return Ids::fromBinary($root->id);
+    }
 
-            $approvalId = $adj->approval_id ? Ids::fromBinary($adj->approval_id) : null;
-            if ($approve) {
-                $doc = $this->post($adjustmentId, $decider, $approvalId, $note);
-            } else {
-                DB::table('stock_adjustment')->where('id', $adj->id)->update([
-                    'status' => 'REJECTED', 'decided_by' => Ids::toBinary($decider), 'decided_at' => now('UTC')->format('Y-m-d H:i:s.u'),
-                    'decision_note' => $note, 'row_version' => $adj->row_version + 1,
-                ]);
-                Audit::record('inventory.adjustment.reject', 'StockAdjustment', $adjustmentId, ['status' => 'PENDING_APPROVAL'], ['status' => 'REJECTED', 'note' => $note],
-                    facilityUnitId: $location->facility_unit_id ? Ids::fromBinary($location->facility_unit_id) : null, approvalId: $approvalId);
-                $doc = MovementDocument::make($adj->kind, $adjustmentId, 'REJECTED', $approvalId, $this->lineDocs($adjustmentId, Ids::fromBinary($adj->location_id)));
-            }
-            if ($approvalId !== null) {
-                DB::table('approval')->where('id', Ids::toBinary($approvalId))->update([
-                    'status' => $approve ? 'APPROVED' : 'REJECTED', 'approved_by' => Ids::toBinary($decider), 'decided_at' => now('UTC')->format('Y-m-d H:i:s.u'),
-                ]);
-            }
+    /** @param list<array{itemId: string, quantityDelta: string}> $lines */
+    private function summary(string $kind, array $lines, string $reason): string
+    {
+        $names = DB::table('inventory_item')->whereIn('id', array_map(fn ($l) => Ids::toBinary($l['itemId']), $lines))->pluck('name', 'id');
+        $parts = array_map(fn ($l) => ($names[Ids::toBinary($l['itemId'])] ?? 'item').' '.(Qty::isNegative($l['quantityDelta']) ? '' : '+').rtrim(rtrim($l['quantityDelta'], '0'), '.'), array_slice($lines, 0, 3));
 
-            return $doc;
-        });
+        return ($kind === 'COUNT_VARIANCE' ? 'Stock count variance' : "Stock adjustment ({$reason})").': '.implode(', ', $parts).(count($lines) > 3 ? ' +'.(count($lines) - 3).' more' : '');
     }
 
     /** Post the ledger legs of a (locked or freshly-created) adjustment and flip it to POSTED. */

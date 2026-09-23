@@ -36,7 +36,7 @@ class InventoryAccess
     {
         $location = $this->locationRow($locationId);
         if (! $this->can($permission, $location)) {
-            throw ApiProblem::forbidden('permission_denied', "Missing permission: {$permission} for this stock location.", ['permission' => $permission]);
+            throw ApiProblem::permissionDenied($permission);
         }
 
         return $location;
@@ -70,11 +70,11 @@ class InventoryAccess
     public function locationRow(string $locationId): object
     {
         if (! Ids::isUuid($locationId)) {
-            throw ApiProblem::notFound('stock_location_not_found', 'That stock location does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock location does not exist.');
         }
         $row = DB::table('stock_location')->where('id', Ids::toBinary($locationId))->first();
         if (! $row) {
-            throw ApiProblem::notFound('stock_location_not_found', 'That stock location does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock location does not exist.');
         }
 
         return $row;

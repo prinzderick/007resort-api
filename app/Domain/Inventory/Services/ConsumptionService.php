@@ -132,7 +132,7 @@ class ConsumptionService implements InventoryConsumption
             $cursor = $parent ? Ids::fromBinary($parent) : null;
         }
 
-        throw ApiProblem::unprocessable('stock_location_not_configured', 'This facility has no stock location configured.', []);
+        throw ApiProblem::unprocessable('validation_failed', 'This facility has no stock location configured.', ['facilityId' => ['no stock location configured']]);
     }
 
     /** Facility rule `stock_consumption_timing` (SEND | SETTLE) from its INVENTORY capability's operating rules. */

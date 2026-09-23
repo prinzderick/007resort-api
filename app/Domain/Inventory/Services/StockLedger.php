@@ -151,10 +151,10 @@ class StockLedger
     {
         $row = DB::table('stock_location')->where('id', Ids::toBinary($locationId))->first();
         if (! $row) {
-            throw ApiProblem::notFound('stock_location_not_found', 'That stock location does not exist.');
+            throw ApiProblem::notFound('not_found', 'That stock location does not exist.');
         }
         if (! $row->is_active) {
-            throw ApiProblem::conflict('stock_location_inactive', 'That stock location is inactive.', ['meta' => ['locationId' => $locationId]]);
+            throw ApiProblem::unprocessable('validation_failed', 'That stock location is inactive.', ['locationId' => ['inactive']]);
         }
 
         return $row;
@@ -169,11 +169,11 @@ class StockLedger
     {
         $item = DB::table('inventory_item')->where('id', Ids::toBinary($itemId))->first(['is_active', 'organization_id']);
         if (! $item || $item->organization_id !== $location->organization_id) {
-            throw ApiProblem::notFound('inventory_item_not_found', 'That inventory item does not exist.');
+            throw ApiProblem::notFound('not_found', 'That inventory item does not exist.');
         }
         // Only ADDING/OUTBOUND of an inactive item is blocked for stock-in; reducing residual stock stays possible.
         if (! $item->is_active && Qty::isPositive($delta)) {
-            throw ApiProblem::conflict('inventory_item_inactive', 'That inventory item is inactive.', ['meta' => ['itemId' => $itemId]]);
+            throw ApiProblem::unprocessable('validation_failed', 'That inventory item is inactive.', ['itemId' => ['inactive']]);
         }
     }
 

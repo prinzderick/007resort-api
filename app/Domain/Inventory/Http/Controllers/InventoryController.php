@@ -9,6 +9,7 @@ use App\Domain\Inventory\Support\Qty;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
+use App\Support\Http\Etag;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Database\QueryException;
@@ -61,10 +62,10 @@ class InventoryController
                 Audit::record('inventory.item.create', 'InventoryItem', $id, null, $d);
             });
         } catch (QueryException $e) {
-            throw $this->dup($e, 'inventory_item_sku_taken', 'An item with that SKU already exists.');
+            throw $this->dup($e, 'sku', 'An item with that SKU already exists.');
         }
 
-        return response()->json(Dto::item($this->row('inventory_item', $id)), 201)->header('ETag', '"1"');
+        return Etag::json(Dto::item($this->row('inventory_item', $id)), 1, 201);
     }
 
     public function updateItem(Request $request, string $item): JsonResponse
@@ -77,9 +78,9 @@ class InventoryController
         return DB::transaction(function () use ($request, $item, $d) {
             $row = DB::table('inventory_item')->where('id', Ids::toBinary($this->uuid($item)))->where('organization_id', Ids::toBinary($this->org()))->lockForUpdate()->first();
             if (! $row) {
-                throw ApiProblem::notFound('inventory_item_not_found', 'That inventory item does not exist.');
+                throw ApiProblem::notFound('not_found', 'That inventory item does not exist.');
             }
-            $this->checkIfMatch($request, (int) $row->row_version);
+            Etag::assertMatches($request, (int) $row->row_version);
             $set = [];
             foreach (['name' => 'name', 'unit' => 'unit', 'category' => 'category', 'reorderLevel' => 'reorder_level'] as $in => $col) {
                 if (array_key_exists($in, $d)) {
@@ -96,7 +97,7 @@ class InventoryController
             }
             $fresh = DB::table('inventory_item')->where('id', $row->id)->first();
 
-            return response()->json(Dto::item($fresh))->header('ETag', '"'.$fresh->row_version.'"');
+            return Etag::json(Dto::item($fresh), (int) $fresh->row_version);
         });
     }
 
@@ -132,7 +133,7 @@ class InventoryController
         }
         $site = Tenant::siteId();
         if ($facilityId !== null && ! DB::table('facility_unit')->where('id', Ids::toBinary($facilityId))->where('site_id', Ids::toBinary($site))->exists()) {
-            throw ApiProblem::notFound('facility_not_found', 'That facility does not exist.');
+            throw ApiProblem::notFound('not_found', 'That facility does not exist.');
         }
         $id = Ids::uuid7();
         try {
@@ -145,10 +146,10 @@ class InventoryController
                 Audit::record('inventory.location.create', 'StockLocation', $id, null, $d, facilityUnitId: $facilityId);
             });
         } catch (QueryException $e) {
-            throw $this->dup($e, 'stock_location_name_taken', 'A stock location with that name already exists.');
+            throw $this->dup($e, 'name', 'A stock location with that name already exists.');
         }
 
-        return response()->json(Dto::location($this->row('stock_location', $id)), 201)->header('ETag', '"1"');
+        return Etag::json(Dto::location($this->row('stock_location', $id)), 1, 201);
     }
 
     /** allowNegative is sensitive (it disables the stock guard for the location): audited with old/new. */
@@ -162,9 +163,9 @@ class InventoryController
         return DB::transaction(function () use ($request, $location, $d) {
             $row = DB::table('stock_location')->where('id', Ids::toBinary($this->uuid($location)))->where('organization_id', Ids::toBinary($this->org()))->lockForUpdate()->first();
             if (! $row) {
-                throw ApiProblem::notFound('stock_location_not_found', 'That stock location does not exist.');
+                throw ApiProblem::notFound('not_found', 'That stock location does not exist.');
             }
-            $this->checkIfMatch($request, (int) $row->row_version);
+            Etag::assertMatches($request, (int) $row->row_version);
             $set = [];
             if (array_key_exists('name', $d)) {
                 $set['name'] = $d['name'];
@@ -179,14 +180,14 @@ class InventoryController
                 try {
                     DB::table('stock_location')->where('id', $row->id)->update($set);
                 } catch (QueryException $e) {
-                    throw $this->dup($e, 'stock_location_name_taken', 'A stock location with that name already exists.');
+                    throw $this->dup($e, 'name', 'A stock location with that name already exists.');
                 }
                 Audit::record('inventory.location.update', 'StockLocation', Ids::fromBinary($row->id), Dto::location($row), $d,
                     facilityUnitId: $row->facility_unit_id ? Ids::fromBinary($row->facility_unit_id) : null);
             }
             $fresh = DB::table('stock_location')->where('id', $row->id)->first();
 
-            return response()->json(Dto::location($fresh))->header('ETag', '"'.$fresh->row_version.'"');
+            return Etag::json(Dto::location($fresh), (int) $fresh->row_version);
         });
     }
 
@@ -218,7 +219,7 @@ class InventoryController
                 Audit::record('supplier.create', 'Supplier', $id, null, $d);
             });
         } catch (QueryException $e) {
-            throw $this->dup($e, 'supplier_name_taken', 'A supplier with that name already exists.');
+            throw $this->dup($e, 'name', 'A supplier with that name already exists.');
         }
 
         return response()->json(Dto::supplier($this->row('supplier', $id)), 201);
@@ -304,7 +305,7 @@ class InventoryController
         $d = $request->validate(['itemId' => ['required', 'uuid'], 'locationId' => ['required', 'uuid'], 'assetTag' => ['required', 'string', 'max:64']]);
         $loc = $this->access->authorize('inventory.item.manage', $d['locationId']);
         if (! DB::table('inventory_item')->where('id', Ids::toBinary($d['itemId']))->where('organization_id', $loc->organization_id)->exists()) {
-            throw ApiProblem::notFound('inventory_item_not_found', 'That inventory item does not exist.');
+            throw ApiProblem::notFound('not_found', 'That inventory item does not exist.');
         }
         $id = Ids::uuid7();
         try {
@@ -316,7 +317,7 @@ class InventoryController
                 Audit::record('inventory.rental_asset.create', 'RentalAsset', $id, null, $d, facilityUnitId: $loc->facility_unit_id ? Ids::fromBinary($loc->facility_unit_id) : null);
             });
         } catch (QueryException $e) {
-            throw $this->dup($e, 'rental_asset_tag_taken', 'An asset with that tag already exists.');
+            throw $this->dup($e, 'assetTag', 'An asset with that tag already exists.');
         }
 
         return response()->json($rentals->dto($this->row('rental_asset', $id)), 201);
@@ -330,7 +331,7 @@ class InventoryController
         if ($l = $request->query('locationId')) {
             $loc = $this->access->locationRow($this->uuid((string) $l));
             if (! $this->access->can('inventory.view', $loc)) {
-                throw ApiProblem::forbidden('permission_denied', 'Missing permission: inventory.view for this stock location.', ['permission' => 'inventory.view']);
+                throw ApiProblem::permissionDenied('inventory.view');
             }
             $query->where($column, $loc->id);
         } elseif (($visible = $this->access->visibleLocationIds('inventory.view')) !== null) {
@@ -346,7 +347,7 @@ class InventoryController
     private function uuid(string $v): string
     {
         if (! Ids::isUuid($v)) {
-            throw ApiProblem::badRequest('invalid_id', 'Malformed identifier.');
+            throw ApiProblem::badRequest('validation_failed', 'Malformed identifier.');
         }
 
         return Ids::normalize($v);
@@ -357,17 +358,9 @@ class InventoryController
         return DB::table($table)->where('id', Ids::toBinary($id))->first();
     }
 
-    private function checkIfMatch(Request $request, int $rowVersion): void
+    private function dup(QueryException $e, string $field, string $message): \Throwable
     {
-        $h = trim((string) $request->header('If-Match', ''), ' "');
-        if ($h !== '' && (int) $h !== $rowVersion) {
-            throw ApiProblem::conflict('concurrency_conflict', 'This record was changed by someone else. Reload and retry.', ['meta' => ['currentRowVersion' => $rowVersion]]);
-        }
-    }
-
-    private function dup(QueryException $e, string $code, string $message): \Throwable
-    {
-        return ($e->errorInfo[1] ?? null) === 1062 ? ApiProblem::conflict($code, $message) : $e;
+        return ($e->errorInfo[1] ?? null) === 1062 ? ApiProblem::unprocessable('validation_failed', $message, [$field => [$message]]) : $e;
     }
 
     private function page($query, Request $request, string $orderBy, string $dir, callable $map): JsonResponse

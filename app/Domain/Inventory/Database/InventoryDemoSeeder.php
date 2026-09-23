@@ -6,12 +6,13 @@ use App\Domain\Inventory\Services\StockDocuments;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Demo inventory: Main Store + one sub-store per operating facility, ~60 everyday bar / restaurant / supermarket / salon /
  * sports goods, opening stock received into the Main Store via a real purchase receipt and distributed to the facility
  * stores via real transfers (so the ledger, balances and audit trail are genuine). Idempotent: does nothing to stock if the
- * organization already has ledger movements. Run standalone with `php artisan r007:inventory:demo-seed`; it also runs
+ * organization already has ledger movements. Catalog products whose SKU equals an item SKU are linked (product_stock_link, 1:1). Run standalone with `php artisan r007:inventory:demo-seed`; it also runs
  * automatically after `php artisan r007:demo-seed`.
  */
 class InventoryDemoSeeder
@@ -147,6 +148,19 @@ class InventoryDemoSeeder
             }
         }
 
+        // --- link Catalog products to stock items where the SKUs match (1 unit per product unit) ---
+        $linked = 0;
+        if (Schema::hasTable('product_stock_link')) {
+            foreach ($itemIds as $sku => $itemId) {
+                $product = DB::table('product')->where('organization_id', $orgB)->where('sku', $sku)->first(['id']);
+                if ($product) {
+                    $linked += DB::table('product_stock_link')->insertOrIgnore([
+                        'id' => Ids::toBinary(Ids::uuid7()), 'product_id' => $product->id, 'stock_item_id' => Ids::toBinary($itemId), 'quantity_per_unit' => '1',
+                    ]);
+                }
+            }
+        }
+
         // --- tagged rental assets ---
         foreach ([['SPT-TRKT-EA', 'SPT-RKT-', 6], ['SPT-BRKT-EA', 'SPT-BDM-', 6]] as [$sku, $prefix, $n]) {
             for ($i = 1; $i <= $n; $i++) {
@@ -181,7 +195,7 @@ class InventoryDemoSeeder
             $seeded = true;
         }
 
-        return ['items' => count($itemIds), 'locations' => count($loc), 'openingStockPosted' => $seeded];
+        return ['items' => count($itemIds), 'locations' => count($loc), 'openingStockPosted' => $seeded, 'productLinks' => $linked];
     }
 
     private function facility(string $org, string $site, string $code, string $name): string
