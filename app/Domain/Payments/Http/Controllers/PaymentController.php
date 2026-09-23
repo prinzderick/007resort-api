@@ -86,6 +86,15 @@ class PaymentController
         if (! empty($f['tenderType'])) {
             $q->where('tender_type', strtoupper((string) $f['tenderType']));
         }
+        // filter[from] (inclusive) / filter[to] (exclusive; a bare YYYY-MM-DD `to` includes that whole UTC day) on created_at
+        $range = validator($f, ['from' => ['nullable', 'date'], 'to' => ['nullable', 'date']])->validate();
+        if (! empty($range['from'])) {
+            $q->where('created_at', '>=', \Carbon\CarbonImmutable::parse($range['from'], 'UTC')->utc()->format('Y-m-d H:i:s.u'));
+        }
+        if (! empty($range['to'])) {
+            $to = \Carbon\CarbonImmutable::parse($range['to'], 'UTC')->utc();
+            $q->where('created_at', '<', ($this->bareDate($range['to']) ? $to->addDay() : $to)->format('Y-m-d H:i:s.u'));
+        }
         if (! empty($f['groupId']) && Ids::isUuid($f['groupId'])) {
             $q->where('group_id', Ids::toBinary($f['groupId']));
         }
@@ -197,6 +206,11 @@ class PaymentController
     private function replayable(array $r): JsonResponse
     {
         return response()->json($r['body'], 201, $r['replayed'] ? ['Idempotent-Replayed' => 'true'] : []);
+    }
+
+    private function bareDate(string $v): bool
+    {
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
     }
 
     /** True when the permission is held at SITE/ORGANIZATION scope (property-wide finance roles). */
