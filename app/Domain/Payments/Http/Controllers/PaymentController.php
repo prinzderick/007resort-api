@@ -74,9 +74,9 @@ class PaymentController
         if (! empty($f['facilityId']) && Ids::isUuid($f['facilityId'])) {
             $this->requireAt($staff, 'payment.view', $f['facilityId']);
             $q->where('facility_unit_id', Ids::toBinary($f['facilityId']));
-        } else {
-            $q->where('taken_by_staff_id', Ids::toBinary($staff)); // without a facility scope you only see your own takings
-        }
+        } elseif (! $this->holdsSiteWide($staff, 'payment.view')) {
+            $q->where('taken_by_staff_id', Ids::toBinary($staff)); // without a facility scope you only see your own takings...
+        } // ...unless you hold payment.view site-wide (owner/accountant): then no facility filter = the whole property
         if (! empty($f['cashSessionId']) && Ids::isUuid($f['cashSessionId'])) {
             $q->where('cash_session_id', Ids::toBinary($f['cashSessionId']));
         }
@@ -197,6 +197,15 @@ class PaymentController
     private function replayable(array $r): JsonResponse
     {
         return response()->json($r['body'], 201, $r['replayed'] ? ['Idempotent-Replayed' => 'true'] : []);
+    }
+
+    /** True when the permission is held at SITE/ORGANIZATION scope (property-wide finance roles). */
+    private function holdsSiteWide(string $staffId, string $permission): bool
+    {
+        $row = DB::table('staff')->where('id', Ids::toBinary($staffId))->first(['site_id']); // the caller's own site
+        $site = $row ? Ids::fromBinary($row->site_id) : null;
+
+        return $site !== null && $this->permissions->can($staffId, $permission, Scope::site($site));
     }
 
     private function requireAt(string $staffId, string $permission, string $facilityId): void
