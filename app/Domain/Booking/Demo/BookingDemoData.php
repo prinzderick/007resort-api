@@ -91,7 +91,7 @@ final class BookingDemoData
             return Ids::fromBinary($id);
         };
 
-        foreach (['FEE-FOOTBALL' => ['Football pitch (per hour)', '25000'], 'FEE-TENNIS' => ['Lawn tennis court (per hour)', '5000'], 'FEE-BASKETBALL' => ['Basketball court (per hour)', '8000'], 'FEE-TENNIS-CLINIC' => ['Tennis clinic (per seat)', '3000']] as $sku => [$name, $price]) {
+        foreach (['FEE-FOOTBALL' => ['Football pitch (per hour)', '25000'], 'FEE-TENNIS' => ['Lawn tennis court (per hour)', '5000'], 'FEE-BASKETBALL' => ['Basketball court (per hour)', '8000'], 'FEE-TENNIS-CLINIC' => ['Tennis clinic (per seat)', '3000'], 'FEE-EVENT-SEAT' => ['Event hall (per seat)', '5000']] as $sku => [$name, $price]) {
             $out['fees'][$sku] = $sell($sku, $name, 'FEE', $price);
         }
         $out['tickets']['POOL-ADULT'] = $sell('POOL-ADULT', 'Pool - Adult', 'TICKET', '3000');
@@ -113,7 +113,7 @@ final class BookingDemoData
     {
         $attrs = [
             'mode' => $d['mode'], 'capacity' => $d['capacity'], 'slot_minutes' => 60, 'max_slots_per_booking' => 4, 'price' => $d['price'],
-            'allow_whole_resource' => $d['clinic'] ?? false ? 1 : 0, 'local_reserve_units' => $d['clinic'] ?? false ? 2 : 0,
+            'allow_whole_resource' => $d['clinic'] ?? false ? 1 : 0, 'local_reserve_units' => $d['clinic'] ?? false ? max(2, intdiv($d['capacity'], 10)) : 0,
             'product_id' => isset($d['sku'], $catalog['fees'][$d['sku']]) ? Ids::toBinary($catalog['fees'][$d['sku']]) : null,
         ];
         $existing = null;
