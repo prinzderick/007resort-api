@@ -3,6 +3,8 @@
 #   scripts/local-node.sh seed     # migrate:fresh + r007:demo-seed (DESTROYS the dev DB)
 #   scripts/local-node.sh start    # nohup r007:run --reverb (logs in storage/logs/local-node.log)
 #   scripts/local-node.sh stop|status|restart
+#   scripts/local-node.sh device-code [FACILITY_CODE]   # one-time device registration code (24 h)
+#   scripts/local-node.sh artisan <cmd...>              # any artisan command with the node's env
 # Environment (all optional): LOCAL_NODE_DB, LOCAL_NODE_PORT, LOCAL_NODE_REVERB_PORT, DB_USERNAME, DB_PASSWORD.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -22,7 +24,8 @@ LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/nu
 
 export APP_ENV=local APP_NODE=local SITE_ID DB_CONNECTION=mysql DB_DATABASE="$DB" DB_USERNAME="${DB_USERNAME:-root}" DB_PASSWORD="${DB_PASSWORD:-}"
 export REDIS_DB=4 REDIS_CACHE_DB=5 REDIS_PREFIX=r007_local_ CACHE_STORE=redis QUEUE_CONNECTION=redis SESSION_DRIVER=array
-export BROADCAST_CONNECTION=reverb REVERB_APP_SECRET="$(cat "$SECRET_FILE")" REVERB_HOST="$LAN_IP" REVERB_PORT="$RPORT" REVERB_SERVER_PORT="$RPORT" REVERB_SERVER_HOST=0.0.0.0
+# REVERB_HOST loopback => GET /system/info advertises the host the client used to reach the API (LAN IP, or 10.0.2.2 from the Android emulator)
+export BROADCAST_CONNECTION=reverb REVERB_APP_SECRET="$(cat "$SECRET_FILE")" REVERB_HOST=127.0.0.1 REVERB_PORT="$RPORT" REVERB_SERVER_PORT="$RPORT" REVERB_SERVER_HOST=0.0.0.0
 export API_PORT="$PORT" APP_URL="http://$LAN_IP:$PORT" CORS_ALLOWED_ORIGINS='*'
 
 running() { [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
@@ -53,6 +56,8 @@ case "${1:-status}" in
     else echo "not running"; fi
     ;;
   restart) "$0" stop; "$0" start ;;
+  artisan) shift; php artisan "$@" ;;   # run any artisan command against the node's DB/Redis, e.g.: scripts/local-node.sh artisan r007:device-code --facility=RESTAURANT
+  device-code) php artisan r007:device-code --facility="${2:-}" ;;
   status)
     if running; then echo "running pid $(cat "$PIDFILE") -> http://$LAN_IP:$PORT/api/v1 (db=$DB)"; else echo "not running"; fi
     ;;

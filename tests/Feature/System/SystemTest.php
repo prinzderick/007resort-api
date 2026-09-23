@@ -47,6 +47,7 @@ class SystemTest extends TestCase
         $this->assertFalse($info['vatEnabled']);
         $this->assertSame('pub-key', $info['realtime']['appKey']);
         $this->assertSame(8081, $info['realtime']['port']);
+        $this->assertSame('10.0.2.2', $this->getJson('http://10.0.2.2:8080/api/v1/system/info')->json('realtime.host'), 'loopback REVERB_HOST echoes the host the client used (emulator)');
         $this->assertArrayHasKey('mobile', $info['minClientVersion']);
         $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\dT[\d:.]+Z$/', $info['serverTime']);
         $this->assertArrayNotHasKey('secret', $info['realtime']);

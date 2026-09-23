@@ -8,6 +8,7 @@ use App\Support\Ids;
 use App\Support\Node;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -16,7 +17,7 @@ class SystemController
     public function __construct(private readonly HealthChecker $health) {}
 
     /** GET /system/info — public; clients call it on start-up (min client versions, deployment mode, realtime endpoint). */
-    public function info(): JsonResponse
+    public function info(Request $request): JsonResponse
     {
         $siteId = null;
         $tz = 'Africa/Lagos';
@@ -46,7 +47,8 @@ class SystemController
             'vatEnabled' => $vat,
             'realtime' => [
                 'scheme' => $reverb['options']['scheme'] ?? 'http',
-                'host' => $reverb['options']['host'] ?? '127.0.0.1',
+                // Loopback/unset REVERB_HOST => echo the host the client used to reach the API (LAN IP, 10.0.2.2 from the Android emulator, ...).
+                'host' => $this->realtimeHost((string) ($reverb['options']['host'] ?? ''), $request),
                 'port' => (int) ($reverb['options']['port'] ?? 8081),
                 'appKey' => $reverb['key'] ?? '',
             ],
@@ -65,5 +67,10 @@ class SystemController
     public function live(): JsonResponse
     {
         return response()->json(['status' => 'ok', 'serverTime' => now('UTC')->format('Y-m-d\TH:i:s.v\Z')]);
+    }
+
+    private function realtimeHost(string $configured, Request $request): string
+    {
+        return in_array($configured, ['', '127.0.0.1', 'localhost', '0.0.0.0', '::1'], true) ? $request->getHost() : $configured;
     }
 }
