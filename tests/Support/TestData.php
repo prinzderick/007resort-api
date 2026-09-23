@@ -92,10 +92,14 @@ final class TestData
     public static function wipe(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        // Append-only ledger tables carry BEFORE DELETE triggers that (correctly) refuse DELETE; TRUNCATE is DDL and bypasses them.
+        $ledger = array_map(fn ($r) => $r->t, DB::select(
+            "SELECT DISTINCT EVENT_OBJECT_TABLE AS t FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND EVENT_MANIPULATION = 'DELETE'"
+        ));
         foreach (DB::select('SHOW TABLES') as $row) {
             $t = array_values((array) $row)[0];
             if (! in_array($t, ['migrations', 'capability_type', 'role', 'permission', 'role_permission', 'audit_chain_head'], true)) {
-                DB::table($t)->delete();
+                in_array($t, $ledger, true) ? DB::statement("TRUNCATE TABLE `{$t}`") : DB::table($t)->delete();
             }
         }
         DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER'])->get(['id'])
