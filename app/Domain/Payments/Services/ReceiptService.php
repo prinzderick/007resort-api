@@ -7,7 +7,6 @@ use App\Domain\Payments\Support\ReceiptRenderer;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
-use App\Support\Money\Money;
 use App\Support\RequestContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;

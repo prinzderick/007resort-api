@@ -5,6 +5,7 @@ namespace Tests\Feature\Payments;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\PaymentsWorld;
+use Tests\Support\TestData;
 use Tests\TestCase;
 
 class PaymentTakingTest extends TestCase
@@ -207,7 +208,7 @@ class PaymentTakingTest extends TestCase
 
     public function test_order_of_another_facility_is_a_facility_mismatch(): void
     {
-        $other = \Tests\Support\TestData::facility($this->t, 'spa')->id;
+        $other = TestData::facility($this->t, 'spa')->id;
         $order = $this->makeOrder('1000.0000', 'SERVED', null, $other);
         $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $order, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'F1']]), $this->auth($this->cashierToken))
             ->assertStatus(409)->assertJsonPath('code', 'facility_mismatch');
@@ -216,16 +217,16 @@ class PaymentTakingTest extends TestCase
     public function test_permissions_are_enforced_per_permission_not_per_role_name(): void
     {
         $order = $this->makeOrder('1000.0000');
-        $waiter = \Tests\Support\TestData::staff($this->t, 'waiter1');
-        \Tests\Support\TestData::assign($waiter, 'WAIT_STAFF', 'SITE');
+        $waiter = TestData::staff($this->t, 'waiter1');
+        TestData::assign($waiter, 'WAIT_STAFF', 'SITE');
         $token = $this->loginToken('waiter1');
         $body = $this->payBody([['orderId' => $order, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'W1']]);
         $this->postJson('/api/v1/payments', $body, $this->auth($token))->assertForbidden()->assertJsonPath('code', 'permission_denied');
 
         // a custom role with a made-up name and only payment.take works; without payment.split it cannot split
-        $role = \Tests\Support\TestData::customRole('TILL_TEMP', 'Weekend till', ['payment.take']);
-        $temp = \Tests\Support\TestData::staff($this->t, 'temp1');
-        \Tests\Support\TestData::assignRole($temp, $role, 'SITE');
+        $role = TestData::customRole('TILL_TEMP', 'Weekend till', ['payment.take']);
+        $temp = TestData::staff($this->t, 'temp1');
+        TestData::assignRole($temp, $role, 'SITE');
         $tt = $this->loginToken('temp1');
         $split = $this->payBody([['orderId' => $order, 'amount' => '1000.0000']], [
             ['tenderType' => 'TRANSFER', 'amount' => '400.0000', 'reference' => 'W2'], ['tenderType' => 'TRANSFER', 'amount' => '600.0000', 'reference' => 'W3'],
@@ -320,8 +321,8 @@ class PaymentTakingTest extends TestCase
         $this->getJson('/api/v1/payments?filter[facilityId]='.$this->facility.'&filter[orderId]='.$order, $this->auth($this->supervisorToken, null))->assertOk()
             ->assertJsonPath('items.0.id', $p['id'])->assertJsonPath('nextCursor', null);
         // someone without payment.view cannot read another cashier's payment
-        $waiter = \Tests\Support\TestData::staff($this->t, 'waiter2');
-        \Tests\Support\TestData::assign($waiter, 'WAIT_STAFF', 'SITE');
+        $waiter = TestData::staff($this->t, 'waiter2');
+        TestData::assign($waiter, 'WAIT_STAFF', 'SITE');
         $this->getJson('/api/v1/payments/'.$p['id'], $this->auth($this->loginToken('waiter2'), null))->assertForbidden();
     }
 }
@@ -331,8 +332,8 @@ final class TestData_staff
 {
     public static function make(array $t, string $user): object
     {
-        $s = \Tests\Support\TestData::staff($t, $user);
-        \Tests\Support\TestData::assign($s, 'CASHIER', 'SITE');
+        $s = TestData::staff($t, $user);
+        TestData::assign($s, 'CASHIER', 'SITE');
 
         return $s;
     }

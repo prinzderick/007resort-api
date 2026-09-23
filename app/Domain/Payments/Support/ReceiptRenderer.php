@@ -2,6 +2,9 @@
 
 namespace App\Domain\Payments\Support;
 
+use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
+
 /**
  * Turns a receipt payload into fixed-width text lines for 80mm thermal printers (ESC/POS font A = 48 columns; pass 32 for
  * 58mm). Clients that render natively can ignore this and use the structured fields; both come from ONE payload so they
@@ -109,7 +112,7 @@ final class ReceiptRenderer
 
     public static function money(string $v): string
     {
-        [$int, $dec] = array_pad(explode('.', bcadd($v, '0', 2)), 2, '00');
+        [$int, $dec] = array_pad(explode('.', Money::roundHalfUp($v, 2)), 2, '00');
         $neg = str_starts_with($int, '-');
         $int = ltrim($int, '-');
 
@@ -130,7 +133,7 @@ final class ReceiptRenderer
             return '';
         }
         try {
-            return \Carbon\CarbonImmutable::parse($iso)->setTimezone(config('payments.receipt.timezone', 'Africa/Lagos'))->format('d/m/Y H:i');
+            return CarbonImmutable::parse($iso)->setTimezone(config('payments.receipt.timezone', 'Africa/Lagos'))->format('d/m/Y H:i');
         } catch (\Throwable) {
             return $iso;
         }

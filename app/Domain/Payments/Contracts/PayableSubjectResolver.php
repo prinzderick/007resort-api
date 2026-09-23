@@ -2,10 +2,12 @@
 
 namespace App\Domain\Payments\Contracts;
 
+use App\Domain\Payments\Events\PaymentCaptured;
+
 /**
  * Non-order things a customer can pay online through Paystack (bookings, memberships). The Booking / Membership modules
  * bind an implementation; the default one (NullPayableSubjectResolver) rejects with 422 `payable_subject_unsupported`.
- * On capture Payments dispatches {@see \App\Domain\Payments\Events\PaymentCaptured} (with subjectType/subjectId) and the
+ * On capture Payments dispatches {@see PaymentCaptured} (with subjectType/subjectId) and the
  * owning module confirms the booking / activates the membership from a listener.
  */
 interface PayableSubjectResolver

@@ -5,6 +5,7 @@ namespace App\Domain\Payments\Provider;
 use App\Domain\Payments\Contracts\PaymentProviderAdapter;
 use App\Support\Http\ApiProblem;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -120,7 +121,7 @@ class PaystackAdapter implements PaymentProviderAdapter
     }
 
     /**
-     * @param  callable(PendingRequest): \Illuminate\Http\Client\Response  $do
+     * @param  callable(PendingRequest): Response  $do
      * @return array<string, mixed>|null
      */
     private function call(callable $do, string $op, bool $allow404 = false): ?array

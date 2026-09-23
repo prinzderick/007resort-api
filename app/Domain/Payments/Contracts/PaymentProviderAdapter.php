@@ -4,6 +4,7 @@ namespace App\Domain\Payments\Contracts;
 
 use App\Domain\Payments\Provider\VerifiedTransaction;
 use App\Domain\Payments\Provider\WebhookEvent;
+use App\Support\Http\ApiProblem;
 
 /**
  * Provider adapter (ADR-0009). Paystack first; Flutterwave later = one more implementation of this interface.
@@ -20,7 +21,7 @@ interface PaymentProviderAdapter
      * @param  array<string, mixed>  $metadata  echoed back by the provider (never put secrets here)
      * @return array{authorizationUrl: string, accessCode: ?string}
      *
-     * @throws \App\Support\Http\ApiProblem 502 provider_error when the provider is unreachable / rejects the request
+     * @throws ApiProblem 502 provider_error when the provider is unreachable / rejects the request
      */
     public function initialize(string $reference, string $amount, string $currency, string $email, ?string $callbackUrl, array $metadata): array;
 
@@ -28,7 +29,7 @@ interface PaymentProviderAdapter
      * Ask the provider (server to server) what really happened to a transaction. This - not a webhook body, not a
      * client redirect - is the only thing allowed to make a payment CAPTURED.
      *
-     * @throws \App\Support\Http\ApiProblem 502 provider_error on transport errors / unparsable responses
+     * @throws ApiProblem 502 provider_error on transport errors / unparsable responses
      */
     public function verify(string $reference): VerifiedTransaction;
 

@@ -352,10 +352,15 @@ class PaymentService
     /** @return null|array{id: string, facilityId: string} */
     private function cashSessionFor(?string $sessionId, string $facilityId, string $staffId, bool $hasCash): ?array
     {
-        if ($sessionId === null && $hasCash && $this->rules->requireCashSession($facilityId)) {
+        if ($sessionId === null) {
+            // The cashier's own open drawer at this facility is used automatically (cash AND non-cash: shift reports need both).
             $open = DB::selectOne("SELECT id FROM cash_session WHERE staff_id = ? AND status = 'OPEN' AND facility_unit_id = ? FOR SHARE", [Ids::toBinary($staffId), Ids::toBinary($facilityId)]);
             if ($open === null) {
-                throw ApiProblem::conflict('cash_session_required', 'Open a cash session before taking cash at this facility.');
+                if ($hasCash && $this->rules->requireCashSession($facilityId)) {
+                    throw ApiProblem::conflict('cash_session_required', 'Open a cash session before taking cash at this facility.');
+                }
+
+                return null;
             }
             $sessionId = Ids::fromBinary($open->id);
         }

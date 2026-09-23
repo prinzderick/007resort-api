@@ -2,13 +2,14 @@
 
 namespace App\Domain\Payments\Services;
 
+use App\Domain\Payments\Contracts\ApprovalPort;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 
 /**
  * The hook Orders' approval-decision service calls, inside the decision transaction, once a supervisor has APPROVED an
- * approval whose `action` is `payment.refund` or `payment.reversal` (see {@see \App\Domain\Payments\Contracts\ApprovalPort}).
+ * approval whose `action` is `payment.refund` or `payment.reversal` (see {@see ApprovalPort}).
  * A REJECTED / CANCELLED approval needs no Payments action: nothing was applied while it was PENDING.
  */
 class PaymentApprovalHandler

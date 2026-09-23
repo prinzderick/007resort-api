@@ -2,9 +2,11 @@
 
 namespace App\Domain\Payments\Contracts;
 
+use App\Domain\Payments\Services\DbOrderPort;
+
 /**
  * What Payments needs from the Orders module (module boundary, docs/MODULES.md: a module talks to another through its
- * Services/Events). The default binding is {@see \App\Domain\Payments\Services\DbOrderPort}: it READS `order`/`tab`/`order_line`
+ * Services/Events). The default binding is {@see DbOrderPort}: it READS `order`/`tab`/`order_line`
  * (allowed: foreign-key style lookups) and delegates every WRITE to Orders' `OrderSettlementService` when that class exists.
  *
  * Locking contract: lockTab/lockOrders MUST use SELECT ... FOR UPDATE and MUST be called before any other read in the
@@ -15,7 +17,7 @@ interface OrderPort
 {
     /**
      * @return null|array{id: string, facilityId: string, status: string, orderIds: list<string>} null if the tab does not exist.
-     *                                                                                              `orderIds` = every order attached to the tab (any status).
+     *                                                                                            `orderIds` = every order attached to the tab (any status).
      */
     public function lockTab(string $tabId): ?array;
 

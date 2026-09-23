@@ -2,10 +2,12 @@
 
 namespace App\Domain\Payments\Contracts;
 
+use App\Domain\Payments\Services\PaymentApprovalHandler;
+
 /**
  * Supervisor-approval workflow (architecture/06 §3, contract `/approvals`). Orders owns the workflow; Payments only
  * creates PENDING approvals for refunds / reversals and applies them when a supervisor approves
- * ({@see \App\Domain\Payments\Services\PaymentApprovalHandler}).
+ * ({@see PaymentApprovalHandler}).
  */
 interface ApprovalPort
 {

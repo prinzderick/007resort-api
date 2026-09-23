@@ -2,6 +2,8 @@
 
 namespace Tests\Support;
 
+use App\Domain\Payments\Support\FacilityRules;
+use App\Domain\Payments\Support\Ledger;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 
@@ -133,7 +135,7 @@ trait PaymentsWorld
             ['facility_capability_id' => $capId, 'rule_key' => $key],
             ['id' => Ids::toBinary(Ids::uuid7()), 'rule_value' => $value],
         );
-        app(\App\Domain\Payments\Support\FacilityRules::class)->forget();
+        app(FacilityRules::class)->forget();
     }
 
     protected function setVat(bool $on, string $tin = 'TIN-12345678'): void
@@ -155,7 +157,7 @@ trait PaymentsWorld
 
     protected function paidOf(string $orderId): string
     {
-        return \App\Domain\Payments\Support\Ledger::paidByOrder([$orderId])[$orderId];
+        return Ledger::paidByOrder([$orderId])[$orderId];
     }
 
     protected function orderStatus(string $orderId): string

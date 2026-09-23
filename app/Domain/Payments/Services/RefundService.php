@@ -15,6 +15,7 @@ use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\Sync\Outbox;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -157,7 +158,7 @@ class RefundService
         }
         $refundable = bcsub(Money::normalize((string) $p->amount), Money::normalize((string) $p->refunded_amount), 4);
         if (bccomp($amount, $refundable, 4) > 0) {
-            throw ApiProblem::unprocessable('amount_mismatch', "Cannot refund {$amount}: only {$refundable} of this payment is still refundable.", [], );
+            throw ApiProblem::unprocessable('amount_mismatch', "Cannot refund {$amount}: only {$refundable} of this payment is still refundable.", []);
         }
     }
 
@@ -168,7 +169,7 @@ class RefundService
             throw ApiProblem::conflict('payment_state_invalid', "A payment in status {$p->status} cannot be reversed (use a refund for a partially refunded payment).", ['status' => $p->status]);
         }
         if ($p->cash_session_id === null) {
-            $age = now('UTC')->diffInHours(\Carbon\CarbonImmutable::parse((string) $p->created_at, 'UTC'), true);
+            $age = now('UTC')->diffInHours(CarbonImmutable::parse((string) $p->created_at, 'UTC'), true);
             if ($age > (int) config('payments.reversal_window_hours', 24)) {
                 throw ApiProblem::conflict('payment_state_invalid', 'The reversal window for this payment has passed: use a refund instead.');
             }
