@@ -98,7 +98,7 @@ final class KdsService
             $t = DB::table('prep_ticket')->where('id', $pre->id)->lockForUpdate()->first();
             Concurrency::assertVersion((int) $t->row_version, $ifMatch, 'prep ticket');
             if (! in_array($to, self::LEGAL[$t->status] ?? [], true)) {
-                throw ApiProblem::conflict('order_state_invalid', "A ticket that is {$t->status} cannot move to {$to}.", ['status' => $t->status, 'allowed' => self::LEGAL[$t->status] ?? []]);
+                throw ApiProblem::conflict('order_state_invalid', "A ticket that is {$t->status} cannot move to {$to}.", ['currentStatus' => $t->status, 'allowed' => self::LEGAL[$t->status] ?? []]);
             }
             $now = Fmt::now();
             $staff = Ids::toBinary(Authz::staffId());
