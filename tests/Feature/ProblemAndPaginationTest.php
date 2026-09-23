@@ -26,13 +26,13 @@ class ProblemAndPaginationTest extends TestCase
 
         $this->get('/api/v1/me')->assertStatus(401)->assertJsonPath('code', 'unauthenticated'); // no Accept header
         $this->getJson('/api/v1/nope')->assertStatus(404)->assertJsonPath('code', 'not_found');
-        $this->postJson('/api/v1/auth/staff/logout')->assertStatus(401)->assertJsonPath('code', 'unauthenticated')->assertHeader('WWW-Authenticate', 'Bearer');
+        $this->postJson('/api/v1/auth/staff/logout', [], ['X-Correlation-Id' => 'abc-123'])->assertStatus(401)->assertJsonPath('code', 'unauthenticated')->assertJsonPath('correlationId', 'abc-123')->assertHeader('X-Correlation-Id', 'abc-123')->assertHeader('WWW-Authenticate', 'Bearer');
         $this->getJson('/api/v1/auth/staff/login')->assertStatus(405)->assertJsonPath('code', 'method_not_allowed');
         $this->postJson('/api/v1/_p/validate', ['qty' => 0])->assertStatus(422)
-            ->assertJsonPath('code', 'validation_failed')->assertJsonPath('errors.0.field', 'qty')->assertJsonPath('errors.0.code', 'min');
+            ->assertJsonPath('code', 'validation_failed')->assertJsonPath('errors.qty.0', 'The qty field must be at least 1.');
 
         config(['app.debug' => false]);
-        $this->getJson('/api/v1/_p/boom')->assertStatus(500)->assertJsonPath('code', 'internal_error')->assertJsonMissingPath('debug');
+        $this->getJson('/api/v1/_p/boom')->assertStatus(500)->assertJsonPath('code', 'server_error')->assertJsonMissingPath('debug');
     }
 
     public function test_cursor_pagination_walks_all_rows_without_duplicates(): void
@@ -51,8 +51,8 @@ class ProblemAndPaginationTest extends TestCase
             $req = Request::create('/x', 'GET', array_filter(['limit' => 3, 'cursor' => $cursor]));
             $page = CursorPage::paginate(FacilityUnit::query()->where('site_id', $t['site']), $req);
             $out = $page->toArray(fn ($f) => $f->id);
-            array_push($seen, ...$out['data']);
-            $cursor = $out['page']['nextCursor'];
+            array_push($seen, ...$out['items']);
+            $cursor = $out['nextCursor'];
             $pages++;
         } while ($cursor !== null);
 

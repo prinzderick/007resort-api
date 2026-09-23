@@ -37,7 +37,6 @@ jobs:
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
-      DB_DATABASE: r007_ci
       DB_USERNAME: root
       DB_PASSWORD: ""
       REDIS_HOST: 127.0.0.1
@@ -70,6 +69,8 @@ jobs:
           mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS r007_foundation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
 
       - name: Migrations apply to MySQL 8.4 (fresh)
+        env:
+          DB_DATABASE: r007_ci
         run: php artisan migrate:fresh --force
 
       - name: Lint (Pint)

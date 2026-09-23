@@ -31,7 +31,7 @@ class RequirePermission
             throw ApiProblem::unauthenticated();
         }
 
-        $deny = fn () => ApiProblem::forbidden('permission_denied', "Missing permission: {$permission}.", ['permission' => $permission]);
+        $deny = fn () => ApiProblem::permissionDenied($permission);
 
         if (! $this->checker->can($staffId, $permission)) {
             throw $deny();
@@ -43,7 +43,7 @@ class RequirePermission
             $value = is_object($value) && method_exists($value, 'getKey') ? $value->getKey() : $value;
             $value ??= $request->input($key);
             if (! is_string($value) || $value === '') {
-                throw ApiProblem::badRequest('scope_required', "'{$key}' is required to authorize this request.");
+                throw ApiProblem::badRequest('validation_failed', "'{$key}' is required to authorize this request.");
             }
             $scope = match ($kind) {
                 'facility' => Scope::facility($value),
@@ -56,7 +56,7 @@ class RequirePermission
                     throw $deny();
                 }
             } catch (ModelNotFoundException) {
-                throw ApiProblem::notFound('scope_not_found', 'The referenced facility/site was not found.');
+                throw ApiProblem::notFound('not_found', 'The referenced facility/site was not found.');
             }
         }
 

@@ -3,6 +3,7 @@
 use App\Domain\Identity\Http\Middleware\RequirePermission;
 use App\Domain\Identity\Http\Middleware\RequireStepUp;
 use App\Support\Http\ApiProblem;
+use App\Support\Http\CorrelationId;
 use App\Support\Http\OpenApiController;
 use App\Support\Http\ProblemRenderer;
 use App\Support\Idempotency\Idempotent;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [CorrelationId::class]);
         $middleware->redirectGuestsTo(fn () => null); // API only: never redirect to a login page
 
         // Route middleware aliases usable from any module's routes.php.
