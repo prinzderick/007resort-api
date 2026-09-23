@@ -4,6 +4,7 @@ namespace Tests\Feature\Membership;
 
 use App\Domain\Membership\Models\Membership;
 use App\Domain\Membership\Services\MembershipLifecycle;
+use App\Domain\Membership\Services\MembershipPayableSubject;
 use App\Domain\Membership\Services\MembershipScheduler;
 use App\Domain\Membership\Services\MembershipService;
 use App\Support\Audit\Audit;
@@ -90,8 +91,21 @@ class MembershipTest extends TestCase
 
         // and the Event listener route works with a plain event object.
         $m2 = $this->postJson('/api/v1/memberships', ['planId' => $plan->id, 'customer' => ['name' => 'Two']], $this->idem($tok))->json('id');
-        event('App\\Domain\\Payments\\Events\\PaymentCaptured', [(object) ['paymentId' => Ids::uuid7(), 'metadata' => ['membershipId' => $m2], 'reference' => 'R2']]);
+        event('App\\Domain\\Payments\\Events\\PaymentCaptured', [(object) ['paymentId' => Ids::uuid7(), 'subjectType' => 'MEMBERSHIP', 'subjectId' => $m2, 'provider' => 'PAYSTACK']]);
         $this->assertSame('ACTIVE', Membership::find($m2)->status);
+    }
+
+    public function test_payable_subject_resolves_amount_due(): void
+    {
+        [, $tok] = $this->actor('reception', 'CASHIER');
+        $plan = $this->plan(['price' => '75000.0000']);
+        $pending = $this->postJson('/api/v1/memberships', ['planId' => $plan->id, 'customer' => ['name' => 'Pay Later']], $this->idem($tok))->json('id');
+        $resolver = app(MembershipPayableSubject::class);
+        $this->assertSame('75000.0000', $resolver->resolve('MEMBERSHIP', $pending)['amountDue']);
+        $this->assertNull($resolver->resolve('BOOKING', $pending));
+        $this->assertNull($resolver->resolve('MEMBERSHIP', Ids::uuid7()));
+        app(MembershipService::class)->cancel($pending, 'changed mind', null);
+        $this->assertNull($resolver->resolve('MEMBERSHIP', $pending));
     }
 
     public function test_same_customer_phone_reuses_the_customer(): void

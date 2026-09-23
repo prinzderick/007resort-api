@@ -2,12 +2,10 @@
 
 namespace App\Domain\Reporting;
 
+use App\Domain\Reporting\Console\InstallViewsCommand;
 use Illuminate\Support\ServiceProvider;
 
-/**
- * Reporting module. Auto-registered by App\Providers\ModuleServiceProvider (see docs/MODULES.md).
- * Optional siblings, all auto-loaded: routes.php (under /api/v1), Migrations/, config.php.
- */
+/** Reporting module (read-only). Auto-registered by App\Providers\ModuleServiceProvider. */
 class ReportingServiceProvider extends ServiceProvider
 {
     public function register(): void
@@ -17,6 +15,8 @@ class ReportingServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        if ($this->app->runningInConsole()) {
+            $this->commands([InstallViewsCommand::class]);
+        }
     }
 }

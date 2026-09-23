@@ -92,7 +92,7 @@ final class TestData
     public static function wipe(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
-        foreach (DB::select('SHOW TABLES') as $row) {
+        foreach (DB::select("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'") as $row) {
             $t = array_values((array) $row)[0];
             if (! in_array($t, ['migrations', 'capability_type', 'role', 'permission', 'role_permission', 'audit_chain_head'], true)) {
                 DB::table($t)->delete();
