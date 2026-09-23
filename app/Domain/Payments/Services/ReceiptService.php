@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Services;
 
+use App\Domain\Organization\Services\TaxSettingService;
 use App\Domain\Payments\Support\Fmt;
 use App\Domain\Payments\Support\ReceiptRenderer;
 use App\Support\Audit\Audit;
@@ -52,8 +53,8 @@ class ReceiptService
             $change = bcadd($change, $t['changeGiven'], 4);
         }
 
-        $vat = DB::table('organization_tax_setting')->where('organization_id', Ids::toBinary($ctx['organizationId']))->first();
-        $vatRegistered = $vat !== null && (bool) $vat->vat_enabled;
+        $vat = app(TaxSettingService::class)->get($ctx['organizationId']); // ADR-0011: admin-settable, default not registered
+        $vatRegistered = $vat['vatEnabled'] && $vat['vatNumber'] !== null;
         $org = DB::table('organization')->where('id', Ids::toBinary($ctx['organizationId']))->value('name');
         $site = DB::table('site')->where('id', Ids::toBinary($ctx['siteId']))->value('name');
         $facility = DB::table('facility_unit')->where('id', Ids::toBinary($ctx['facilityId']))->value('name');
@@ -90,8 +91,8 @@ class ReceiptService
             ], $ctx['tenders']),
             'changeGiven' => $change,
             'vatRegistered' => $vatRegistered,
-            'vatRatePercent' => $vatRegistered ? rtrim(rtrim((string) $vat->vat_rate_percent, '0'), '.') : null,
-            'vatNumber' => $vatRegistered ? $vat->vat_number : null,
+            'vatRatePercent' => $vatRegistered ? $vat['vatRatePercent'] : null,
+            'vatNumber' => $vatRegistered ? $vat['vatNumber'] : null,
             'qrPayload' => null,
             'footer' => (string) config('payments.receipt.footer', ''),
         ];

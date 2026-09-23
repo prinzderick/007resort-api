@@ -78,7 +78,7 @@ Payments' own key: `require_cash_session` (default true).
 ## Receipts
 
 Immutable snapshot at issue time (`receipt.payload`), number `RCP-YYYYMMDD-NNNNNN` per site per Lagos business day. `taxTotal`
-is 0 and no VAT line / TIN is emitted unless `organization_tax_setting.vat_enabled` was on at issue time. `printLines` = 48-column text
+is 0 and no VAT line / TIN is emitted unless the organization was VAT registered (`TaxSettingService`, ADR-0011) at issue time. `printLines` = 48-column text
 for 80mm printers (`RECEIPT_COLUMNS=32` for 58mm). Reprints are counted in `receipt_reprint`, audited, and marked `duplicate`.
 
 ## Integration points

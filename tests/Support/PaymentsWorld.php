@@ -142,7 +142,7 @@ trait PaymentsWorld
     {
         DB::table('organization_tax_setting')->updateOrInsert(
             ['organization_id' => Ids::toBinary($this->t['org'])],
-            ['vat_enabled' => $on ? 1 : 0, 'vat_rate_percent' => '7.5', 'vat_number' => $on ? $tin : null],
+            ['vat_registered' => $on ? 1 : 0, 'default_vat_rate' => '7.5', 'tin' => $on ? $tin : null],
         );
     }
 
