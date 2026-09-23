@@ -22,6 +22,4 @@ Route::middleware('auth:staff')->group(function () {
     });
     Route::put('catalog/products/{id}/price', [CatalogController::class, 'setPrice'])->middleware(['permission:pricing.manage', 'idempotent']);
 
-    Route::get('admin/settings/tax', [CatalogController::class, 'getTax'])->middleware('permission:config.manage');
-    Route::put('admin/settings/tax', [CatalogController::class, 'updateTax'])->middleware(['permission:config.manage', 'idempotent']);
 });

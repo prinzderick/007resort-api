@@ -121,35 +121,25 @@ class CatalogTest extends OrdersTestCase
             DB::table('audit_log')->where('action', 'like', 'catalog.%')->orderBy('seq')->pluck('action')->all());
     }
 
-    public function test_vat_setting_is_admin_settable_default_off_and_audited(): void
+    public function test_vat_setting_changed_through_the_admin_endpoint_drives_order_pricing(): void
     {
+        // ADR-0011: the setting lives in the Organization module; pricing must honour it live (default OFF)
         $owner = TestData::staff($this->f->t, 'owner');
         TestData::assign($owner, 'OWNER', 'ORGANIZATION');
+        $this->assertSame('9000.0000', $this->draft(['jollof' => 2])->json('total'));
         $g = $this->api('owner', 'GET', '/admin/settings/tax')->assertOk();
         $this->assertFalse($g->json('vatEnabled'));
-        $this->assertSame('7.5', $g->json('vatRatePercent'));
-        $this->api('waiter', 'GET', '/admin/settings/tax')->assertStatus(403);
-        $u = $this->api('owner', 'PUT', '/admin/settings/tax', ['vatEnabled' => true, 'vatRatePercent' => '7.5', 'pricesTaxInclusive' => false, 'vatNumber' => 'TIN-123'])->assertOk();
-        $this->assertTrue($u->json('vatEnabled'));
-        $this->assertFalse($u->json('pricesTaxInclusive'));
-        $this->api('owner', 'PUT', '/admin/settings/tax', ['vatRatePercent' => '150'])->assertStatus(422);
-        $this->assertSame('9675.0000', $this->draft(['jollof' => 2])->json('total')); // exclusive 7.5 %
-        $this->assertSame(1, DB::table('audit_log')->where('action', 'config.tax.update')->count());
-        $this->assertSame(Ids::toBinary($this->f->t['org']), DB::table('organization_tax_setting')->value('organization_id'));
+        $this->api('owner', 'PUT', '/admin/settings/tax', ['vatEnabled' => true, 'vatRatePercent' => '7.5', 'pricesTaxInclusive' => false, 'vatNumber' => 'TIN-123'], ['If-Match' => $this->etag($g)])->assertOk();
+        $r = $this->draft(['jollof' => 2], 'waiter', 'T2');
+        $this->assertSame('9675.0000', $r->json('total')); // exclusive 7.5 %
+        $this->assertSame('675.0000', $r->json('taxTotal'));
     }
 
-    public function test_categories_list_and_system_info_is_public(): void
+    public function test_categories_list(): void
     {
         $cat = DB::table('product_category')->first();
         $r = $this->api('waiter', 'GET', '/catalog/categories')->assertOk();
         $this->assertSame('Menu', $r->json('items.0.name'));
         $this->assertSame(Ids::fromBinary($cat->id), $r->json('items.0.id'));
-        $info = $this->getJson('/api/v1/system/info')->assertOk();
-        $this->assertSame('007resort-api', $info->json('service'));
-        $this->assertSame('local', $info->json('deploymentMode'));
-        $this->assertSame('NGN', $info->json('currency'));
-        $this->assertSame(8081, $info->json('realtime.port'));
-        $this->assertSame('ws', $info->json('realtime.scheme'));
-        $this->assertArrayHasKey('appKey', $info->json('realtime'));
     }
 }

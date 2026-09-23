@@ -14,14 +14,12 @@ use App\Domain\Orders\Broadcast\TableUpdated;
 use App\Domain\Orders\Events\OrderSent;
 use App\Domain\Orders\Events\OrderVoided;
 use App\Support\Ids;
-use Illuminate\Broadcasting\BroadcastManager;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\Support\OrdersFixture;
-use Tests\Support\TestData;
 
 /** api/realtime.md: events, channels, envelope; dispatched after commit; domain events for other modules. */
 class RealtimeBroadcastTest extends OrdersTestCase
@@ -132,36 +130,12 @@ class RealtimeBroadcastTest extends OrdersTestCase
         return $id;
     }
 
-    private function realtimeOn(): void
+    public function test_the_channels_our_events_use_are_authorised_by_the_realtime_registry(): void
     {
-        config(['broadcasting.default' => 'reverb', 'broadcasting.connections.reverb.key' => 'test-key', 'broadcasting.connections.reverb.secret' => 'test-secret', 'broadcasting.connections.reverb.app_id' => 'test-app']);
-        app(BroadcastManager::class)->purge('reverb');
-        Channels::define(); // callbacks live on the driver instance
-    }
-
-    private function auth(string $user, string $channel)
-    {
-        $this->flushHeaders();
-
-        return $this->withToken($this->token($user))->postJson('/api/v1/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => 'private-'.$channel]);
-    }
-
-    public function test_channel_authorisation_follows_permissions_and_returns_a_clean_403(): void
-    {
-        $this->realtimeOn();
-        $st = $this->f->kitchenStation;
-        $fid = $this->f->restaurant->id;
-        $ok = $this->auth('chef', "kds.station.{$st}")->assertOk();
-        $this->assertStringStartsWith('test-key:', $ok->json('auth'));
-        $this->auth('barman', "kds.station.{$st}")->assertOk();
-        $this->auth('waiter', "facility.{$fid}.orders")->assertOk();
-        $this->auth('waiter', "kds.station.{$st}")->assertStatus(403)->assertJsonPath('code', 'permission_denied');
-        TestData::staff($this->f->t, 'nobody'); // no role at all
-        $this->auth('nobody', "facility.{$fid}.orders")->assertStatus(403)->assertJsonPath('code', 'permission_denied');
-        $this->auth('nobody', "kds.station.{$st}")->assertStatus(403);
-        $this->auth('waiter', "facility.{$this->f->club->id}.orders")->assertStatus(403);
-        $this->auth('waiter', 'site.status')->assertStatus(403);
-        $this->auth('waiter', 'device.'.Ids::uuid7())->assertStatus(403);
-        $this->withToken('r7a_bogus')->postJson('/api/v1/broadcasting/auth', ['socket_id' => '1.2', 'channel_name' => "private-kds.station.{$st}"])->assertStatus(401);
+        // channel rules live in Devices (App\Support\Realtime\Channels); orders/KDS only publish to these patterns
+        $patterns = \App\Support\Realtime\Channels::patterns();
+        foreach (['kds.station.{stationId}', 'facility.{facilityId}.orders', 'device.{deviceId}'] as $p) {
+            $this->assertContains($p, $patterns);
+        }
     }
 }

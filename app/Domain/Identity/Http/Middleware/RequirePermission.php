@@ -31,9 +31,12 @@ class RequirePermission
             throw ApiProblem::unauthenticated();
         }
 
-        $deny = fn () => ApiProblem::permissionDenied($permission);
+        // `permission:a|b` = holds ANY of them (rarely needed; prefer one code).
+        $alternatives = explode('|', $permission);
+        $deny = fn () => ApiProblem::permissionDenied($alternatives[0]);
+        $holds = fn (?Scope $scope = null) => (bool) array_filter($alternatives, fn ($p) => $this->checker->can($staffId, $p, $scope));
 
-        if (! $this->checker->can($staffId, $permission)) {
+        if (! $holds()) {
             throw $deny();
         }
 
@@ -52,7 +55,7 @@ class RequirePermission
                 default => throw new \InvalidArgumentException("Unknown permission scope kind '{$kind}'."),
             };
             try {
-                if (! $this->checker->can($staffId, $permission, $scope)) {
+                if (! $holds($scope)) {
                     throw $deny();
                 }
             } catch (ModelNotFoundException) {

@@ -4,6 +4,10 @@ namespace App\Domain\Identity;
 
 use App\Domain\Identity\Models\UserAccount;
 use App\Domain\Identity\Services\PermissionChecker;
+use App\Domain\Identity\Services\PrivilegeGuard;
+use App\Domain\Identity\Services\RoleAssignmentService;
+use App\Domain\Identity\Services\SessionRevoker;
+use App\Domain\Identity\Services\StaffAdminService;
 use App\Domain\Identity\Services\StaffAuthService;
 use App\Domain\Identity\Services\StepUpService;
 use App\Support\RequestContext;
@@ -18,7 +22,10 @@ class IdentityServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(PermissionChecker::class);
-        $this->app->singleton(StaffAuthService::class);
+        foreach ([StaffAuthService::class, PrivilegeGuard::class, SessionRevoker::class,
+            StaffAdminService::class, RoleAssignmentService::class] as $svc) {
+            $this->app->singleton($svc);
+        }
         $this->app->singleton(StepUpService::class);
     }
 

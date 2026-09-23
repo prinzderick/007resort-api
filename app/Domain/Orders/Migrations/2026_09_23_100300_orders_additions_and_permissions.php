@@ -26,7 +26,7 @@ return new class extends Migration
     private const BUNDLES = [
         'WAIT_STAFF' => ['order.view', 'order.serve', 'order.void.execute', 'order.discount.execute', 'order.comp.execute', 'tab.open', 'table.manage'],
         'BARTENDER' => ['order.view', 'order.serve', 'order.line.add', 'order.line.remove_unsent', 'order.send', 'order.void.execute', 'order.discount.execute', 'tab.open', 'tab.view_own_facility', 'catalog.availability.manage'],
-        'KITCHEN_STAFF' => ['order.view', 'catalog.availability.manage'],
+        'KITCHEN_STAFF' => ['catalog.availability.manage'],
         'CASHIER' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage'],
         'UNIT_SUPERVISOR' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage', 'catalog.availability.manage', 'prep_ticket.view', 'prep_ticket.transition'],
         'MANAGER' => ['order.view', 'order.serve', 'order.discount.execute', 'order.price_override.execute', 'order.comp.execute', 'tab.open', 'table.manage', 'catalog.availability.manage', 'catalog.manage', 'prep_ticket.view', 'prep_ticket.transition'],

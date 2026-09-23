@@ -4,7 +4,6 @@ namespace App\Domain\Catalog\Http\Controllers;
 
 use App\Domain\Catalog\Services\CatalogAdmin;
 use App\Domain\Catalog\Services\CatalogService;
-use App\Domain\Catalog\Services\TaxSettings;
 use App\Support\Api\Authz;
 use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
@@ -20,7 +19,7 @@ use Illuminate\Validation\Rule;
 
 class CatalogController
 {
-    public function __construct(private readonly CatalogService $catalog, private readonly CatalogAdmin $admin, private readonly TaxSettings $tax) {}
+    public function __construct(private readonly CatalogService $catalog, private readonly CatalogAdmin $admin) {}
 
     public function categories(Request $request)
     {
@@ -183,26 +182,6 @@ class CatalogController
         $p = $this->admin->setPrice($this->id($id), $d['amount'], isset($d['facilityId']) ? Ids::normalize($d['facilityId']) : null);
 
         return Concurrency::json($p, 200, $p['rowVersion']);
-    }
-
-    // ---- tax setting (ADR-0011) --------------------------------------------------------------------------------
-
-    public function getTax(): JsonResponse
-    {
-        $t = $this->tax->get(Tenant::organizationId());
-
-        return Concurrency::json($t, 200, $t['rowVersion']);
-    }
-
-    public function updateTax(Request $request): JsonResponse
-    {
-        $d = $request->validate([
-            'vatEnabled' => ['sometimes', 'boolean'], 'vatRatePercent' => ['sometimes', 'string'],
-            'pricesTaxInclusive' => ['sometimes', 'boolean'], 'vatNumber' => ['sometimes', 'nullable', 'string', 'max:64'],
-        ]);
-        $t = $this->tax->update(Tenant::organizationId(), $d, Concurrency::ifMatch($request, false));
-
-        return Concurrency::json($t, 200, $t['rowVersion']);
     }
 
     private function facility(mixed $facilityId): string

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Catalog\Services;
 
+use App\Domain\Organization\Services\TaxSettingService;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class Pricing
 {
-    public function __construct(private readonly TaxSettings $tax) {}
+    public function __construct(private readonly TaxSettingService $tax) {}
 
     /** Effective unit price for a product at a facility: facility price beats list-wide; latest valid_from wins. */
     public function unitPrice(string $productId, string $facilityId, ?string $at = null): ?string

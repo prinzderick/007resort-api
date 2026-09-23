@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Catalog & pricing schema (architecture/03, 04 §2; ADR-0011 tax setting).
+ * Catalog & pricing schema (architecture/03, 04 §2). The ADR-0011 VAT setting (organization_tax_setting) lives in the Organization module.
  * product.kind is the commercial kind; the contract's Product.kind (FOOD|DRINK|RETAIL|...) is derived from it + prep route.
  * product_facility: a product is sold at a facility ONLY if a row exists (absence = NOT_SOLD_HERE).
  */
@@ -15,19 +15,6 @@ return new class extends Migration
     public function up(): void
     {
         $t = self::T;
-
-        // ADR-0011: org-level VAT setting, admin editable, default OFF.
-        DB::unprepared("CREATE TABLE organization_tax_setting (
-  organization_id     BINARY(16) NOT NULL PRIMARY KEY,
-  vat_enabled         TINYINT(1) NOT NULL DEFAULT 0,
-  vat_rate_percent    DECIMAL(7,4) NOT NULL DEFAULT 7.5000 CHECK (vat_rate_percent >= 0 AND vat_rate_percent <= 100),
-  prices_tax_inclusive TINYINT(1) NOT NULL DEFAULT 1,
-  vat_number          VARCHAR(64) NULL,
-  row_version         INT UNSIGNED NOT NULL DEFAULT 1,
-  created_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  updated_at          DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_ots_org FOREIGN KEY (organization_id) REFERENCES organization (id)
-) $t");
 
         DB::unprepared("CREATE TABLE product_category (
   id               BINARY(16) NOT NULL PRIMARY KEY,
@@ -44,7 +31,7 @@ return new class extends Migration
   INDEX ix_pc_org (organization_id, sort_order)
 ) $t");
 
-        // Rate table. VAT is applied only when organization_tax_setting.vat_enabled = 1; a row with rate 0 = exempt.
+        // Rate table. VAT is applied only when organization_tax_setting.vat_registered = 1; a row with rate 0 = exempt.
         DB::unprepared("CREATE TABLE tax_rate (
   id               BINARY(16) NOT NULL PRIMARY KEY,
   organization_id  BINARY(16) NOT NULL,
@@ -162,7 +149,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        foreach (['product_stock_link', 'product_facility', 'price', 'price_list', 'product', 'prep_route', 'tax_rate', 'product_category', 'organization_tax_setting'] as $t) {
+        foreach (['product_stock_link', 'product_facility', 'price', 'price_list', 'product', 'prep_route', 'tax_rate', 'product_category'] as $t) {
             DB::statement("DROP TABLE IF EXISTS `$t`");
         }
     }

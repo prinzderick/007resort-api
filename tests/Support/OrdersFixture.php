@@ -114,7 +114,7 @@ final class OrdersFixture
     public function setVat(bool $enabled, string $rate = '7.5', bool $inclusive = true): void
     {
         DB::table('organization_tax_setting')->updateOrInsert(['organization_id' => Ids::toBinary($this->t['org'])], [
-            'vat_enabled' => $enabled ? 1 : 0, 'vat_rate_percent' => $rate, 'prices_tax_inclusive' => $inclusive ? 1 : 0,
+            'vat_registered' => $enabled ? 1 : 0, 'default_vat_rate' => $rate, 'prices_tax_inclusive' => $inclusive ? 1 : 0, 'tin' => $enabled ? 'TIN-0001' : null,
         ]);
     }
 }

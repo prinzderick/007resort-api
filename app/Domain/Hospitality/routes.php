@@ -1,10 +1,7 @@
 <?php
 
 use App\Domain\Hospitality\Http\Controllers\KdsController;
-use App\Domain\Hospitality\Http\Controllers\SystemInfoController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('system/info', SystemInfoController::class); // public
 
 Route::middleware('auth:staff')->group(function () {
     Route::get('kds/stations', [KdsController::class, 'stations']);
