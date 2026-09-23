@@ -95,7 +95,8 @@ final class TestData
         foreach (DB::select('SHOW TABLES') as $row) {
             $t = array_values((array) $row)[0];
             if (! in_array($t, ['migrations', 'capability_type', 'role', 'permission', 'role_permission', 'audit_chain_head'], true)) {
-                DB::table($t)->delete();
+                // Append-only ledgers (DELETE trigger) are emptied with TRUNCATE, which does not fire row triggers.
+                in_array($t, ['stock_movement'], true) ? DB::statement("TRUNCATE TABLE `{$t}`") : DB::table($t)->delete();
             }
         }
         DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER'])->get(['id'])

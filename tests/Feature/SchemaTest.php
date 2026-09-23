@@ -15,9 +15,10 @@ class SchemaTest extends TestCase
     {
         $this->assertSame(22, DB::table('capability_type')->count());
         $this->assertSame(11, DB::table('role')->count());
-        $this->assertSame(42, DB::table('permission')->count());
+        // V0001 seeds 42 permissions; modules add more via their own migrations, and OWNER must always hold every one.
+        $this->assertGreaterThanOrEqual(42, DB::table('permission')->count());
         $owner = DB::table('role')->where('code', 'OWNER')->value('id');
-        $this->assertSame(42, DB::table('role_permission')->where('role_id', $owner)->count());
+        $this->assertSame(DB::table('permission')->count(), DB::table('role_permission')->where('role_id', $owner)->count());
         $this->assertGreaterThan(80, DB::table('role_permission')->count());
     }
 
