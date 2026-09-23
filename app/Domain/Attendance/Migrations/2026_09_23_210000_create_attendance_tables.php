@@ -26,6 +26,7 @@ return new class extends Migration
   status            VARCHAR(12) NOT NULL DEFAULT \'ACTIVE\' CHECK (status IN (\'ACTIVE\',\'DISABLED\')),
   last_seen_at      DATETIME(6) NULL,
   last_punch_at     DATETIME(6) NULL,
+  adms_stamp        VARCHAR(32) NULL COMMENT \'ZKTeco ATTLOGStamp echoed back in the handshake\',
   row_version       INT UNSIGNED NOT NULL DEFAULT 1,
   created_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   updated_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
