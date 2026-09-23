@@ -13364,6 +13364,7 @@ components:
             type: object
             properties:
               id: {$ref: '#/components/schemas/Uuid'}
+              parentId: {type: [string, 'null'], description: parent facility (Sports Arena > Lawn Tennis); online flags roll up from descendants}
               code: {type: string}
               kind: {type: string}
               name: {type: string}

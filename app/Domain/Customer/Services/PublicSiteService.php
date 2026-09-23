@@ -5,6 +5,7 @@ namespace App\Domain\Customer\Services;
 use App\Domain\Sync\Services\SiteAvailability;
 use App\Support\Ids;
 use App\Support\Node;
+use App\Support\Tenancy\FacilityTree;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
@@ -24,16 +25,20 @@ class PublicSiteService
 
         $facilities = [];
         foreach (DB::table('facility_unit')->where('site_id', Ids::toBinary((string) $siteId))->where('is_active', 1)->whereNull('deleted_at')->orderBy('code')->get() as $f) {
-            $res = DB::table('bookable_resource')->where('facility_unit_id', $f->id)->where('is_active', 1)->whereNull('deleted_at');
+            $tree = array_map(Ids::toBinary(...), FacilityTree::selfAndDescendants(Ids::fromBinary($f->id)));
+            $res = DB::table('bookable_resource')->whereIn('facility_unit_id', $tree)->where('is_active', 1)->whereNull('deleted_at');
             $bookable = (clone $res)->where('online_bookable', 1)->exists();
             $hours = (clone $res)->join('availability_schedule as s', 's.resource_id', '=', 'bookable_resource.id')->selectRaw('MIN(s.open_time) o, MAX(s.close_time) c')->first();
-            $tickets = $this->catalog->ticketProductIds(Ids::fromBinary($f->organization_id), Ids::fromBinary($f->id)) !== [];
+            $tickets = false;
+            foreach ($tree as $t) {
+                $tickets = $tickets || $this->catalog->ticketProductIds(Ids::fromBinary($f->organization_id), Ids::fromBinary($t)) !== [];
+            }
             $notice = null;
             if ($tickets && ! $fresh) {
                 $notice = 'Same-day online tickets are temporarily unavailable. Advance tickets are still on sale.';
             }
             $facilities[] = [
-                'id' => Ids::fromBinary($f->id), 'code' => $f->code, 'kind' => $f->kind ?? 'GENERAL', 'name' => $f->name, 'description' => null,
+                'id' => Ids::fromBinary($f->id), 'parentId' => $f->parent_id ? Ids::fromBinary($f->parent_id) : null, 'code' => $f->code, 'kind' => $f->kind ?? 'GENERAL', 'name' => $f->name, 'description' => null,
                 'openingHours' => $hours && $hours->o ? substr($hours->o, 0, 5).' - '.substr($hours->c, 0, 5) : null, 'phone' => null,
                 'onlineBookable' => $bookable || $tickets, 'onlineBooking' => $bookable, 'onlineTickets' => $tickets, 'sameDayAvailable' => $fresh, 'onlineNotice' => $notice,
             ];

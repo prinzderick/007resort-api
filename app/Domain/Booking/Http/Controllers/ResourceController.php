@@ -13,6 +13,7 @@ use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\RequestContext;
+use App\Support\Tenancy\FacilityTree;
 use App\Support\Tenancy\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,8 @@ class ResourceController
             if (! Ids::isUuid($fac)) {
                 throw ApiProblem::unprocessable('validation_failed', 'facilityId must be a UUID.');
             }
-            $q->where('facility_unit_id', strtolower($fac));
+            // A public caller asking for a parent facility (Sports Arena) gets its children's resources too (tennis, football, ...).
+            Actor::isPublic() ? $q->whereIn('facility_unit_id', array_map(Ids::toBinary(...), FacilityTree::selfAndDescendants(strtolower($fac)))) : $q->where('facility_unit_id', strtolower($fac));
         }
 
         return Paged::envelope(CursorPage::paginate($q, $request, 'id', 'asc'), fn ($r) => BookingPresenter::resource($r));
