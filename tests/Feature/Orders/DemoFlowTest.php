@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Orders;
 
+use App\Domain\Orders\Broadcast\ApprovalDecided;
+use App\Domain\Orders\Broadcast\ApprovalRequested;
 use App\Support\Demo\DemoIds;
 use App\Support\Ids;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\Support\DemoApi;
 use Tests\TestCase;
 
@@ -117,5 +120,26 @@ class DemoFlowTest extends TestCase
         $expect = [DemoIds::of('kds:INDOOR_CLUB:BAR'), DemoIds::operatingPoint('MAIN_KITCHEN', 'MAIN_KITCHEN')];
         sort($expect);
         $this->assertSame($expect, $stations);
+    }
+
+    public function test_device_context_is_recorded_and_approvals_reach_the_supervisors_checked_out_tablet(): void
+    {
+        $this->seedDemo();
+        Event::fake([ApprovalRequested::class, ApprovalDecided::class]);
+        $rst = DemoIds::facility('RESTAURANT');
+        $waiterTablet = $this->deviceToken('TABLET_WAITER_01');
+        $supTablet = DemoIds::device('TABLET_SUPERVISOR_1');
+        // manager checks the supervisor's tablet out at the Restaurant
+        $this->as('manager1', 'POST', "/devices/{$supTablet}/checkout", ['staffId' => DemoIds::staff('supervisor1'), 'facilityId' => $rst])->assertOk();
+
+        $h = ['X-Device-Token' => $waiterTablet];
+        $o = $this->as('wait1', 'POST', '/orders', ['facilityId' => $rst, 'tableId' => DemoIds::of('table:RESTAURANT:T3'), 'lines' => [['productId' => DemoIds::of('product:FD-JOL-CH'), 'quantity' => 1]]], $h)->assertStatus(201);
+        $this->assertSame(DemoIds::device('TABLET_WAITER_01'), $o->json('deviceId'));
+        $sent = $this->as('wait1', 'POST', '/orders/'.$o->json('id').'/send', [], $h + ['If-Match' => $o->headers->get('ETag')])->assertOk();
+        $v = $this->as('wait1', 'POST', '/orders/'.$o->json('id').'/void', ['reason' => 'Guest left'], $h + ['If-Match' => $sent->headers->get('ETag')])->assertStatus(202);
+        Event::assertDispatched(ApprovalRequested::class, fn ($e) => $e->channels === ['device.'.$supTablet] && $e->data['approval']['id'] === $v->json('approval.id'));
+
+        $this->as('supervisor1', 'POST', '/approvals/'.$v->json('approval.id').'/decision', ['decision' => 'APPROVE'])->assertOk();
+        Event::assertDispatched(ApprovalDecided::class, fn ($e) => $e->channels === ['device.'.DemoIds::device('TABLET_WAITER_01')] && $e->data['applied'] === true);
     }
 }

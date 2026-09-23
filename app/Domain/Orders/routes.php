@@ -6,7 +6,7 @@ use App\Domain\Orders\Http\Controllers\TabController;
 use App\Domain\Orders\Http\Controllers\TableController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:staff')->group(function () {
+Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     // Dining tables
     Route::get('tables', [TableController::class, 'index']);
     Route::get('tables/{tableId}', [TableController::class, 'show']);

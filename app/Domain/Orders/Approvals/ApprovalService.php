@@ -17,6 +17,7 @@ use App\Support\RequestContext;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Sensitive-action approvals (architecture/06, 17 §5; contract Approval schema).
@@ -277,14 +278,21 @@ final class ApprovalService
         ]));
     }
 
-    /** Devices where a staff member holding the permission at the facility currently has a live session. @return list<string> */
+    /**
+     * Devices where a staff member holding the permission at the facility is signed in (live session) or has the tablet checked out.
+     *
+     * @return list<string>
+     */
     private function approverDevices(string $permission, string $facilityId, string $exceptStaff): array
     {
         $rows = DB::table('session as s')
             ->join('user_account as ua', 'ua.id', '=', 's.user_account_id')
             ->whereNotNull('s.device_id')->whereNull('s.revoked_at')->where('s.expires_at', '>', Fmt::now())
             ->where('ua.staff_id', '!=', Ids::toBinary($exceptStaff))
-            ->get(['ua.staff_id', 's.device_id']);
+            ->get(['ua.staff_id', 's.device_id'])
+            ->concat(Schema::hasTable('tablet_checkout')
+                ? DB::table('tablet_checkout')->whereNull('checked_in_at')->where('staff_id', '!=', Ids::toBinary($exceptStaff))->get(['staff_id', 'device_id'])
+                : collect());
         $out = [];
         $can = [];
         foreach ($rows as $r) {
