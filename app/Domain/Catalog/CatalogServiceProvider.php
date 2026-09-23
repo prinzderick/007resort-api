@@ -2,21 +2,21 @@
 
 namespace App\Domain\Catalog;
 
+use App\Domain\Catalog\Contracts\StockLevelProvider;
+use App\Domain\Catalog\Services\CatalogAdmin;
+use App\Domain\Catalog\Services\CatalogService;
+use App\Domain\Catalog\Services\NullStockLevelProvider;
+use App\Domain\Catalog\Services\Pricing;
 use Illuminate\Support\ServiceProvider;
 
-/**
- * Catalog module. Auto-registered by App\Providers\ModuleServiceProvider (see docs/MODULES.md).
- * Optional siblings, all auto-loaded: routes.php (under /api/v1), Migrations/, config.php.
- */
+/** Catalog module. Inventory may rebind StockLevelProvider to report availability/OUT_OF_STOCK. */
 class CatalogServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
-    }
-
-    public function boot(): void
-    {
-        //
+        $this->app->singleton(Pricing::class);
+        $this->app->singleton(CatalogAdmin::class);
+        $this->app->singleton(CatalogService::class);
+        $this->app->bindIf(StockLevelProvider::class, NullStockLevelProvider::class);
     }
 }

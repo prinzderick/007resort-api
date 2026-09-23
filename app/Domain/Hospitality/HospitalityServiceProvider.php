@@ -2,21 +2,20 @@
 
 namespace App\Domain\Hospitality;
 
+use App\Domain\Hospitality\Services\KdsService;
+use App\Domain\Hospitality\Services\StationRouter;
+use App\Domain\Hospitality\Services\TicketPresenter;
 use Illuminate\Support\ServiceProvider;
 
-/**
- * Hospitality module. Auto-registered by App\Providers\ModuleServiceProvider (see docs/MODULES.md).
- * Optional siblings, all auto-loaded: routes.php (under /api/v1), Migrations/, config.php.
- */
+/** Hospitality module: KDS stations, prep tickets, prep-ticket state machine. */
 class HospitalityServiceProvider extends ServiceProvider
 {
+    public function boot(): void {}
+
     public function register(): void
     {
-        //
-    }
-
-    public function boot(): void
-    {
-        //
+        $this->app->singleton(StationRouter::class);
+        $this->app->singleton(TicketPresenter::class);
+        $this->app->singleton(KdsService::class);
     }
 }
