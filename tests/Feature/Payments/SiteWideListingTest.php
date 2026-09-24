@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payments;
 
+use Carbon\CarbonImmutable;
 use Tests\Support\PaymentsWorld;
 use Tests\Support\TestData;
 use Tests\TestCase;
@@ -42,11 +43,11 @@ class SiteWideListingTest extends TestCase
     {
         $this->postJson('/api/v1/cash-sessions', ['facilityId' => $this->facility, 'openingFloat' => '1000.0000'], $this->auth($this->cashierToken))->assertCreated();
         foreach (['1000.0000' => '2020-03-04 10:00:00', '2000.0000' => null] as $amt => $when) {
-            \Carbon\CarbonImmutable::setTestNow($when);   // (test-only backdating: the ledger is immutable)
+            CarbonImmutable::setTestNow($when);   // (test-only backdating: the ledger is immutable)
             $order = $this->makeOrder($amt);
             $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $order, 'amount' => $amt]], [['tenderType' => 'CASH', 'amount' => $amt]]), $this->auth($this->cashierToken))->assertCreated();
         }
-        \Carbon\CarbonImmutable::setTestNow();
+        CarbonImmutable::setTestNow();
         $mgr = $this->auth($this->managerToken, null);
 
         $this->getJson('/api/v1/payments?filter[from]=2021-01-01', $mgr)->assertOk()->assertJsonCount(1, 'items')->assertJsonPath('items.0.amount', '2000.0000');

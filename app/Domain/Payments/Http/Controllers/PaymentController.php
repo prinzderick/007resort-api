@@ -14,6 +14,7 @@ use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\RequestContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -89,10 +90,10 @@ class PaymentController
         // filter[from] (inclusive) / filter[to] (exclusive; a bare YYYY-MM-DD `to` includes that whole UTC day) on created_at
         $range = validator($f, ['from' => ['nullable', 'date'], 'to' => ['nullable', 'date']])->validate();
         if (! empty($range['from'])) {
-            $q->where('created_at', '>=', \Carbon\CarbonImmutable::parse($range['from'], 'UTC')->utc()->format('Y-m-d H:i:s.u'));
+            $q->where('created_at', '>=', CarbonImmutable::parse($range['from'], 'UTC')->utc()->format('Y-m-d H:i:s.u'));
         }
         if (! empty($range['to'])) {
-            $to = \Carbon\CarbonImmutable::parse($range['to'], 'UTC')->utc();
+            $to = CarbonImmutable::parse($range['to'], 'UTC')->utc();
             $q->where('created_at', '<', ($this->bareDate($range['to']) ? $to->addDay() : $to)->format('Y-m-d H:i:s.u'));
         }
         if (! empty($f['groupId']) && Ids::isUuid($f['groupId'])) {
