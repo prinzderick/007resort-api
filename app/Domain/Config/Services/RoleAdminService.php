@@ -117,7 +117,7 @@ class RoleAdminService
             $version = (int) $role->row_version + 1;
             DB::table('role')->where('id', $role->id)->update(['row_version' => $version]);
             ConfigChange::record('config.role.permissions.set', 'Role', $role->public_id, ['permissions' => array_keys($current)], ['permissions' => array_keys($wanted), 'added' => $added, 'removed' => $removed, 'approvalChanged' => $approvalChanged],
-                'rolePermissions', ['code' => $role->code, 'permissions' => $wanted], $version);
+                'rolePermissions', ['code' => $role->code, 'permissions' => $wanted], $version, eventType: 'StaffRosterUpdated');
 
             return $this->matrix(Role::query()->find($role->id));
         });
@@ -156,7 +156,7 @@ class RoleAdminService
                     DB::table('role_permission')->insert(['role_id' => $role->id, 'permission_id' => $pid, 'requires_approval' => 0]);
                 }
                 ConfigChange::record('config.role.create', 'Role', $role->public_id, null, ['code' => $code, 'name' => $in['name'], 'permissions' => $codes], 'rolePermissions',
-                    ['code' => $code, 'name' => $in['name'], 'description' => $in['description'] ?? null, 'permissions' => array_fill_keys($codes, false)], 1);
+                    ['code' => $code, 'name' => $in['name'], 'description' => $in['description'] ?? null, 'permissions' => array_fill_keys($codes, false)], 1, eventType: 'StaffRosterUpdated');
 
                 return $this->matrix($role->refresh());
             });
@@ -185,7 +185,7 @@ class RoleAdminService
             }
             $version = (int) $role->row_version + 1;
             DB::table('role')->where('id', $role->id)->update($set + ['row_version' => $version]);
-            ConfigChange::record('config.role.update', 'Role', $role->public_id, array_intersect_key($role->getAttributes(), $set), $set, 'rolePermissions', ['code' => $role->code] + $set, $version);
+            ConfigChange::record('config.role.update', 'Role', $role->public_id, array_intersect_key($role->getAttributes(), $set), $set, 'rolePermissions', ['code' => $role->code] + $set, $version, eventType: 'StaffRosterUpdated');
 
             return $this->matrix(Role::query()->find($role->id));
         });
@@ -205,7 +205,7 @@ class RoleAdminService
             $perms = DB::table('role_permission as rp')->join('permission as p', 'p.id', '=', 'rp.permission_id')->where('rp.role_id', $role->id)->pluck('p.code')->all();
             DB::table('role_permission')->where('role_id', $role->id)->delete();
             DB::table('role')->where('id', $role->id)->delete();
-            ConfigChange::record('config.role.delete', 'Role', $role->public_id, ['code' => $role->code, 'name' => $role->name, 'permissions' => $perms], ['deleted' => true], 'rolePermissions', ['code' => $role->code, 'deleted' => true], (int) $role->row_version + 1);
+            ConfigChange::record('config.role.delete', 'Role', $role->public_id, ['code' => $role->code, 'name' => $role->name, 'permissions' => $perms], ['deleted' => true], 'rolePermissions', ['code' => $role->code, 'deleted' => true], (int) $role->row_version + 1, eventType: 'StaffRosterUpdated');
         });
     }
 }

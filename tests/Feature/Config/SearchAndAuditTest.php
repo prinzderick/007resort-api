@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Config;
 
+use App\Domain\Audit\Http\Controllers\AuditController;
 use App\Support\Demo\DemoIds;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
@@ -88,7 +89,7 @@ class SearchAndAuditTest extends ConfigTestCase
         $this->assertCount(3, $m->get("/audit?entityId={$fid}")->assertOk()->json('items'));
         $types = array_unique(array_column($m->get('/audit?limit=200')->json('items'), 'entityType'));
         foreach ($types as $t) {
-            $this->assertContains($t, \App\Domain\Audit\Http\Controllers\AuditController::CONFIG_ENTITY_TYPES);
+            $this->assertContains($t, AuditController::CONFIG_ENTITY_TYPES);
         }
         $this->api('cashier1')->get('/audit')->assertStatus(403);
     }

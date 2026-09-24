@@ -47,7 +47,7 @@ abstract class ConfigTestCase extends TestCase
     /** @return list<array<string, mixed>> ConfigurationUpdated outbox events for an entity (payload decoded) */
     protected function outbox(string $entityId, ?string $domain = null): array
     {
-        return DB::table('outbox_event')->where('event_type', 'ConfigurationUpdated')->where('entity_id', Ids::toBinary($entityId))->orderBy('created_at')->orderBy('entity_version')->get()
+        return DB::table('outbox_event')->whereIn('event_type', ['ConfigurationUpdated', 'StaffRosterUpdated'])->where('entity_id', Ids::toBinary($entityId))->orderBy('created_at')->orderBy('entity_version')->get()
             ->map(fn ($r) => ['version' => (int) $r->entity_version, 'payload' => json_decode($r->payload, true)])
             ->filter(fn ($e) => $domain === null || $e['payload']['domain'] === $domain)->values()->all();
     }

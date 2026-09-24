@@ -9,6 +9,7 @@ use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\Tenancy\Tenant;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -299,7 +300,7 @@ class CatalogCsvService
         $from = ($row['validFrom'] ?? '') === '' ? null : Fmt::clientTs($row['validFrom']);
         $listBin = $list ?? DB::table('price_list')->where('organization_id', $orgBin)->where('is_default', 1)->where('is_active', 1)->value('id');
         if ($listBin !== null && $from !== null) {
-            $fromEnd = \Carbon\CarbonImmutable::createFromFormat('Y-m-d H:i:s.u', $from, 'UTC')->addMillisecond()->format('Y-m-d H:i:s.u'); // exports carry millisecond precision
+            $fromEnd = CarbonImmutable::createFromFormat('Y-m-d H:i:s.u', $from, 'UTC')->addMillisecond()->format('Y-m-d H:i:s.u'); // exports carry millisecond precision
             $same = DB::table('price')->where('product_id', $product->id)->where('price_list_id', $listBin)->where('is_active', 1)->where('valid_from', '>=', $from)->where('valid_from', '<', $fromEnd)
                 ->where(fn ($q) => $facility === null ? $q->whereNull('facility_unit_id') : $q->where('facility_unit_id', $facility))->first();
             if ($same !== null && Money::normalize($same->amount) === Money::normalize($row['amount'])) {

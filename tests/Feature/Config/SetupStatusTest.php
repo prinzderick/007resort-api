@@ -2,9 +2,6 @@
 
 namespace Tests\Feature\Config;
 
-use App\Support\Demo\DemoIds;
-use App\Support\Ids;
-use Illuminate\Support\Facades\DB;
 use Tests\Support\TestData;
 use Tests\Support\TestResponseBuilder;
 use Tests\TestCase;

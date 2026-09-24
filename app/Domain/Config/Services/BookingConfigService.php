@@ -2,8 +2,11 @@
 
 namespace App\Domain\Config\Services;
 
+use App\Domain\Booking\Models\BookableResource;
+use App\Domain\Booking\Services\BookingRules;
 use App\Domain\Config\Support\ConfigChange;
 use App\Domain\Config\Support\ConfigVersion;
+use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
@@ -51,7 +54,7 @@ class BookingConfigService
     {
         return DB::transaction(function () use ($resourceId, $windows, $ifMatch): array {
             $r = $this->resource($resourceId, true);
-            \App\Support\Api\Concurrency::assertVersion((int) $r->row_version, $ifMatch, 'bookable resource');
+            Concurrency::assertVersion((int) $r->row_version, $ifMatch, 'bookable resource');
             $errors = [];
             foreach ($windows as $i => $w) {
                 if (! preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $w['open']) || ! preg_match('/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/', $w['close']) || $w['close'] <= $w['open']) {
@@ -135,7 +138,7 @@ class BookingConfigService
             DB::table('blackout')->insert(['id' => Ids::toBinary($id), 'organization_id' => $f->organization_id, 'facility_unit_id' => $f->id, 'starts_at' => CarbonImmutable::parse($in['start'])->utc()->format('Y-m-d H:i:s.u'),
                 'ends_at' => CarbonImmutable::parse($in['end'])->utc()->format('Y-m-d H:i:s.u'), 'reason' => $in['reason'] ?? null, 'created_by' => RequestContext::staffId() ? Ids::toBinary(RequestContext::staffId()) : null]);
             $v = $this->blackoutView(DB::table('blackout')->where('id', Ids::toBinary($id))->first());
-            ConfigChange::record('config.booking.blackout.create', 'Blackout', $id, null, $v, 'blackout', ['blackout' => $v, 'organizationId' => Ids::fromBinary($f->organization_id)], ConfigVersion::next($id),
+            ConfigChange::record('config.booking.blackout.create', 'Blackout', $id, null, $v, 'blackout', $v + ['organizationId' => Ids::fromBinary($f->organization_id)], ConfigVersion::next($id),
                 facilityId: Ids::fromBinary($f->id), organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
 
             return $v;
@@ -168,8 +171,8 @@ class BookingConfigService
             $v = $row?->{$col};
             $out[$key] = $v === null ? null : ($int ? (int) $v : (float) $v);
         }
-        $model = \App\Domain\Booking\Models\BookableResource::query()->find(Ids::fromBinary($r->id));
-        $eff = app(\App\Domain\Booking\Services\BookingRules::class)->for($model);
+        $model = BookableResource::query()->find(Ids::fromBinary($r->id));
+        $eff = app(BookingRules::class)->for($model);
         $effective = [];
         foreach (self::RULES as $key => [$col, , $int]) {
             $effective[$key] = $int ? (int) $eff[$col] : (float) $eff[$col];
@@ -183,7 +186,7 @@ class BookingConfigService
     {
         DB::transaction(function () use ($resourceId, $in, $ifMatch): void {
             $r = $this->resource($resourceId, true);
-            \App\Support\Api\Concurrency::assertVersion((int) $r->row_version, $ifMatch, 'bookable resource');
+            Concurrency::assertVersion((int) $r->row_version, $ifMatch, 'bookable resource');
             $old = $this->rules($resourceId);
             $vals = [];
             foreach (self::RULES as $key => [$col]) {
@@ -197,7 +200,7 @@ class BookingConfigService
             } else {
                 DB::table('booking_rule')->insert(['id' => Ids::toBinary(Ids::uuid7()), 'organization_id' => $r->organization_id, 'resource_id' => $r->id] + $vals);
             }
-            app(\App\Domain\Booking\Services\BookingRules::class)->forget();
+            app(BookingRules::class)->forget();
             $new = $this->rules($resourceId);
             if (json_encode(array_intersect_key($old, self::RULES)) === json_encode(array_intersect_key($new, self::RULES))) {
                 return;

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Config;
 
+use App\Domain\Config\Sync\ConfigSyncTargets;
+use App\Domain\Sync\Appliers\VersionedTargets;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -14,6 +16,7 @@ class ConfigServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Receive side of every ConfigurationUpdated domain this module emits (version-checked, see ConfigSyncTargets).
+        $this->callAfterResolving(VersionedTargets::class, fn (VersionedTargets $t) => ConfigSyncTargets::register($t));
     }
 }

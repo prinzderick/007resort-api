@@ -2,9 +2,12 @@
 
 namespace App\Domain\Audit\Http\Controllers;
 
+use App\Domain\Identity\Services\PermissionChecker;
 use App\Support\Audit\Audit;
+use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
+use App\Support\RequestContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,8 +26,8 @@ class AuditController
     public function index(Request $request): JsonResponse
     {
         $q = DB::table('audit_log');
-        $staff = \App\Support\RequestContext::staffId();
-        if ($staff !== null && ! app(\App\Domain\Identity\Services\PermissionChecker::class)->can($staff, 'audit.view')) {
+        $staff = RequestContext::staffId();
+        if ($staff !== null && ! app(PermissionChecker::class)->can($staff, 'audit.view')) {
             $q->whereIn('entity_type', self::CONFIG_ENTITY_TYPES);
         }
         if ($v = $request->query('entityTypes')) {
@@ -41,7 +44,7 @@ class AuditController
                 try {
                     $q->where('occurred_at', $op, CarbonImmutable::parse((string) $v)->utc()->format('Y-m-d H:i:s.u'));
                 } catch (\Throwable) {
-                    throw \App\Support\Http\ApiProblem::unprocessable('validation_failed', "{$param} must be an ISO-8601 date/time.", [$param => ['Invalid date.']]);
+                    throw ApiProblem::unprocessable('validation_failed', "{$param} must be an ISO-8601 date/time.", [$param => ['Invalid date.']]);
                 }
             }
         }

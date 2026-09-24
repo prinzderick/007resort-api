@@ -101,16 +101,17 @@ class FacilityAdminService
                 $row = DB::table('facility_unit')->where('id', Ids::toBinary($id))->first();
                 $this->rules->writeInitial($row, $rules, $caps);
 
+                // the facility event goes out BEFORE its starter operating points so the peer can apply them in order
+                $snapshot = $this->present($row) + ['operatingRules' => $rules];
+                ConfigChange::record('config.facility.create', 'Facility', $id, null, $snapshot, 'facilityFull',
+                    ['facility' => $this->present($row), 'operatingRules' => $rules, 'organizationId' => $orgId], 1, facilityId: $id, organizationId: $orgId, siteId: $siteId);
+
                 $starter = [];
                 if ($tpl !== null && ($in['applyStarter'] ?? true)) {
                     $starter = $this->points->createStarterKit($row, $tpl);
                 }
 
-                $snapshot = $this->present($row) + ['operatingRules' => $rules, 'starterOperatingPoints' => $starter];
-                ConfigChange::record('config.facility.create', 'Facility', $id, null, $snapshot, 'facilityFull',
-                    ['facility' => $this->present($row), 'operatingRules' => $rules], 1, facilityId: $id, organizationId: $orgId, siteId: $siteId);
-
-                return $snapshot;
+                return $snapshot + ['starterOperatingPoints' => $starter];
             });
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
@@ -193,7 +194,7 @@ class FacilityAdminService
                 $version = (int) $row->row_version + 1;
                 DB::table('facility_unit')->where('id', $row->id)->update(['is_active' => 0, 'deactivated_at' => Fmt::now(), 'deactivation_reason' => $reason, 'row_version' => $version]);
                 ConfigChange::record('config.facility.deactivate', 'Facility', $t, ['active' => true], ['active' => false, 'reason' => $reason, 'cascadedFrom' => $t === $id ? null : $id],
-                    'facilityDetails', ['isActive' => false], $version, facilityId: $t, organizationId: Ids::fromBinary($row->organization_id), siteId: Ids::fromBinary($row->site_id));
+                    'facilityDetails', ['isActive' => false, 'deactivationReason' => $reason], $version, facilityId: $t, organizationId: Ids::fromBinary($row->organization_id), siteId: Ids::fromBinary($row->site_id));
             }
 
             return $this->present(DB::table('facility_unit')->where('id', $f->id)->first());
@@ -214,7 +215,7 @@ class FacilityAdminService
             }
             $version = (int) $f->row_version + 1;
             DB::table('facility_unit')->where('id', $f->id)->update(['is_active' => 1, 'deactivated_at' => null, 'deactivation_reason' => null, 'row_version' => $version]);
-            ConfigChange::record('config.facility.reactivate', 'Facility', $id, ['active' => false], ['active' => true], 'facilityDetails', ['isActive' => true], $version,
+            ConfigChange::record('config.facility.reactivate', 'Facility', $id, ['active' => false], ['active' => true], 'facilityDetails', ['isActive' => true, 'deactivationReason' => null], $version,
                 facilityId: $id, organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
 
             return $this->present(DB::table('facility_unit')->where('id', $f->id)->first());
@@ -282,7 +283,7 @@ class FacilityAdminService
             DB::table('facility_capability')->where('facility_unit_id', $bin)->delete();
             $version = (int) $f->row_version + 1;
             DB::table('facility_unit')->where('id', $bin)->update(['deleted_at' => Fmt::now(), 'is_active' => 0, 'row_version' => $version]);
-            ConfigChange::record('config.facility.delete', 'Facility', $id, $snapshot, ['deleted' => true], 'facilityDetails', ['isActive' => false], $version,
+            ConfigChange::record('config.facility.delete', 'Facility', $id, $snapshot, ['deleted' => true], 'facilityDetails', ['isActive' => false, 'deletedAt' => Fmt::ts(Fmt::now())], $version,
                 facilityId: $id, organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
         });
     }

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Catalog\Services;
 
+use App\Domain\Config\Support\ConfigIds;
+use App\Domain\Config\Support\ConfigVersion;
 use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
 use App\Support\Audit\Audit;
@@ -87,14 +89,19 @@ final class CatalogAdmin
                 'image_url' => $in['imageUrl'] ?? null, 'description' => $in['description'] ?? null, 'barcode' => $in['barcode'] ?? null,
                 'modifiers' => isset($in['modifiers']) ? json_encode($in['modifiers']) : null,
             ]);
+            // the product's event goes out before anything that references it (facility links, prices) so a peer can apply them in order
+            Outbox::record('ConfigurationUpdated', 'Product', $id, ['domain' => 'product', 'changes' => $this->syncSnapshot($id)], 1);
             foreach ($in['facilityIds'] ?? [] as $fid) {
-                DB::table('product_facility')->insertOrIgnore(['product_id' => Ids::toBinary($id), 'facility_unit_id' => Ids::toBinary($fid)]);
+                if (DB::table('product_facility')->insertOrIgnore(['product_id' => Ids::toBinary($id), 'facility_unit_id' => Ids::toBinary($fid)]) > 0) {
+                    Outbox::record('ConfigurationUpdated', 'ProductFacility', ConfigIds::pair($id, $fid),
+                        ['domain' => 'productFacility', 'changes' => ['productId' => $id, 'facilityId' => $fid, 'available' => true, 'reason' => null, 'kdsStationId' => null, 'sortOrder' => 0]],
+                        ConfigVersion::next(ConfigIds::pair($id, $fid)), facilityId: $fid);
+                }
             }
             if (isset($in['price'])) {
                 $this->writePrice($id, $in['price'], null);
             }
             Audit::record('catalog.product.create', 'Product', $id, new: ['sku' => $in['sku'], 'name' => $in['name'], 'kind' => $in['kind'] ?? 'GOOD', 'price' => $in['price'] ?? null]);
-            Outbox::record('ConfigurationUpdated', 'Product', $id, ['domain' => 'product', 'changes' => $this->syncSnapshot($id)], 1);
 
             return $this->product($id);
         });
@@ -159,6 +166,7 @@ final class CatalogAdmin
             }
             $old = $this->writePrice($productId, $amount, $facilityId);
             DB::table('product')->where('id', $row->id)->update(['row_version' => $row->row_version + 1]);
+            Outbox::record('ConfigurationUpdated', 'Product', $productId, ['domain' => 'product', 'changes' => $this->syncSnapshot($productId)], (int) $row->row_version + 1); // the price change bumped the product version: keep the peer in step
             Audit::record('catalog.price.set', 'Product', $productId, old: ['amount' => $old, 'facilityId' => $facilityId], new: ['amount' => Money::normalize($amount), 'facilityId' => $facilityId], facilityUnitId: $facilityId);
 
             return $this->product($productId);
@@ -171,6 +179,7 @@ final class CatalogAdmin
         if (! $list) {
             $lid = Ids::uuid7();
             DB::table('price_list')->insert(['id' => Ids::toBinary($lid), 'organization_id' => Ids::toBinary(Tenant::organizationId()), 'name' => 'Standard', 'is_default' => 1]);
+            Outbox::record('ConfigurationUpdated', 'PriceList', $lid, ['domain' => 'priceList', 'changes' => ['organizationId' => Tenant::organizationId(), 'name' => 'Standard', 'currency' => 'NGN', 'isDefault' => true, 'active' => true]], 1);
             $listBin = Ids::toBinary($lid);
         } else {
             $listBin = $list->id;
@@ -189,9 +198,9 @@ final class CatalogAdmin
             'id' => Ids::toBinary($newId), 'price_list_id' => $listBin, 'product_id' => Ids::toBinary($productId),
             'facility_unit_id' => Fmt::b($facilityId), 'amount' => Money::normalize($amount), 'valid_from' => $now,
         ]);
-        Outbox::record('ConfigurationUpdated', 'Price', $newId, ['domain' => 'price', 'changes' => ['price' => [
-            'id' => $newId, 'priceListId' => Ids::fromBinary($listBin), 'productId' => $productId, 'facilityId' => $facilityId, 'amount' => Money::normalize($amount),
-            'validFrom' => Fmt::ts($now), 'validTo' => null, 'active' => true, 'rowVersion' => 1]]], 1, facilityId: $facilityId);
+        Outbox::record('ConfigurationUpdated', 'Price', $newId, ['domain' => 'price', 'changes' => [
+            'priceListId' => Ids::fromBinary($listBin), 'productId' => $productId, 'facilityId' => $facilityId, 'amount' => Money::normalize($amount),
+            'validFrom' => Fmt::ts($now), 'validTo' => null, 'active' => true]], 1, facilityId: $facilityId);
 
         return $prev === null ? null : Money::normalize($prev);
     }

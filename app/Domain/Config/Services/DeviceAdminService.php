@@ -2,10 +2,10 @@
 
 namespace App\Domain\Config\Services;
 
-use App\Domain\Config\Support\ConfigChange;
 use App\Domain\Devices\Models\Device;
 use App\Domain\Devices\Services\DeviceService;
 use App\Support\Api\Concurrency;
+use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
@@ -80,8 +80,8 @@ class DeviceAdminService
             DB::table('device')->where('id', Ids::toBinary($d->id))->update(array_merge($set, ['row_version' => $d->row_version + 1]));
             $fresh = Device::query()->find($d->id);
             $changed = array_keys(array_filter($new, fn ($v, $k) => $v !== $old[$k], ARRAY_FILTER_USE_BOTH));
-            ConfigChange::record('config.device.update', 'Device', $d->id, array_intersect_key($old, array_flip($changed)), array_intersect_key($new, array_flip($changed)),
-                'device', array_intersect_key($new, array_flip($changed)), (int) $fresh->row_version, facilityId: $new['facilityId']);
+            // Devices are node-local hardware: audited, deliberately NOT synced to the other node.
+            Audit::record('config.device.update', 'Device', $d->id, array_intersect_key($old, array_flip($changed)), array_intersect_key($new, array_flip($changed)), facilityUnitId: $new['facilityId']);
 
             return $this->devices->present($fresh);
         });

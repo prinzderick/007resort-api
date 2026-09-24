@@ -7,7 +7,7 @@ booking rules, payment methods, receipt settings, business profile, roles and pe
 All endpoints are under `/api/v1`, authenticated with a staff bearer token, camelCase JSON, RFC 7807 errors (`application/problem+json`, stable `code`).
 Machine-readable contract: `docs/openapi/v1.yaml` (every path below is marked `x-additive: true`). Base conventions: `docs/MODULES.md`.
 
-**Status legend:** `[built]` = merged in this branch and tested, `[planned]` = contract fixed, implementation in progress (the shape will not change).
+**Status legend:** `[built]` = merged in this branch and tested, `[built]` = contract fixed, implementation in progress (the shape will not change).
 
 ## 0. Conventions that apply to every endpoint
 
@@ -156,7 +156,7 @@ The effective `operatingRules` object of `GET /facilities/{id}/capabilities` exp
 | `KITCHEN` | KITCHEN | INVENTORY | {"stock_consumption_timing":"SEND"} | ; KDS PASS |
 
 
-## 3. Operating points, KDS stations `[planned]`
+## 3. Operating points, KDS stations `[built]`
 
 `kind`: `TABLE_AREA | COUNTER | GATE | STORE_WINDOW | STATION | ROOM`. A `STATION` can carry a KDS station (same id as the operating point, the convention Hospitality already uses).
 Object: `{id, facilityId, code, name, kind, defaultPrepStationId, active, rowVersion, kdsStation: {id, kind (KITCHEN|BAR|DISPENSE), prepRouteId, active} | null}`.
@@ -168,7 +168,7 @@ Object: `{id, facilityId, code, name, kind, defaultPrepStationId, active, rowVer
 | `PATCH /organization/operating-points/{id}` (If-Match) | `facility.manage` — `{name?, defaultPrepStationId?, kdsStation?: {prepRouteId}}` |
 | `POST /organization/operating-points/{id}/deactivate` / `reactivate` (If-Match) | `facility.manage` — deactivation refused (`409 operating_point_in_use`) while devices are assigned, prep tickets are open on the station or active tables belong to the area. |
 
-## 4. Dining tables `[planned]`
+## 4. Dining tables `[built]`
 
 Object: `{id, facilityId, operatingPointId (section/area), label, seats, status, active, sortOrder, mergedIntoId, mergedTableIds[], effectiveSeats, rowVersion}`.
 
@@ -183,13 +183,13 @@ Object: `{id, facilityId, operatingPointId (section/area), label, seats, status,
 
 Runtime table status changes stay on the existing `PATCH /tables/{id}` (`table.manage`).
 
-## 5. Devices `[planned]`
+## 5. Devices `[built]`
 
 `PATCH /devices/{id}` (`device.manage`, If-Match): `{name?, facilityId?: uuid|null, operatingPointId?: uuid|null, mode?, active?}`. `mode` must fit the device kind (TABLET: ATTENDANT|SUPERVISOR; POS_TERMINAL: POS; KDS_SCREEN: KDS; ENTRANCE_SCANNER: SPORTS_ENTRANCE|SPORTS_STORE;
 ATTENDANCE_TERMINAL: ATTENDANCE_TERMINAL); `operatingPointId` must belong to `facilityId` (KDS mode needs a KDS station); moving a device to another facility while it is checked out is refused (`409 device_checked_out`).
-Audited (`config.device.update`). The device presentation gains `operatingPointId`. Revoke is the existing `POST /devices/{id}/revoke` (`device.revoke`); `GET /devices` is now also open to `device.manage`.
+Audited (`config.device.update`); devices are node-local hardware, so this change is audited but deliberately not synced to the other node. The device presentation gains `operatingPointId`. Revoke is the existing `POST /devices/{id}/revoke` (`device.revoke`); `GET /devices` is now also open to `device.manage`.
 
-## 6. Catalogue configuration `[planned]`
+## 6. Catalogue configuration `[built]`
 
 Existing (unchanged): `GET /catalog/categories|products|prep-routes|tax-rates`, `PUT /catalog/products/{id}/availability/{facilityId}` (the "86" switch), `PUT /catalog/products/{id}/price`.
 Extended: product create/update accept `description`, `barcode` (unique per org), `modifiers`, and product objects return them.
@@ -208,15 +208,13 @@ Extended: product create/update accept `description`, `barcode` (unique per org)
 | `POST /catalog/categories/{id}/prep-route` | `catalog.manage` | `{prepRouteId|null, applyToProducts}` applies a prep route to every product of the category. |
 | `GET/PUT /catalog/products/{id}/stock-links` | `catalog.manage` | `{links:[{stockItemId, quantityPerUnit}]}` replaces the set (stock items must exist). |
 | `GET /catalog/products/export`, `GET /catalog/prices/export` | `catalog.manage` / `pricing.manage` | `text/csv` (UTF-8, header row). |
-| `POST /catalog/products/import?dryRun=true`, `POST /catalog/prices/import?dryRun=true` | `catalog.manage` / `pricing.manage` | Body: `text/csv`, or JSON `{csv: "..."}`. Upserts by `sku` (products) or `sku`+`facilityCode`+`priceList`+`validFrom` (prices). `dryRun=true` (default) validates and returns the report without writing; `dryRun=false` (Idempotency-Key) applies all-or-nothing. Report: `{dryRun, totalRows, valid, willCreate, willUpdate, unchanged, createdCategories[], errors[{row, field, message}], applied}`; errors on apply -> `422 import_validation_failed` with the same report. |
+| `POST /catalog/products/import?dryRun=true`, `POST /catalog/prices/import?dryRun=true` | `catalog.manage` / `pricing.manage` | Body: `text/csv`, or JSON `{csv: "..."}` (max 2 MB / 5000 rows). Upserts by `sku` (products) or `sku`+`facilityCode`+`priceList`+`validFrom` (prices). `dryRun=true` (default) validates and returns the report without writing; `dryRun=false` applies all-or-nothing. No Idempotency-Key needed: importing is idempotent by content (re-uploading the same file reports everything `unchanged`). The dry run executes the real import inside a rolled-back transaction, so it reports exactly what the real run would do (incl. price overlaps). Only the columns present in the file are considered: a missing column leaves the field alone, a present-but-blank cell clears it (`price`, `active`, `trackStock` blank = unchanged); new products need `sku,name,category`. Missing categories are created (reported in `createdCategories`). Report: `{dryRun, totalRows, valid, willCreate, willUpdate, unchanged, createdCategories[], errors[{row, field, message}], applied}`; errors on apply -> `422 import_validation_failed` with the same report. |
 
-Product CSV columns: `sku,name,category,kind,description,barcode,taxRateCode,prepRoute,trackStock,imageUrl,active,price`. Price CSV columns: `sku,facilityCode,priceList,amount,validFrom,validTo`.
+Product CSV columns: `sku,name,category,kind,description,barcode,taxRateCode,prepRoute,trackStock,imageUrl,active,price`. Price CSV columns: `sku,facilityCode,priceList,amount,validFrom,validTo`. Cells that start with `= + - @` are exported with a leading apostrophe (spreadsheet formula-injection guard) and un-escaped again on import. Prices: only the default price list is used at checkout; other lists are stored for future use. Creating a price end-dates the previous open-ended price of the same product/list/facility at the new `validFrom`.
 
-## 6b. Prices/products change history
+Products and prices are versioned rows (`rowVersion`); all catalogue changes above are audited (`config.catalog.*`; the existing `catalog.*` audit actions stay) and emit `ConfigurationUpdated`. Product `PATCH` keeps its existing optional `If-Match` (send it: a stale write gets 412).
 
-Products and prices are versioned rows (`rowVersion`); all catalogue changes above are audited (`config.catalog.*`, existing `catalog.*` actions stay) and emit `ConfigurationUpdated`.
-
-## 7. Ticket types `[planned]`
+## 7. Ticket types `[built]`
 
 `GET /ticketing/ticket-types?facilityId&active` (`config.view|ticket_type.manage|ticket.issue`), `POST /ticketing/ticket-types` (`ticket_type.manage`, Idempotency-Key),
 `PATCH /ticketing/ticket-types/{id}` (`ticket_type.manage`, If-Match). Fields: `code, name, facilityId, format (INDIVIDUAL|COMBINED), validationMode (NONE|SINGLE_USE|MULTIPLE_ENTRY|TIME_LIMITED|ENTRY_EXIT|STAFF_APPROVAL),
@@ -228,7 +226,7 @@ validityKind (ISSUE_DAY|DURATION_MINUTES|BOOKING_SLOT), validityMinutes (require
 Existing and sufficient: `GET /memberships/plans`, `POST /memberships/plans`, `PATCH /memberships/plans/{id}` (`membership.plan.manage`) including coverage via `facilityIds`/`propertyWide`, discounts and grace/renewal terms.
 Gap: plan edits have no `If-Match` (last write wins on the plan row; sold memberships snapshot their terms so money is unaffected).
 
-## 9. Booking configuration `[planned]`
+## 9. Booking configuration `[built]`
 
 Existing: `GET/POST /bookings/resources`, `PATCH /bookings/resources/{id}` (incl. `authority.offlineStrategy A|B|C`, `localReserveUnits`, `onlineStaleAfterSeconds`, `capacity`, `slotMinutes`, price, `active`), `POST /bookings/resources/{id}/blackouts` (`booking.configure`).
 Added (all `booking.configure`):
@@ -236,7 +234,7 @@ Added (all `booking.configure`):
 - `GET /bookings/resources/{id}/blackouts?from&to`, `DELETE /bookings/blackouts/{id}`, `POST /bookings/blackouts` (facility-wide `{facilityId,start,end,reason}`).
 - `GET|PUT /bookings/resources/{id}/rules` — resource-level overrides of the booking rules `{holdTtlSeconds, minNoticeMinutes, maxAdvanceDays, cancelCutoffMinutes, cancelFeePercent, rescheduleCutoffMinutes, maxReschedules, earlyEntryMinutes}` (`null` = inherit the facility rule, then the property default).
 
-## 10. Settings `[planned]`
+## 10. Settings `[built]`
 
 | Endpoint | Permission | Notes |
 | --- | --- | --- |
@@ -245,7 +243,7 @@ Added (all `booking.configure`):
 | `GET/PUT /admin/settings/tax` | `config.manage` | Existing (ADR-0011). |
 | `GET/PUT /facilities/{id}/payment-methods` (ETag/If-Match = facility version) | `config.view` / `settings.manage` | `{methods: {CASH: true, CARD: false, TRANSFER: true, POS_TERMINAL: true, PAYSTACK: true}}`; no row = all enabled. Enforced by the payment service: a disabled tender is refused with `422 payment_method_disabled`. At least one method must stay enabled at a facility with PAYMENT_ACCEPTANCE. |
 
-## 11. Roles and permissions `[planned]`
+## 11. Roles and permissions `[built]`
 
 Existing: `GET /roles`, `GET /permissions`, staff CRUD + credentials (`staff.manage`), role assignments (`role_assignment.manage`, with anti-escalation).
 Staff "invitation" = an admin creates the staff member (`POST /staff`) and sets a PIN/password (`PUT /staff/{id}/credentials/...`); there is no e-mailed invitation link yet (gap).
@@ -256,7 +254,7 @@ Staff "invitation" = an admin creates the staff member (`POST /staff`) and sets 
 | `PUT /roles/{roleId}/permissions` (If-Match) | `role.manage` | `{permissions:[{code, requiresApproval?}]}` = the complete set. Anti-escalation: the caller must hold EVERY permission being added and every permission the role currently has (you cannot edit a role above you); OWNER is immutable (`403 role_immutable`); unknown codes 422. Audited with the added/removed lists; sessions keep working (permissions are read per request). |
 | `POST /roles`, `PATCH /roles/{roleId}`, `DELETE /roles/{roleId}` | `role.manage` | Custom roles: `{name, description?, permissions?}` (code derived from the name); `DELETE` only for a custom role with no active assignments (`409 role_in_use`). System roles can be edited (permissions) but not renamed/deleted. |
 
-## 12. Setup progress, search, history `[planned]`
+## 12. Setup progress, search, history `[built]`
 
 `GET /admin/setup-status` (`config.view`): `{percent, complete, steps:[{key,label,done,required,count,hint}], counts{...}, missing:[keys]}` — steps: `business_profile, facilities, products, prices, tax, staff, roles, devices, kds_stations,
 payment_methods, receipt_settings, booking_resources, tables`; steps that do not apply to this property (no facility uses that capability) are `required: false` and excluded from `percent`.
@@ -271,10 +269,23 @@ Use `entityType=Facility&entityId=<id>&order=desc` for a "change history" panel 
 
 ## 13. Sync (two nodes)
 
-Domains emitted as `ConfigurationUpdated`: `facilityFull` (create, v1), `facilityDetails`, `facilityCapabilities`, `facilityRules`, `facilityPaymentMethods`, `operatingPoint`, `diningTable`, `product`, `priceList`, `price`, `taxRate`, `prepRoute`,
-`ticketType`, `receiptSetting`, `businessProfile`, `role`. The receiving node applies each one only when `entityVersion == localVersion + 1` (gap -> deferred, stale -> `CONFIGURATION_CONFLICT`).
-See "Gaps" in the PR for domains whose apply side is not wired yet.
+Every write also writes an outbox event in the same transaction. Domains emitted as `ConfigurationUpdated {domain, changes}` (payload `changes` = camelCase columns / a snapshot; `entityVersion` = the aggregate's `rowVersion` after the change):
+`facilityFull` (create, v1: facility + capabilities + rules), `facilityDetails`, `facilityCapabilities`, `facilityRules`, `facilityPaymentMethods` (all versioned on the facility's `row_version`), `operatingPoint` (+ its KDS station), `diningTable`,
+`productCategory`, `product`, `productStockLinks`, `productFacility`, `priceList`, `price`, `taxRate`, `prepRoute`, `prepRouteStation`, `ticketType`, `bookableResource`, `resourceSchedule`, `resourceRules`, `blackout`, `receiptSetting`, `businessProfile`.
+Role permission sets are emitted as `StaffRosterUpdated {domain: rolePermissions}` (permission conflicts follow the roster rules). Composite-key rows without their own `row_version` (blackout, product-at-facility, prep-route-station) are versioned in `config_entity_version`.
+The receiving node (`App\Domain\Config\Sync\ConfigSyncTargets`) applies an event only when `entityVersion == localVersion + 1` (v1 creates the row), defers on a gap, and records a `CONFIGURATION_CONFLICT` for a stale version: never last-writer-wins.
+Not synced on purpose: devices (node-local hardware; audited only) and runtime state (table status). `tests/Feature/Config/ConfigSyncTest.php` drives a real local -> cloud drain over two MySQL databases.
 
 ## 14. Demo
 
 `php artisan r007:demo-seed` seeds the demo property; log in as `owner1` (PIN `1234`, OWNER at organization scope) to try every endpoint. `manager1` (MANAGER) holds the default manager bundle.
+
+## 15. Known gaps
+
+- `enforcement: planned` rules (approval thresholds per action, tab limits, online-orderable, max occupancy) are stored, audited and synced, but no runtime module enforces them yet (`enforcement: client` rules are enforced by the apps that read `operatingRules`).
+- Staff "invitation" is admin-driven (create + set PIN/password); there is no e-mailed invite/reset link yet.
+- Membership plan `PATCH` has no `If-Match`.
+- Only the default price list is used at checkout.
+- The `PAYSTACK` payment method flag is stored but online (Paystack) payments are not gated per facility yet; staff tenders (`CASH`, `CARD`, `TRANSFER`, `POS_TERMINAL`) are enforced.
+- Receipt `headerNote`, `logoUrl` and `businessPhone` are in the receipt payload; the pre-rendered `printLines` do not include them yet (clients draw the logo/header).
+- Merged tables: the order-taker table list hides merged-away tables, but orders are not yet re-pointed to the parent table by the server.

@@ -36,6 +36,7 @@ class SettingsTest extends ConfigTestCase
 
     public function test_receipt_settings(): void
     {
+        DB::table('receipt_setting')->delete(); // the demo seeds one; start from a property that never configured receipts
         $o = $this->owner();
         $r = $o->get('/admin/settings/receipt')->assertOk();
         $this->assertSame(0, $r->json('rowVersion'));

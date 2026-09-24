@@ -6,6 +6,7 @@ use App\Domain\Config\Services\CatalogConfigService;
 use App\Domain\Config\Services\CatalogCsvService;
 use App\Support\Api\Concurrency;
 use App\Support\Http\ApiProblem;
+use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Http\JsonResponse;
@@ -82,7 +83,7 @@ class CatalogConfigController
         if (($a = $request->query('active')) !== null && $a !== '') {
             $q->where('x.is_active', filter_var($a, FILTER_VALIDATE_BOOL) ? 1 : 0);
         }
-        $page = \App\Support\Http\CursorPage::paginate(DB::query()->fromSub($q, 'x'), $request, 'valid_from', 'desc');
+        $page = CursorPage::paginate(DB::query()->fromSub($q, 'x'), $request, 'valid_from', 'desc');
 
         return response()->json($page->toArray(fn ($r) => $this->config->priceView($r)));
     }

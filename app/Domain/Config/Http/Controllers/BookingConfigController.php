@@ -4,7 +4,6 @@ namespace App\Domain\Config\Http\Controllers;
 
 use App\Domain\Config\Services\BookingConfigService as S;
 use App\Support\Api\Concurrency;
-use App\Support\Ids;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;

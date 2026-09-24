@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Config;
 
+use App\Domain\Catalog\Services\Pricing;
 use App\Support\Demo\DemoIds;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,7 @@ class TicketTypeAdminTest extends ConfigTestCase
         $p = DB::table('product')->where('id', Ids::toBinary($r->json('productId')))->first();
         $this->assertSame('TICKET', $p->kind);
         $this->assertSame('TKT-POOL-KIDS', $p->sku);
-        $this->assertSame('2500.0000', app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice($r->json('productId'), $pool));
+        $this->assertSame('2500.0000', app(Pricing::class)->unitPrice($r->json('productId'), $pool));
         $id = $r->json('id');
 
         $o->post('/ticketing/ticket-types', ['code' => 'POOL-KIDS', 'name' => 'dup', 'facilityId' => $pool])->assertStatus(409)->assertJsonPath('code', 'ticket_type_code_taken');
@@ -34,7 +35,7 @@ class TicketTypeAdminTest extends ConfigTestCase
         $u = $o->patch("/ticketing/ticket-types/{$id}", ['name' => 'Pool kids day', 'price' => '3000', 'active' => false], ['If-Match' => '"1"'])->assertOk();
         $this->assertSame('3000.0000', $u->json('price'));
         $this->assertFalse($u->json('active'));
-        $this->assertSame('3000.0000', app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice($r->json('productId'), $pool));
+        $this->assertSame('3000.0000', app(Pricing::class)->unitPrice($r->json('productId'), $pool));
         $o->patch("/ticketing/ticket-types/{$id}", ['name' => 'Stale'], ['If-Match' => '"1"'])->assertStatus(412);
         $o->patch("/ticketing/ticket-types/{$id}", ['code' => 'NEWCODE'], ['If-Match' => '"2"'])->assertStatus(422);
         $this->assertSame([1, 2], array_column($this->outbox($id, 'ticketType'), 'version'));

@@ -82,7 +82,7 @@ class OperatingPointAdminService
         }
         $row = DB::table('operating_point')->where('id', Ids::toBinary($id))->first();
         $view = $this->present($row);
-        ConfigChange::record('config.operating_point.create', 'OperatingPoint', $id, null, $view, 'operatingPoint', ['operatingPoint' => $view], 1,
+        ConfigChange::record('config.operating_point.create', 'OperatingPoint', $id, null, $view, 'operatingPoint', $this->syncView($view, $f), 1,
             facilityId: Ids::fromBinary($f->id), organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
 
         return $view;
@@ -135,7 +135,7 @@ class OperatingPointAdminService
             $version = (int) $r->row_version + 1;
             DB::table('operating_point')->where('id', $r->id)->update($set + ['row_version' => $version]);
             $new = $this->present(DB::table('operating_point')->where('id', $r->id)->first());
-            ConfigChange::record('config.operating_point.update', 'OperatingPoint', $id, $old, $new, 'operatingPoint', ['operatingPoint' => $new], $version,
+            ConfigChange::record('config.operating_point.update', 'OperatingPoint', $id, $old, $new, 'operatingPoint', $this->syncView($new, $r), $version,
                 facilityId: Ids::fromBinary($r->facility_unit_id), organizationId: Ids::fromBinary($r->organization_id), siteId: Ids::fromBinary($r->site_id));
 
             return $new;
@@ -172,10 +172,16 @@ class OperatingPointAdminService
             DB::table('kds_station')->where('id', $r->id)->update(['is_active' => $active ? 1 : 0]);
             $new = $this->present(DB::table('operating_point')->where('id', $r->id)->first());
             ConfigChange::record($active ? 'config.operating_point.reactivate' : 'config.operating_point.deactivate', 'OperatingPoint', $id, ['active' => ! $active], ['active' => $active],
-                'operatingPoint', ['operatingPoint' => $new], $version, facilityId: Ids::fromBinary($r->facility_unit_id), organizationId: Ids::fromBinary($r->organization_id), siteId: Ids::fromBinary($r->site_id));
+                'operatingPoint', $this->syncView($new, $r), $version, facilityId: Ids::fromBinary($r->facility_unit_id), organizationId: Ids::fromBinary($r->organization_id), siteId: Ids::fromBinary($r->site_id));
 
             return $new;
         });
+    }
+
+    /** Flat sync payload (camelCase columns + org/site so the peer can create the row). @param array<string, mixed> $view @return array<string, mixed> */
+    private function syncView(array $view, object $r): array
+    {
+        return $view + ['organizationId' => Ids::fromBinary($r->organization_id), 'siteId' => Ids::fromBinary($r->site_id)];
     }
 
     public function lock(string $id): object
@@ -224,8 +230,11 @@ class OperatingPointAdminService
         if ($row !== null) {
             return $row->id;
         }
-        $id = Ids::toBinary(Ids::uuid7());
-        DB::table('prep_route')->insert(['id' => $id, 'organization_id' => $orgBin, 'code' => $kind, 'name' => ucfirst(strtolower($kind)), 'kind' => $kind]);
+        $uuid = Ids::uuid7();
+        $id = Ids::toBinary($uuid);
+        DB::table('prep_route')->insert(['id' => $id, 'organization_id' => $orgBin, 'code' => $kind, 'name' => ucfirst(strtolower($kind)), 'kind' => $kind, 'row_version' => 1]);
+        $view = ['id' => $uuid, 'code' => $kind, 'name' => ucfirst(strtolower($kind)), 'kind' => $kind, 'rowVersion' => 1, 'organizationId' => Ids::fromBinary($orgBin)];
+        ConfigChange::record('config.catalog.prep_route.create', 'PrepRoute', $uuid, null, $view, 'prepRoute', $view, 1, organizationId: Ids::fromBinary($orgBin));
 
         return $id;
     }

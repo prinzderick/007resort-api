@@ -6,6 +6,8 @@ use App\Domain\Booking\Http\Presenters\BookingPresenter;
 use App\Domain\Booking\Models\Blackout;
 use App\Domain\Booking\Models\BookableResource;
 use App\Domain\Booking\Services\AvailabilityService;
+use App\Domain\Config\Support\ConfigVersion;
+use App\Domain\Config\Sync\ResourceSync;
 use App\Domain\Customer\Support\Actor;
 use App\Support\Api\Paged;
 use App\Support\Audit\Audit;
@@ -13,6 +15,7 @@ use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\RequestContext;
+use App\Support\Sync\Outbox;
 use App\Support\Tenancy\FacilityTree;
 use App\Support\Tenancy\Tenant;
 use Carbon\CarbonImmutable;
@@ -70,6 +73,7 @@ class ResourceController
                 'organization_id' => Ids::fromBinary($facility->organization_id), 'site_id' => Ids::fromBinary($facility->site_id), 'facility_unit_id' => strtolower($data['facilityId']),
             ]);
             Audit::record('booking.resource.create', 'BookableResource', $r->id, null, ['name' => $r->name, 'mode' => $r->mode, 'capacity' => $r->capacity], organizationId: $r->organization_id, siteId: $r->site_id, facilityUnitId: $r->facility_unit_id);
+            ResourceSync::emit($r->refresh());
 
             return $r;
         });
@@ -85,6 +89,7 @@ class ResourceController
         DB::transaction(function () use ($resource, $data, $old) {
             $resource->update($this->attributes($data, $resource->capacity) + ['row_version' => $resource->row_version + 1]);
             Audit::record('booking.resource.update', 'BookableResource', $resource->id, $old, BookingPresenter::resource($resource->refresh()), organizationId: $resource->organization_id, siteId: $resource->site_id, facilityUnitId: $resource->facility_unit_id);
+            ResourceSync::emit($resource);
         });
 
         return response()->json(BookingPresenter::resource($resource->refresh()));
@@ -100,9 +105,9 @@ class ResourceController
                 'ends_at' => CarbonImmutable::parse($data['end'])->utc(), 'reason' => $data['reason'] ?? null, 'created_by' => RequestContext::staffId(),
             ]);
             Audit::record('booking.blackout.create', 'Blackout', $b->id, null, ['resourceId' => $resource->id, 'start' => $data['start'], 'end' => $data['end']], organizationId: $resource->organization_id, siteId: $resource->site_id, facilityUnitId: $resource->facility_unit_id);
-            \App\Support\Sync\Outbox::record('ConfigurationUpdated', 'Blackout', $b->id, ['domain' => 'blackout', 'changes' => ['blackout' => ['id' => $b->id, 'resourceId' => $resource->id, 'facilityId' => null,
-                'start' => CarbonImmutable::parse($data['start'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'end' => CarbonImmutable::parse($data['end'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'reason' => $data['reason'] ?? null],
-                'organizationId' => $resource->organization_id]], \App\Domain\Config\Support\ConfigVersion::next($b->id), organizationId: $resource->organization_id, siteId: $resource->site_id, facilityId: $resource->facility_unit_id);
+            Outbox::record('ConfigurationUpdated', 'Blackout', $b->id, ['domain' => 'blackout', 'changes' => ['id' => $b->id, 'resourceId' => $resource->id, 'facilityId' => null,
+                'start' => CarbonImmutable::parse($data['start'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'end' => CarbonImmutable::parse($data['end'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'reason' => $data['reason'] ?? null,
+                'organizationId' => $resource->organization_id]], ConfigVersion::next($b->id), organizationId: $resource->organization_id, siteId: $resource->site_id, facilityId: $resource->facility_unit_id);
 
             return $b;
         });

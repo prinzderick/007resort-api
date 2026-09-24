@@ -33,7 +33,7 @@ class DeviceConfigTest extends ConfigTestCase
         $a = $this->audit('config.device.update', $id);
         $this->assertCount(1, $a);
         $this->assertSame('Waiter tablet 9', $a[0]->new['name']);
-        $this->assertNotEmpty($this->outbox($id, 'device'));
+        $this->assertEmpty($this->outbox($id), 'devices are node-local hardware: audited, not synced');
         // stale writer
         $o->patch("/devices/{$id}", ['name' => 'Stale'], ['If-Match' => '"'.$ver.'"'])->assertStatus(412);
     }

@@ -6,15 +6,18 @@ use App\Domain\Catalog\Services\CatalogAdmin;
 use App\Domain\Catalog\Services\CatalogService;
 use App\Domain\Config\Support\ConfigChange;
 use App\Domain\Config\Support\ConfigIds;
+use App\Domain\Config\Support\ConfigVersion;
 use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
+use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\Sync\Outbox;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,7 +67,7 @@ class CatalogConfigService
     }
 
     /** @return array{items: list<array<string, mixed>>, nextCursor: ?string} */
-    public function productList(\Illuminate\Http\Request $request): array
+    public function productList(Request $request): array
     {
         $q = DB::table('product as p')->leftJoin('product_category as c', 'c.id', '=', 'p.category_id')->where('p.organization_id', $this->orgBin())->whereNull('p.deleted_at')
             ->select(['p.*', 'c.name as category_name']);
@@ -78,7 +81,7 @@ class CatalogConfigService
         if (($a = $request->query('active')) !== null && $a !== '') {
             $q->where('p.is_active', filter_var($a, FILTER_VALIDATE_BOOL) ? 1 : 0);
         }
-        $page = \App\Support\Http\CursorPage::paginate(DB::query()->fromSub($q, 'x'), $request, 'name');
+        $page = CursorPage::paginate(DB::query()->fromSub($q, 'x'), $request, 'name');
         $ids = $page->items->pluck('id')->all();
         $counts = $ids === [] ? collect() : DB::table('product_facility')->whereIn('product_id', $ids)->selectRaw('product_id, COUNT(*) n')->groupBy('product_id')->pluck('n', 'product_id');
         $linked = $ids === [] ? collect() : DB::table('product_stock_link')->whereIn('product_id', $ids)->distinct()->pluck('product_id')->flip();
@@ -143,7 +146,7 @@ class CatalogConfigService
             $new = ['available' => (bool) $now->is_available, 'reason' => $now->unavailable_reason, 'kdsStationId' => Fmt::u($now->kds_station_id), 'sortOrder' => (int) $now->sort_order, 'priceChanged' => $priceChanged];
             Audit::record('config.catalog.product_facility.set', 'Product', $productId, $old, $new, facilityUnitId: $facilityId);
             Outbox::record('ConfigurationUpdated', 'ProductFacility', ConfigIds::pair($productId, $facilityId),
-                ['domain' => 'productFacility', 'changes' => ['productId' => $productId, 'facilityId' => $facilityId] + $new], $version, facilityId: $facilityId);
+                ['domain' => 'productFacility', 'changes' => ['productId' => $productId, 'facilityId' => $facilityId] + $new], ConfigVersion::next(ConfigIds::pair($productId, $facilityId)), facilityId: $facilityId);
 
             return $this->productView($productId);
         });
@@ -163,7 +166,7 @@ class CatalogConfigService
             $this->setFacilityPrice($productId, $facilityId, null);
             Audit::record('config.catalog.product_facility.remove', 'Product', $productId, ['available' => (bool) $pf->is_available], ['available' => false, 'reason' => 'NOT_SOLD_HERE'], facilityUnitId: $facilityId);
             Outbox::record('ConfigurationUpdated', 'ProductFacility', ConfigIds::pair($productId, $facilityId),
-                ['domain' => 'productFacility', 'changes' => ['productId' => $productId, 'facilityId' => $facilityId, 'available' => false, 'reason' => 'NOT_SOLD_HERE']], (int) $pf->row_version + 1, facilityId: $facilityId);
+                ['domain' => 'productFacility', 'changes' => ['productId' => $productId, 'facilityId' => $facilityId, 'available' => false, 'reason' => 'NOT_SOLD_HERE']], ConfigVersion::next(ConfigIds::pair($productId, $facilityId)), facilityId: $facilityId);
 
             return $this->productView($productId);
         });
@@ -215,7 +218,7 @@ class CatalogConfigService
             }
             DB::table('price_list')->insert(['id' => Ids::toBinary($id), 'organization_id' => $this->orgBin(), 'name' => $in['name'], 'currency' => 'NGN', 'is_default' => ! empty($in['isDefault']) ? 1 : 0, 'is_active' => ($in['active'] ?? true) ? 1 : 0]);
             $v = $this->listView(DB::table('price_list')->where('id', Ids::toBinary($id))->first());
-            ConfigChange::record('config.catalog.price_list.create', 'PriceList', $id, null, $v, 'priceList', ['priceList' => $v], 1);
+            ConfigChange::record('config.catalog.price_list.create', 'PriceList', $id, null, $v, 'priceList', $v + ['organizationId' => $this->org()], 1);
 
             return $v;
         });
@@ -252,7 +255,7 @@ class CatalogConfigService
             }
             DB::table('price_list')->where('id', $r->id)->update($set + ['row_version' => $r->row_version + 1]);
             $new = $this->listView(DB::table('price_list')->where('id', $r->id)->first());
-            ConfigChange::record('config.catalog.price_list.update', 'PriceList', $id, $old, $new, 'priceList', ['priceList' => $new], $new['rowVersion']);
+            ConfigChange::record('config.catalog.price_list.update', 'PriceList', $id, $old, $new, 'priceList', $new, $new['rowVersion']);
 
             return $new;
         });
@@ -317,7 +320,7 @@ class CatalogConfigService
                 'valid_from' => $from, 'valid_to' => $to, 'is_active' => ($in['active'] ?? true) ? 1 : 0, 'row_version' => 1]);
             DB::table('product')->where('id', $product->id)->update(['updated_at' => Fmt::now()]);
             $v = $this->priceView(DB::table('price')->where('id', Ids::toBinary($id))->first());
-            ConfigChange::record('config.catalog.price.create', 'Price', $id, null, $v, 'price', ['price' => $v], 1, facilityId: $in['facilityId'] ?? null);
+            ConfigChange::record('config.catalog.price.create', 'Price', $id, null, $v, 'price', $v, 1, facilityId: $in['facilityId'] ?? null);
 
             return $v;
         });
@@ -357,7 +360,7 @@ class CatalogConfigService
             DB::table('price')->where('id', $r->id)->update($set + ['row_version' => $r->row_version + 1]);
             DB::table('product')->where('id', $r->product_id)->update(['updated_at' => Fmt::now()]);
             $new = $this->priceView(DB::table('price')->where('id', $r->id)->first());
-            ConfigChange::record('config.catalog.price.update', 'Price', $id, $old, $new, 'price', ['price' => $new], $new['rowVersion'], facilityId: $new['facilityId']);
+            ConfigChange::record('config.catalog.price.update', 'Price', $id, $old, $new, 'price', array_intersect_key($new, array_flip(array_keys($set) === [] ? [] : ['amount', 'validTo', 'active'])), $new['rowVersion'], facilityId: $new['facilityId']);
 
             return $new;
         });
@@ -379,7 +382,7 @@ class CatalogConfigService
                 $id = Ids::uuid7();
                 DB::table('tax_rate')->insert(['id' => Ids::toBinary($id), 'organization_id' => $this->orgBin(), 'code' => strtoupper($in['code']), 'name' => $in['name'], 'rate_percent' => $in['ratePercent'], 'is_active' => ($in['active'] ?? true) ? 1 : 0]);
                 $v = $this->taxView(DB::table('tax_rate')->where('id', Ids::toBinary($id))->first());
-                ConfigChange::record('config.catalog.tax_rate.create', 'TaxRate', $id, null, $v, 'taxRate', ['taxRate' => $v], 1);
+                ConfigChange::record('config.catalog.tax_rate.create', 'TaxRate', $id, null, $v, 'taxRate', $v + ['organizationId' => $this->org()], 1);
 
                 return $v;
             });
@@ -417,7 +420,7 @@ class CatalogConfigService
             }
             DB::table('tax_rate')->where('id', $r->id)->update($set + ['row_version' => $r->row_version + 1]);
             $new = $this->taxView(DB::table('tax_rate')->where('id', $r->id)->first());
-            ConfigChange::record('config.catalog.tax_rate.update', 'TaxRate', $id, $old, $new, 'taxRate', ['taxRate' => $new], $new['rowVersion']);
+            ConfigChange::record('config.catalog.tax_rate.update', 'TaxRate', $id, $old, $new, 'taxRate', $new, $new['rowVersion']);
 
             return $new;
         });
@@ -437,7 +440,7 @@ class CatalogConfigService
                 $id = Ids::uuid7();
                 DB::table('prep_route')->insert(['id' => Ids::toBinary($id), 'organization_id' => $this->orgBin(), 'code' => strtoupper($in['code']), 'name' => $in['name'], 'kind' => $in['kind']]);
                 $v = $this->routeView(DB::table('prep_route')->where('id', Ids::toBinary($id))->first());
-                ConfigChange::record('config.catalog.prep_route.create', 'PrepRoute', $id, null, $v, 'prepRoute', ['prepRoute' => $v], 1);
+                ConfigChange::record('config.catalog.prep_route.create', 'PrepRoute', $id, null, $v, 'prepRoute', $v + ['organizationId' => $this->org()], 1);
 
                 return $v;
             });
@@ -466,7 +469,7 @@ class CatalogConfigService
             }
             DB::table('prep_route')->where('id', $r->id)->update($set + ['row_version' => $r->row_version + 1]);
             $new = $this->routeView(DB::table('prep_route')->where('id', $r->id)->first());
-            ConfigChange::record('config.catalog.prep_route.update', 'PrepRoute', $id, $old, $new, 'prepRoute', ['prepRoute' => $new], $new['rowVersion']);
+            ConfigChange::record('config.catalog.prep_route.update', 'PrepRoute', $id, $old, $new, 'prepRoute', $new, $new['rowVersion']);
 
             return $new;
         });
@@ -505,7 +508,7 @@ class CatalogConfigService
                 $new = Ids::fromBinary($st->id);
             }
             if ($old !== $new) {
-                $v = \App\Domain\Config\Support\ConfigVersion::next(ConfigIds::pair($in['facilityId'], $in['prepRouteId']));
+                $v = ConfigVersion::next(ConfigIds::pair($in['facilityId'], $in['prepRouteId']));
                 ConfigChange::record('config.catalog.prep_route_station.set', 'PrepRoute', $in['prepRouteId'], ['facilityId' => $in['facilityId'], 'kdsStationId' => $old], ['facilityId' => $in['facilityId'], 'kdsStationId' => $new],
                     'prepRouteStation', ['facilityId' => $in['facilityId'], 'prepRouteId' => $in['prepRouteId'], 'kdsStationId' => $new], $v, facilityId: $in['facilityId'], outboxEntityType: 'PrepRouteStation', outboxEntityId: ConfigIds::pair($in['facilityId'], $in['prepRouteId']));
             }

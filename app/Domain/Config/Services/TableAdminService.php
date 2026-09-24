@@ -42,7 +42,7 @@ class TableAdminService
                 throw ApiProblem::conflict('table_label_taken', 'This facility already has a table with that label.');
             }
             $view = $this->present($row);
-            ConfigChange::record('config.table.create', 'DiningTable', $view['id'], null, $view, 'diningTable', ['table' => $view], 1, facilityId: $facilityId,
+            ConfigChange::record('config.table.create', 'DiningTable', $view['id'], null, $view, 'diningTable', $this->syncView($view, $f), 1, facilityId: $facilityId,
                 organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
 
             return $view;
@@ -92,7 +92,7 @@ class TableAdminService
                     continue;
                 }
                 $view = $this->present($row);
-                Outbox::record('ConfigurationUpdated', 'DiningTable', $view['id'], ['domain' => 'diningTable', 'changes' => ['table' => $view]], 1,
+                Outbox::record('ConfigurationUpdated', 'DiningTable', $view['id'], ['domain' => 'diningTable', 'changes' => $this->syncView($view, $f)], 1,
                     organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id), facilityId: $facilityId);
                 $created[] = $view;
             }
@@ -133,7 +133,7 @@ class TableAdminService
             }
             DB::table('dining_table')->where('id', $t->id)->update($set + ['row_version' => $t->row_version + 1]);
             $new = $this->present(DB::table('dining_table')->where('id', $t->id)->first());
-            ConfigChange::record('config.table.update', 'DiningTable', $id, $old, $new, 'diningTable', ['table' => $new], $new['rowVersion'], facilityId: $old['facilityId'],
+            ConfigChange::record('config.table.update', 'DiningTable', $id, $old, $new, 'diningTable', $this->syncView($new, $t), $new['rowVersion'], facilityId: $old['facilityId'],
                 organizationId: Ids::fromBinary($t->organization_id), siteId: Ids::fromBinary($t->site_id));
 
             return $new;
@@ -158,7 +158,7 @@ class TableAdminService
             $old = $this->present($t);
             DB::table('dining_table')->where('id', $t->id)->update(['is_active' => $active ? 1 : 0, 'merge_parent_id' => $active ? $t->merge_parent_id : null, 'row_version' => $t->row_version + 1]);
             $new = $this->present(DB::table('dining_table')->where('id', $t->id)->first());
-            ConfigChange::record($active ? 'config.table.reactivate' : 'config.table.deactivate', 'DiningTable', $id, $old, $new, 'diningTable', ['table' => $new], $new['rowVersion'],
+            ConfigChange::record($active ? 'config.table.reactivate' : 'config.table.deactivate', 'DiningTable', $id, $old, $new, 'diningTable', $this->syncView($new, $t), $new['rowVersion'],
                 facilityId: $old['facilityId'], organizationId: Ids::fromBinary($t->organization_id), siteId: Ids::fromBinary($t->site_id));
 
             return $new;
@@ -200,8 +200,8 @@ class TableAdminService
             $newDst = $this->present(DB::table('dining_table')->where('id', $dst->id)->first());
             $ctx = ['facilityId' => $newDst['facilityId'], 'organizationId' => Ids::fromBinary($dst->organization_id), 'siteId' => Ids::fromBinary($dst->site_id)];
             ConfigChange::record('config.table.merge', 'DiningTable', $newSrc['id'], ['mergedIntoId' => null], ['mergedIntoId' => $newDst['id'], 'label' => $src->label, 'intoLabel' => $dst->label],
-                'diningTable', ['table' => $newSrc], $newSrc['rowVersion'], ...$ctx);
-            Outbox::record('ConfigurationUpdated', 'DiningTable', $newDst['id'], ['domain' => 'diningTable', 'changes' => ['table' => $newDst]], $newDst['rowVersion'],
+                'diningTable', $this->syncView($newSrc, $src), $newSrc['rowVersion'], ...$ctx);
+            Outbox::record('ConfigurationUpdated', 'DiningTable', $newDst['id'], ['domain' => 'diningTable', 'changes' => $this->syncView($newDst, $dst)], $newDst['rowVersion'],
                 organizationId: $ctx['organizationId'], siteId: $ctx['siteId'], facilityId: $ctx['facilityId']);
 
             return $newDst;
@@ -225,11 +225,19 @@ class TableAdminService
             }
             DB::table('dining_table')->where('id', $t->id)->update(['merge_parent_id' => null, 'row_version' => $t->row_version + 1]);
             $new = $this->present(DB::table('dining_table')->where('id', $t->id)->first());
-            ConfigChange::record('config.table.unmerge', 'DiningTable', $id, ['mergedIntoId' => Fmt::u($t->merge_parent_id)], ['mergedIntoId' => null], 'diningTable', ['table' => $new], $new['rowVersion'],
+            ConfigChange::record('config.table.unmerge', 'DiningTable', $id, ['mergedIntoId' => Fmt::u($t->merge_parent_id)], ['mergedIntoId' => null], 'diningTable', $this->syncView($new, $t), $new['rowVersion'],
                 facilityId: $new['facilityId'], organizationId: Ids::fromBinary($t->organization_id), siteId: Ids::fromBinary($t->site_id));
 
             return $new;
         });
+    }
+
+    /** Flat sync payload (runtime `status` is deliberately not synced). @param array<string, mixed> $view @return array<string, mixed> */
+    private function syncView(array $view, object $r): array
+    {
+        unset($view['status']);
+
+        return $view + ['organizationId' => Ids::fromBinary($r->organization_id), 'siteId' => Ids::fromBinary($r->site_id)];
     }
 
     public function lock(string $id): object

@@ -46,7 +46,7 @@ class SetupStatusService
 
         $steps = [
             ['business_profile', 'Business profile', ! empty($siteRow->address) && ! empty($siteRow->time_zone), true, null, 'Add the address and phone number that appear on receipts.'],
-            ['facilities', 'Facilities set up', $configured > 0, true, $configured, $facilities === 0 ? 'Create your first facility (restaurant, bar, spa...).' : ($facilities - $configured)." facility(ies) have no capabilities yet."],
+            ['facilities', 'Facilities set up', $configured > 0, true, $configured, $facilities === 0 ? 'Create your first facility (restaurant, bar, spa...).' : ($facilities - $configured).' facility(ies) have no capabilities yet.'],
             ['products', 'Products', $products > 0, true, $products, 'Add the products you sell (or import them from a CSV file).'],
             ['prices', 'Prices for every product', $products > 0 && $priced === $products, true, $priced, ($products - $priced).' product(s) have no price yet.'],
             ['tax', 'Tax', $taxReviewed || $taxRates > 0, true, $taxRates, 'Review the VAT settings (VAT is off by default).'],

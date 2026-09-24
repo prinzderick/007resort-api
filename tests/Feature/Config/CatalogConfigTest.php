@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Config;
 
+use App\Domain\Catalog\Services\Pricing;
 use App\Support\Demo\DemoIds;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
@@ -88,7 +89,7 @@ class CatalogConfigTest extends ConfigTestCase
         $old = collect($rows)->firstWhere('amount', '1000.0000');
         $this->assertNotNull($old['validTo']);
         // today's runtime price is still the old one
-        $this->assertSame('1000.0000', app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
+        $this->assertSame('1000.0000', app(Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
 
         // a future price can be edited; an effective one cannot be re-priced, only end-dated
         $o->patch("/catalog/prices/{$created->json('id')}", ['amount' => '1250'], ['If-Match' => '"1"'])->assertOk()->assertJsonPath('amount', '1250.0000');
@@ -99,9 +100,9 @@ class CatalogConfigTest extends ConfigTestCase
         $o->post('/catalog/prices', ['productId' => $p['id'], 'amount' => '999', 'validFrom' => $mid, 'validTo' => $future])->assertStatus(422);
         // facility scoped price coexists with list-wide
         $fp = $o->post('/catalog/prices', ['productId' => $p['id'], 'facilityId' => DemoIds::facility('CAFE'), 'amount' => '1100'])->assertStatus(201);
-        $this->assertSame('1100.0000', app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
+        $this->assertSame('1100.0000', app(Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
         $o->patch("/catalog/prices/{$fp->json('id')}", ['active' => false], ['If-Match' => '"1"'])->assertOk();
-        $this->assertSame('1000.0000', app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
+        $this->assertSame('1000.0000', app(Pricing::class)->unitPrice($p['id'], DemoIds::facility('CAFE')));
 
         // price lists: exactly one default
         $l = $o->post('/catalog/price-lists', ['name' => 'Happy hour'])->assertStatus(201);
@@ -271,7 +272,7 @@ class CatalogConfigTest extends ConfigTestCase
 
     private function importPriceOf(string $sku): ?string
     {
-        return app(\App\Domain\Catalog\Services\Pricing::class)->unitPrice(Ids::fromBinary($this->sku($sku)->id), DemoIds::facility('CAFE'));
+        return app(Pricing::class)->unitPrice(Ids::fromBinary($this->sku($sku)->id), DemoIds::facility('CAFE'));
     }
 
     private function importRaw(string $uri, string $csv)

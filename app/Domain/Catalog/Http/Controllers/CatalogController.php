@@ -3,8 +3,8 @@
 namespace App\Domain\Catalog\Http\Controllers;
 
 use App\Domain\Catalog\Services\CatalogAdmin;
-use App\Domain\Config\Support\ProductInput;
 use App\Domain\Catalog\Services\CatalogService;
+use App\Domain\Config\Support\ProductInput;
 use App\Domain\Customer\Services\PublicCatalog;
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Customer\Support\TicketCatalog;

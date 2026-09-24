@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Services;
 
+use App\Domain\Config\Services\SettingsService;
 use App\Domain\Organization\Services\TaxSettingService;
 use App\Domain\Payments\Support\Fmt;
 use App\Domain\Payments\Support\ReceiptRenderer;
@@ -64,7 +65,7 @@ class ReceiptService
             $cashier = $s ? trim($s->first_name.' '.$s->last_name) : 'Staff';
         }
         $terminal = $ctx['deviceId'] !== null ? DB::table('device')->where('id', Ids::toBinary($ctx['deviceId']))->value('name') : null;
-        $rs = \App\Domain\Config\Services\SettingsService::forReceipt($ctx['organizationId']); // admin-settable receipt settings (config/env values are the fallback)
+        $rs = SettingsService::forReceipt($ctx['organizationId']); // admin-settable receipt settings (config/env values are the fallback)
 
         $payload = [
             'facilityId' => $ctx['facilityId'],
@@ -145,7 +146,7 @@ class ReceiptService
             'reprintCount' => $reprints,
             'duplicate' => $duplicate,
         ];
-        $columns = \App\Domain\Config\Services\SettingsService::forReceipt(Ids::fromBinary($row->organization_id))['paperColumns'] ?? (int) config('payments.receipt.columns', 48);
+        $columns = SettingsService::forReceipt(Ids::fromBinary($row->organization_id))['paperColumns'] ?? (int) config('payments.receipt.columns', 48);
         $out['printLines'] = ReceiptRenderer::lines($out, $columns);
 
         return $out;

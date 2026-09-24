@@ -187,7 +187,8 @@ paths:
                 summary: NFC badge
                 value:
                   credentialType: NFC_CARD
-                  secret: 04A2246B7C5E80
+                  identifier: 04A2246B7C5E80
+                  secret: '4821'
               password:
                 summary: Admin web
                 value:
@@ -5029,6 +5030,13 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
+      - name: order
+        in: query
+        required: false
+        description: Oldest first (`asc`, default) or newest first (`desc`). `from`/`to` are also accepted without the filter[] wrapper; a bare date `to` includes that whole day.
+        schema:
+          type: string
+          enum: [asc, desc]
       responses:
         '200':
           description: Success
@@ -10143,6 +10151,7 @@ paths:
       description: |-
         Required permission: `catalog.manage`.
       parameters:
+      - $ref: '#/components/parameters/IfMatch'
       - name: prepRouteId
         in: path
         required: true
@@ -10162,6 +10171,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PrepRoute'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -10172,6 +10184,10 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
   /catalog/prep-route-stations:
     get:
       operationId: listPrepRouteStations
@@ -10397,7 +10413,7 @@ paths:
       x-permission: 'catalog.manage'
       x-additive: true
       description: |-
-        `dryRun=true` (default) validates only. `dryRun=false` applies all-or-nothing (needs Idempotency-Key). Body: text/csv or JSON `{csv}`.
+        `dryRun=true` (default) validates only (the dry run executes the real import in a rolled-back transaction). `dryRun=false` applies all-or-nothing. Idempotent by content: no Idempotency-Key needed. Body: text/csv or JSON `{csv}`.
 
         Required permission: `catalog.manage`.
       parameters:
@@ -11584,10 +11600,10 @@ components:
           - NFC_CARD
         identifier:
           type: string
-          description: Staff username or staff number (PASSWORD, PIN). Omitted for NFC_CARD.
+          description: Staff username or staff number (PASSWORD, PIN). For NFC_CARD the card UID (a card alone never signs in).
         secret:
           type: string
-          description: Password, PIN, or NFC card UID/hash depending on credentialType.
+          description: Password or PIN (also for NFC_CARD, where it is the staff PIN that must accompany the card).
           writeOnly: true
         username:
           type: string
@@ -11610,8 +11626,9 @@ components:
       - required:
         - username
         - pin
-      description: 'Preferred: `{credentialType, identifier, secret}` (identifier is required for PASSWORD and PIN; NFC_CARD
-        carries the card UID in `secret`). Legacy: `{username, password}` or `{username, pin}` is still accepted.'
+      description: 'Preferred: `{credentialType, identifier, secret}`; `identifier` is required for every type. NFC_CARD is card + PIN in
+        ONE call: `identifier` = the card UID, `secret` = the staff PIN (NFC alone is refused). Legacy: `{username, password}` or `{username, pin}`
+        is still accepted.'
     Staff:
       type: object
       properties:
@@ -12112,6 +12129,10 @@ components:
         vatRatePercent:
           type: string
           example: '7.5'
+        paymentTiming:
+          type: string
+          description: 'PAY_FIRST (Reception: a DRAFT order can be paid) or PAY_AFTER_SERVICE / PAY_BEFORE_LEAVING (Restaurant/bars: only a SERVED order can be paid; alias values are emitted as configured), OPEN_TAB.'
+          example: PAY_FIRST
     FacilityCapabilities:
       type: object
       properties:
@@ -13334,6 +13355,19 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Money'
           - type: 'null'
+        totals:
+          type: object
+          description: 'Additive. Drawer totals (readable by a cashier without report.view). `nonCash` is a tender => amount MAP and is `{}` when empty.'
+          properties:
+            cashSales: {$ref: '#/components/schemas/Money'}
+            cashRefunds: {$ref: '#/components/schemas/Money'}
+            cashReversals: {$ref: '#/components/schemas/Money'}
+            paidIn: {$ref: '#/components/schemas/Money'}
+            paidOut: {$ref: '#/components/schemas/Money'}
+            drops: {$ref: '#/components/schemas/Money'}
+            nonCash:
+              type: object
+              additionalProperties: {$ref: '#/components/schemas/Money'}
         openedAt:
           $ref: '#/components/schemas/Timestamp'
         closedAt:
@@ -13440,6 +13474,11 @@ components:
                 type:
                 - string
                 - 'null'
+              tendered:
+                description: Additive. Cash handed over (CASH tenders).
+                oneOf:
+                - $ref: '#/components/schemas/Money'
+                - type: 'null'
             required:
             - tenderType
             - amount
@@ -13458,6 +13497,28 @@ components:
           type: integer
         footer:
           type: string
+        amountPaid:
+          $ref: '#/components/schemas/Money'
+          description: Additive. Money paid against the receipt's order(s) at issue time.
+        balanceDue:
+          $ref: '#/components/schemas/Money'
+          description: Additive. Still owed after this payment (partial settlement); clients print it as BALANCE DUE when > 0.
+        duplicate:
+          type: boolean
+          description: Additive. True on a counted reprint (`?reprint=true`).
+        businessName:
+          type: string
+          description: Additive. Legal/business name printed above the site name.
+        terminal:
+          type: string
+          description: Additive. Name of the device that took the payment.
+        vatRegistered:
+          type: boolean
+        printLines:
+          type: array
+          description: Additive. The node's own 48-column (80 mm) text layout; clients may print it as is.
+          items:
+            type: string
       required:
       - id
       - number
@@ -14216,6 +14277,11 @@ components:
             $ref: '#/components/schemas/EntitlementItem'
         issuedAt:
           $ref: '#/components/schemas/Timestamp'
+        groupEntitlementIds:
+          type: array
+          description: 'Additive. On `POST /entitlements` for an order of several individual tickets, every entitlement of the order (this one is the first).'
+          items:
+            $ref: '#/components/schemas/Uuid'
       required:
       - id
       - qrToken

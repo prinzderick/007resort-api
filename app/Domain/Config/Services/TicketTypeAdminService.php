@@ -65,7 +65,7 @@ class TicketTypeAdminService
                     DB::table('ticket_type')->where('id', Ids::toBinary($id))->update(['product_id' => Ids::toBinary($productId)]);
                 }
                 $v = $this->present(DB::table('ticket_type')->where('id', Ids::toBinary($id))->first());
-                ConfigChange::record('config.ticket_type.create', 'TicketType', $id, null, $v, 'ticketType', ['ticketType' => $v, 'organizationId' => Ids::fromBinary($f->organization_id), 'siteId' => Ids::fromBinary($f->site_id)], 1,
+                ConfigChange::record('config.ticket_type.create', 'TicketType', $id, null, $v, 'ticketType', $v + ['organizationId' => Ids::fromBinary($f->organization_id), 'siteId' => Ids::fromBinary($f->site_id)], 1,
                     facilityId: $v['facilityId'], organizationId: Ids::fromBinary($f->organization_id), siteId: Ids::fromBinary($f->site_id));
 
                 return $v;
@@ -125,7 +125,7 @@ class TicketTypeAdminService
             }
             DB::table('ticket_type')->where('id', $r->id)->update($set + ['row_version' => $r->row_version + 1]);
             $new = $this->present(DB::table('ticket_type')->where('id', $r->id)->first());
-            ConfigChange::record('config.ticket_type.update', 'TicketType', $id, $old, $new, 'ticketType', ['ticketType' => $new], $new['rowVersion'], facilityId: $new['facilityId'],
+            ConfigChange::record('config.ticket_type.update', 'TicketType', $id, $old, $new, 'ticketType', $new, $new['rowVersion'], facilityId: $new['facilityId'],
                 organizationId: Ids::fromBinary($r->organization_id), siteId: Ids::fromBinary($r->site_id));
 
             return $new;
