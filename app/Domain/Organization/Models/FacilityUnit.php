@@ -17,7 +17,7 @@ class FacilityUnit extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'deleted_at' => 'datetime'];
+        return ['is_active' => 'boolean', 'deleted_at' => 'datetime', 'contact' => 'array', 'opening_hours' => 'array', 'deactivated_at' => 'datetime'];
     }
 
     public function parent(): BelongsTo
@@ -41,6 +41,13 @@ class FacilityUnit extends Model
             'name' => $this->name,
             'kind' => $this->kind ?? 'GENERAL',
             'status' => $this->is_active ? 'ACTIVE' : 'INACTIVE',
+            'active' => (bool) $this->is_active,
+            'description' => $this->description,
+            'timezone' => $this->timezone,
+            'sortOrder' => (int) ($this->sort_order ?? 0),
+            'contact' => $this->contact,
+            'openingHours' => $this->opening_hours,
+            'templateKey' => $this->template_key,
             'capabilities' => $capabilities,
             'rowVersion' => (int) $this->row_version,
         ];
