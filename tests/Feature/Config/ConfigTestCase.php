@@ -21,9 +21,11 @@ abstract class ConfigTestCase extends TestCase
         $this->seedDemo();
     }
 
+    private ?TestResponseBuilder $ownerApi = null;
+
     protected function owner(): TestResponseBuilder
     {
-        return $this->api('owner1');
+        return $this->ownerApi ??= $this->api('owner1');
     }
 
     /** @return list<object> audit rows (decoded old/new) for an action, newest last */

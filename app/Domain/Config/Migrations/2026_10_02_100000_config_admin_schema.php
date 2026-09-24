@@ -64,6 +64,10 @@ return new class extends Migration
   ADD COLUMN modifiers   JSON NULL,
   ADD CONSTRAINT uq_prod_barcode UNIQUE (organization_id, barcode)');
 
+        foreach (['price_list', 'tax_rate', 'prep_route'] as $t) {
+            DB::unprepared("ALTER TABLE {$t} ADD COLUMN row_version INT UNSIGNED NOT NULL DEFAULT 1");
+        }
+
         DB::unprepared('CREATE TABLE receipt_setting (
   organization_id  BINARY(16) NOT NULL PRIMARY KEY,
   business_name    VARCHAR(200) NULL,
@@ -78,6 +82,12 @@ return new class extends Migration
   created_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   updated_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_rs_org FOREIGN KEY (organization_id) REFERENCES organization (id)
+) '.self::T);
+
+        // Version counter for config entities that have no row_version of their own (composite-key rows such as prep_route_station).
+        DB::unprepared('CREATE TABLE config_entity_version (
+  entity_id  BINARY(16) NOT NULL PRIMARY KEY,
+  version    INT UNSIGNED NOT NULL DEFAULT 0
 ) '.self::T);
 
         // No rows for a facility = every method enabled (backward compatible). A row set is the explicit allow-list.
@@ -113,6 +123,10 @@ return new class extends Migration
         DB::table('role_permission')->whereIn('permission_id', $ids)->delete();
         DB::table('permission')->whereIn('id', $ids)->delete();
         DB::unprepared('ALTER TABLE role DROP COLUMN is_system, DROP COLUMN row_version');
+        foreach (['price_list', 'tax_rate', 'prep_route'] as $t) {
+            DB::unprepared("ALTER TABLE {$t} DROP COLUMN row_version");
+        }
+        DB::statement('DROP TABLE IF EXISTS config_entity_version');
         DB::statement('DROP TABLE IF EXISTS facility_payment_method');
         DB::statement('DROP TABLE IF EXISTS receipt_setting');
         DB::unprepared('ALTER TABLE product DROP INDEX uq_prod_barcode, DROP COLUMN description, DROP COLUMN barcode, DROP COLUMN modifiers');

@@ -95,6 +95,9 @@ final class CatalogService
                 // active = the product is live AND not 86'd at this facility (clients hide inactive items)
                 'active' => (bool) $r->is_active && (bool) $r->is_available && $price !== null,
                 'imageUrl' => $r->image_url,
+                'description' => $r->description,
+                'barcode' => $r->barcode,
+                'modifiers' => $r->modifiers === null ? null : json_decode($r->modifiers, true),
                 'rowVersion' => (int) $r->row_version,
             ];
         })->all();

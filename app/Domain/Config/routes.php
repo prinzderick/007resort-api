@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Config\Http\Controllers\CatalogConfigController;
 use App\Domain\Config\Http\Controllers\DeviceAdminController;
 use App\Domain\Config\Http\Controllers\FacilityAdminController;
 use App\Domain\Config\Http\Controllers\OperatingPointAdminController;
@@ -46,4 +47,35 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
 
     // ---- Devices -------------------------------------------------------------------------------------------------------------
     Route::patch('devices/{deviceId}', [DeviceAdminController::class, 'update'])->middleware('permission:device.manage');
+
+    // ---- Catalogue configuration ----------------------------------------------------------------------------------------------
+    Route::middleware('permission:catalog.manage|pricing.manage')->group(function () {
+        Route::get('admin/catalog/products', [CatalogConfigController::class, 'products']);
+        Route::get('admin/catalog/products/{productId}', [CatalogConfigController::class, 'product']);
+    });
+    Route::middleware('permission:catalog.manage')->group(function () {
+        Route::put('catalog/products/{productId}/facilities/{facilityId}', [CatalogConfigController::class, 'setProductFacility']);
+        Route::delete('catalog/products/{productId}/facilities/{facilityId}', [CatalogConfigController::class, 'removeProductFacility']);
+        Route::post('catalog/tax-rates', [CatalogConfigController::class, 'createTaxRate'])->middleware('idempotent');
+        Route::patch('catalog/tax-rates/{id}', [CatalogConfigController::class, 'updateTaxRate']);
+        Route::post('catalog/prep-routes', [CatalogConfigController::class, 'createPrepRoute'])->middleware('idempotent');
+        Route::patch('catalog/prep-routes/{id}', [CatalogConfigController::class, 'updatePrepRoute']);
+        Route::get('catalog/prep-route-stations', [CatalogConfigController::class, 'prepRouteStations']);
+        Route::put('catalog/prep-route-stations', [CatalogConfigController::class, 'setPrepRouteStation']);
+        Route::post('catalog/categories/{id}/prep-route', [CatalogConfigController::class, 'categoryPrepRoute']);
+        Route::get('catalog/products/{productId}/stock-links', [CatalogConfigController::class, 'stockLinks']);
+        Route::put('catalog/products/{productId}/stock-links', [CatalogConfigController::class, 'setStockLinks']);
+        Route::get('catalog/products/export', [CatalogConfigController::class, 'exportProducts']);
+        Route::post('catalog/products/import', [CatalogConfigController::class, 'importProducts']);
+    });
+    Route::middleware('permission:pricing.manage')->group(function () {
+        Route::get('catalog/price-lists', [CatalogConfigController::class, 'priceLists']);
+        Route::post('catalog/price-lists', [CatalogConfigController::class, 'createPriceList'])->middleware('idempotent');
+        Route::patch('catalog/price-lists/{id}', [CatalogConfigController::class, 'updatePriceList']);
+        Route::get('catalog/prices', [CatalogConfigController::class, 'prices']);
+        Route::post('catalog/prices', [CatalogConfigController::class, 'createPrice'])->middleware('idempotent');
+        Route::patch('catalog/prices/{id}', [CatalogConfigController::class, 'updatePrice']);
+        Route::get('catalog/prices/export', [CatalogConfigController::class, 'exportPrices']);
+        Route::post('catalog/prices/import', [CatalogConfigController::class, 'importPrices']);
+    });
 });

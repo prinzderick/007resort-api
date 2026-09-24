@@ -31,8 +31,10 @@ final class ConfigChange
         ?string $facilityId = null,
         ?string $organizationId = null,
         ?string $siteId = null,
+        ?string $outboxEntityType = null,
+        ?string $outboxEntityId = null,
     ): void {
         Audit::record($auditAction, $entityType, $entityId, $old, $new, organizationId: $organizationId, siteId: $siteId, facilityUnitId: $facilityId);
-        Outbox::record('ConfigurationUpdated', $entityType, $entityId, ['domain' => $domain, 'changes' => $changes], $version, organizationId: $organizationId, siteId: $siteId, facilityId: $facilityId);
+        Outbox::record('ConfigurationUpdated', $outboxEntityType ?? $entityType, $outboxEntityId ?? $entityId, ['domain' => $domain, 'changes' => $changes], $version, organizationId: $organizationId, siteId: $siteId, facilityId: $facilityId);
     }
 }
