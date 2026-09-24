@@ -107,6 +107,21 @@ class CashHandoverController
         return response()->json($this->handovers->position($staffId, is_string($facility) && Ids::isUuid($facility) ? Ids::normalize($facility) : null));
     }
 
+    /** GET /cash-in-hand?facilityId= : every waiter holding cash at the facility (additive; cash_handover.view at that facility). */
+    public function holdings(Request $request): JsonResponse
+    {
+        $facility = $request->query('facilityId');
+        if (! is_string($facility) || ! Ids::isUuid($facility)) {
+            throw ApiProblem::unprocessable('validation_failed', 'The facilityId query parameter is required.', ['facilityId' => ['The facilityId query parameter is required.']]);
+        }
+        $facility = Ids::normalize($facility);
+        if (! $this->permissions->can($this->staff(), 'cash_handover.view', Scope::facility($facility))) {
+            throw ApiProblem::permissionDenied('cash_handover.view');
+        }
+
+        return response()->json(['items' => $this->handovers->holdings($facility), 'nextCursor' => null]);
+    }
+
     public function showPolicy(Request $request, string $staffId): JsonResponse
     {
         $staffId = $this->targetStaff($staffId);

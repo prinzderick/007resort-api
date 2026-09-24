@@ -62,6 +62,7 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::post('cash-handovers/{handoverId}/receive', [CashHandoverController::class, 'receive'])->middleware(['permission:cash_handover.receive', 'idempotent']);
     Route::post('cash-handovers/{handoverId}/signoff', [CashHandoverController::class, 'signoff'])->middleware(['permission:cash_handover.signoff', 'idempotent']);
     Route::get('staff/{staffId}/cash-in-hand', [CashHandoverController::class, 'cashInHand']);
+    Route::get('cash-in-hand', [CashHandoverController::class, 'holdings']);
     Route::get('staff/{staffId}/collection-policy', [CashHandoverController::class, 'showPolicy']);
     Route::patch('staff/{staffId}/collection-policy', [CashHandoverController::class, 'updatePolicy'])->middleware(['permission:staff.manage', 'idempotent']);
 
