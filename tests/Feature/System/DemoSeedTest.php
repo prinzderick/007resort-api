@@ -38,7 +38,8 @@ class DemoSeedTest extends TestCase
             $roles = array_merge($roles, $auth['staff']['roles']);
             $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => $u, 'secret' => 'Dev#Pass1234'])->assertOk();
         }
-        $this->assertEqualsCanonicalizing(DB::table('role')->pluck('code')->all(), $roles, 'one demo user per seeded role');
+        // MARKETING (website editor, CMS migration) has no demo login on purpose: no new demo credentials.
+        $this->assertEqualsCanonicalizing(array_values(array_diff(DB::table('role')->pluck('code')->all(), ['MARKETING'])), $roles, 'one demo user per seeded role');
         $this->assertSame(['WAIT_STAFF'], $this->loginAs('wait1')['staff']['roles']);
         $this->assertContains('order.void.approve', $this->loginAs('supervisor1')['staff']['permissions']);
         $this->assertNotContains('order.void.approve', $this->loginAs('cashier1')['staff']['permissions']);

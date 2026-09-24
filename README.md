@@ -31,6 +31,7 @@ don't collide. Dev docs UI (non-production): `GET /api/documentation` (spec: `do
 | UUIDv7 / `BINARY(16)` cast + `HasUuidV7`, Money (bcmath), RFC 7807 problems, cursor pagination | `app/Support/*` |
 | Audit (hash-chained) + `verifyChain()`, transactional Outbox, `idempotent` + `permission:` middleware | `app/Support/*`, `app/Domain/Identity` |
 | Schema: verified V0001 (org/identity/devices/audit/idempotency + seeded roles/permissions) + sync tables | `database/sql/V0001__initial_schema.sql`, `app/Domain/*/Migrations` |
+| Website CMS: site settings, home blocks, pages, blog, events (recurrence), gallery, media pipeline, newsletter double opt-in, contact inbox; `php artisan r007:cms-seed` | `app/Domain/Cms`, [docs/CMS_API.md](docs/CMS_API.md) |
 | Staff auth: PASSWORD/PIN (Argon2id), opaque access + rotating refresh tokens (hashed, server-side revocation), rate limited | `app/Domain/Identity` |
 
 ### Endpoints (foundation)

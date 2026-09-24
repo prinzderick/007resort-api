@@ -102,9 +102,9 @@ final class TestData
                 in_array($t, $ledger, true) ? DB::statement("TRUNCATE TABLE `{$t}`") : DB::table($t)->delete();
             }
         }
-        DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER'])->get(['id'])
+        DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER', 'MARKETING'])->get(['id'])
             ->each(fn ($r) => DB::table('role_permission')->where('role_id', $r->id)->delete());
-        DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER'])->delete();
+        DB::table('role')->whereNotIn('code', ['WAIT_STAFF', 'BARTENDER', 'KITCHEN_STAFF', 'CASHIER', 'STOREKEEPER', 'UNIT_SUPERVISOR', 'PROCUREMENT', 'ACCOUNTANT', 'MANAGER', 'IT_ADMIN', 'OWNER', 'MARKETING'])->delete();
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
         self::resetAuditChain();
     }

@@ -29,7 +29,7 @@ class RoleAssignmentTest extends TestCase
     {
         $m = $this->api('manager1');
         $roles = $m->get('/roles?limit=200')->assertOk()->json('items');
-        $this->assertCount(11, $roles);
+        $this->assertCount(12, $roles); // 11 foundation roles + MARKETING (website CMS migration)
         $cashier = collect($roles)->firstWhere('code', 'CASHIER');
         $this->assertSame(Role::publicIdFor('CASHIER'), $cashier['id']);
         $this->assertTrue(Ids::isUuid($cashier['id']));

@@ -36,6 +36,8 @@ security:
 - bearerAuth: []
   deviceToken: []
 tags:
+- name: Website CMS
+  description: Public website content (service token) and its admin management (docs/CMS_API.md)
 - name: System
   description: Service info and health
 - name: Auth
@@ -12081,6 +12083,2537 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
   # <<< config-admin paths <<<
+  # >>> cms paths (generated from docs/CMS_API.md; x-additive) >>>
+  /public/cms/site:
+    get:
+      operationId: cms_getPublicCmsSite
+      tags:
+      - Website CMS
+      summary: Site-wide settings
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/home:
+    get:
+      operationId: cms_getPublicCmsHome
+      tags:
+      - Website CMS
+      summary: Ordered enabled home sections
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/pages:
+    get:
+      operationId: cms_getPublicCmsPages
+      tags:
+      - Website CMS
+      summary: Published pages list
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/pages/{slug}:
+    get:
+      operationId: cms_getPublicCmsPagesSlug
+      tags:
+      - Website CMS
+      summary: Page by slug
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/posts:
+    get:
+      operationId: cms_getPublicCmsPosts
+      tags:
+      - Website CMS
+      summary: Blog posts (filter category, tag, q, featured; cursor)
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/posts/{slug}:
+    get:
+      operationId: cms_getPublicCmsPostsSlug
+      tags:
+      - Website CMS
+      summary: Blog post with related
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/post-categories:
+    get:
+      operationId: cms_getPublicCmsPostCategories
+      tags:
+      - Website CMS
+      summary: Blog categories
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/events:
+    get:
+      operationId: cms_getPublicCmsEvents
+      tags:
+      - Website CMS
+      summary: Events (upcoming expansion, category, cursor)
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/events/{slug}:
+    get:
+      operationId: cms_getPublicCmsEventsSlug
+      tags:
+      - Website CMS
+      summary: Event by slug
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/gallery/albums:
+    get:
+      operationId: cms_getPublicCmsGalleryAlbums
+      tags:
+      - Website CMS
+      summary: Gallery albums
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/gallery/albums/{slug}:
+    get:
+      operationId: cms_getPublicCmsGalleryAlbumsSlug
+      tags:
+      - Website CMS
+      summary: Gallery album with items
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/sitemap:
+    get:
+      operationId: cms_getPublicCmsSitemap
+      tags:
+      - Website CMS
+      summary: Slugs and lastmod for sitemap.xml
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/subscribers:
+    post:
+      operationId: cms_postPublicCmsSubscribers
+      tags:
+      - Website CMS
+      summary: Subscribe (double opt-in, always 200 CHECK_EMAIL)
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsSubscribeRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/subscribers/confirm/{token}:
+    get:
+      operationId: cms_getPublicCmsSubscribersConfirmToken
+      tags:
+      - Website CMS
+      summary: Preview a confirmation token (no side effect)
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postPublicCmsSubscribersConfirmToken
+      tags:
+      - Website CMS
+      summary: Confirm subscription
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/subscribers/unsubscribe/{token}:
+    post:
+      operationId: cms_postPublicCmsSubscribersUnsubscribeToken
+      tags:
+      - Website CMS
+      summary: One-click unsubscribe (signed token)
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/cms/contact:
+    post:
+      operationId: cms_postPublicCmsContact
+      tags:
+      - Website CMS
+      summary: Send a contact message
+      x-additive: true
+      security:
+      - serviceToken: []
+      - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsContactRequest'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/meta:
+    get:
+      operationId: cms_getAdminCmsMeta
+      tags:
+      - Website CMS
+      summary: Enums, home section field schemas, limits
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/summary:
+    get:
+      operationId: cms_getAdminCmsSummary
+      tags:
+      - Website CMS
+      summary: Dashboard counts
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/render-preview:
+    post:
+      operationId: cms_postAdminCmsRenderPreview
+      tags:
+      - Website CMS
+      summary: Render Markdown exactly as the public site does
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/settings:
+    get:
+      operationId: cms_getAdminCmsSettings
+      tags:
+      - Website CMS
+      summary: All setting groups
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/settings/{group}:
+    get:
+      operationId: cms_getAdminCmsSettingsGroup
+      tags:
+      - Website CMS
+      summary: One setting group
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: group
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: cms_putAdminCmsSettingsGroup
+      tags:
+      - Website CMS
+      summary: Replace a setting group
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: group
+        in: path
+        required: true
+        schema: {type: string}
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/pages:
+    get:
+      operationId: cms_getAdminCmsPages
+      tags:
+      - Website CMS
+      summary: List pages
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsPages
+      tags:
+      - Website CMS
+      summary: Create page (DRAFT)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/pages/{id}:
+    get:
+      operationId: cms_getAdminCmsPagesId
+      tags:
+      - Website CMS
+      summary: Get page
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsPagesId
+      tags:
+      - Website CMS
+      summary: Update page
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsPagesId
+      tags:
+      - Website CMS
+      summary: Delete page (not while PUBLISHED)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/pages/{id}/publish:
+    post:
+      operationId: cms_postAdminCmsPagesIdPublish
+      tags:
+      - Website CMS
+      summary: Publish page
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/pages/{id}/unpublish:
+    post:
+      operationId: cms_postAdminCmsPagesIdUnpublish
+      tags:
+      - Website CMS
+      summary: Unpublish page
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/pages/{id}/archive:
+    post:
+      operationId: cms_postAdminCmsPagesIdArchive
+      tags:
+      - Website CMS
+      summary: Archive page
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/posts:
+    get:
+      operationId: cms_getAdminCmsPosts
+      tags:
+      - Website CMS
+      summary: List posts
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsPosts
+      tags:
+      - Website CMS
+      summary: Create post (DRAFT)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/posts/{id}:
+    get:
+      operationId: cms_getAdminCmsPostsId
+      tags:
+      - Website CMS
+      summary: Get post
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsPostsId
+      tags:
+      - Website CMS
+      summary: Update post
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsPostsId
+      tags:
+      - Website CMS
+      summary: Delete post (not while PUBLISHED)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/posts/{id}/publish:
+    post:
+      operationId: cms_postAdminCmsPostsIdPublish
+      tags:
+      - Website CMS
+      summary: Publish post
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/posts/{id}/unpublish:
+    post:
+      operationId: cms_postAdminCmsPostsIdUnpublish
+      tags:
+      - Website CMS
+      summary: Unpublish post
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/posts/{id}/archive:
+    post:
+      operationId: cms_postAdminCmsPostsIdArchive
+      tags:
+      - Website CMS
+      summary: Archive post
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/events:
+    get:
+      operationId: cms_getAdminCmsEvents
+      tags:
+      - Website CMS
+      summary: List events
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsEvents
+      tags:
+      - Website CMS
+      summary: Create event (DRAFT)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/events/{id}:
+    get:
+      operationId: cms_getAdminCmsEventsId
+      tags:
+      - Website CMS
+      summary: Get event
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsEventsId
+      tags:
+      - Website CMS
+      summary: Update event
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsEventsId
+      tags:
+      - Website CMS
+      summary: Delete event (not while PUBLISHED)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/events/{id}/publish:
+    post:
+      operationId: cms_postAdminCmsEventsIdPublish
+      tags:
+      - Website CMS
+      summary: Publish event
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/events/{id}/unpublish:
+    post:
+      operationId: cms_postAdminCmsEventsIdUnpublish
+      tags:
+      - Website CMS
+      summary: Unpublish event
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/events/{id}/archive:
+    post:
+      operationId: cms_postAdminCmsEventsIdArchive
+      tags:
+      - Website CMS
+      summary: Archive event
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums:
+    get:
+      operationId: cms_getAdminCmsGalleryAlbums
+      tags:
+      - Website CMS
+      summary: List gallery albums
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsGalleryAlbums
+      tags:
+      - Website CMS
+      summary: Create gallery album (DRAFT)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}:
+    get:
+      operationId: cms_getAdminCmsGalleryAlbumsId
+      tags:
+      - Website CMS
+      summary: Get gallery album
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsGalleryAlbumsId
+      tags:
+      - Website CMS
+      summary: Update gallery album
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsGalleryAlbumsId
+      tags:
+      - Website CMS
+      summary: Delete gallery album (not while PUBLISHED)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}/publish:
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsIdPublish
+      tags:
+      - Website CMS
+      summary: Publish gallery album
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}/unpublish:
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsIdUnpublish
+      tags:
+      - Website CMS
+      summary: Unpublish gallery album
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}/archive:
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsIdArchive
+      tags:
+      - Website CMS
+      summary: Archive gallery album
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/reorder:
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsReorder
+      tags:
+      - Website CMS
+      summary: Bulk sort order for albums
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/post-categories:
+    get:
+      operationId: cms_getAdminCmsPostCategories
+      tags:
+      - Website CMS
+      summary: List post categories
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsPostCategories
+      tags:
+      - Website CMS
+      summary: Create post category
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/post-categories/{id}:
+    get:
+      operationId: cms_getAdminCmsPostCategoriesId
+      tags:
+      - Website CMS
+      summary: Get post category
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsPostCategoriesId
+      tags:
+      - Website CMS
+      summary: Update post category
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsPostCategoriesId
+      tags:
+      - Website CMS
+      summary: Delete post category (409 category_in_use)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/post-categories/reorder:
+    post:
+      operationId: cms_postAdminCmsPostCategoriesReorder
+      tags:
+      - Website CMS
+      summary: Bulk sort order for categories
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/home-sections:
+    get:
+      operationId: cms_getAdminCmsHomeSections
+      tags:
+      - Website CMS
+      summary: List home sections
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsHomeSections
+      tags:
+      - Website CMS
+      summary: Create home section (disabled)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/home-sections/{id}:
+    get:
+      operationId: cms_getAdminCmsHomeSectionsId
+      tags:
+      - Website CMS
+      summary: Get home section
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsHomeSectionsId
+      tags:
+      - Website CMS
+      summary: Update home section payload/order
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsHomeSectionsId
+      tags:
+      - Website CMS
+      summary: Delete home section
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/home-sections/{id}/enable:
+    post:
+      operationId: cms_postAdminCmsHomeSectionsIdEnable
+      tags:
+      - Website CMS
+      summary: Enable home section
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/home-sections/{id}/disable:
+    post:
+      operationId: cms_postAdminCmsHomeSectionsIdDisable
+      tags:
+      - Website CMS
+      summary: Disable home section
+      x-permission: 'cms.publish'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/home-sections/reorder:
+    post:
+      operationId: cms_postAdminCmsHomeSectionsReorder
+      tags:
+      - Website CMS
+      summary: Bulk sort order for home sections
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}/items:
+    get:
+      operationId: cms_getAdminCmsGalleryAlbumsIdItems
+      tags:
+      - Website CMS
+      summary: List album items
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsIdItems
+      tags:
+      - Website CMS
+      summary: Add one or many items to an album
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/albums/{id}/items/reorder:
+    post:
+      operationId: cms_postAdminCmsGalleryAlbumsIdItemsReorder
+      tags:
+      - Website CMS
+      summary: Bulk sort order for album items
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/gallery/items/{id}:
+    patch:
+      operationId: cms_patchAdminCmsGalleryItemsId
+      tags:
+      - Website CMS
+      summary: Update gallery item
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsGalleryItemsId
+      tags:
+      - Website CMS
+      summary: Delete gallery item
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/media:
+    get:
+      operationId: cms_getAdminCmsMedia
+      tags:
+      - Website CMS
+      summary: List media
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: cms_postAdminCmsMedia
+      tags:
+      - Website CMS
+      summary: Upload an image (multipart; jpeg/png/webp/avif, 8 MB)
+      x-permission: 'cms.media.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CmsMediaUpload'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/media/{id}:
+    get:
+      operationId: cms_getAdminCmsMediaId
+      tags:
+      - Website CMS
+      summary: Get media
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsMediaId
+      tags:
+      - Website CMS
+      summary: Edit alt, credit, source, tags
+      x-permission: 'cms.media.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsMediaId
+      tags:
+      - Website CMS
+      summary: Delete media (409 media_in_use with usage list)
+      x-permission: 'cms.media.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/media/{id}/usage:
+    get:
+      operationId: cms_getAdminCmsMediaIdUsage
+      tags:
+      - Website CMS
+      summary: Where a media item is used
+      x-permission: 'cms.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/subscribers:
+    get:
+      operationId: cms_getAdminCmsSubscribers
+      tags:
+      - Website CMS
+      summary: List subscribers
+      x-permission: 'cms.subscribers.view'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/subscribers/export:
+    get:
+      operationId: cms_getAdminCmsSubscribersExport
+      tags:
+      - Website CMS
+      summary: Export subscribers as CSV
+      x-permission: 'cms.subscribers.export'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema: {type: string}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/subscribers/{id}/unsubscribe:
+    post:
+      operationId: cms_postAdminCmsSubscribersIdUnsubscribe
+      tags:
+      - Website CMS
+      summary: Unsubscribe a subscriber
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/subscribers/{id}:
+    delete:
+      operationId: cms_deleteAdminCmsSubscribersId
+      tags:
+      - Website CMS
+      summary: Erase a subscriber (GDPR)
+      x-permission: 'cms.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/messages:
+    get:
+      operationId: cms_getAdminCmsMessages
+      tags:
+      - Website CMS
+      summary: Contact inbox
+      x-permission: 'cms.messages.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/cms/messages/{id}:
+    get:
+      operationId: cms_getAdminCmsMessagesId
+      tags:
+      - Website CMS
+      summary: Contact message
+      x-permission: 'cms.messages.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: cms_patchAdminCmsMessagesId
+      tags:
+      - Website CMS
+      summary: Set status / internal note
+      x-permission: 'cms.messages.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CmsObject'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CmsObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cms_deleteAdminCmsMessagesId
+      tags:
+      - Website CMS
+      summary: Erase a contact message
+      x-permission: 'cms.messages.manage'
+      x-additive: true
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  # <<< cms paths <<<
 components:
   securitySchemes:
     bearerAuth:
@@ -18293,3 +20826,57 @@ components:
         name: {type: string}
         kind: {type: string, enum: [KITCHEN, BAR, NONE]}
     # <<< config-admin schemas <<<
+    # >>> cms schemas >>>
+    CmsObject:
+      type: object
+      additionalProperties: true
+      description: Shape documented in docs/CMS_API.md (section per endpoint).
+    CmsMedia:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        url: {type: string, format: uri}
+        width: {type: integer}
+        height: {type: integer}
+        mimeType: {type: string}
+        alt: {type: string}
+        credit: {type: [string, 'null']}
+        dominantColor: {type: [string, 'null']}
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              width: {type: integer}
+              format: {type: string}
+              url: {type: string, format: uri}
+    CmsMediaUpload:
+      type: object
+      required: [file]
+      properties:
+        file: {type: string, format: binary}
+        alt: {type: string}
+        credit: {type: string}
+        sourceUrl: {type: string}
+        tags: {type: array, items: {type: string}}
+    CmsSubscribeRequest:
+      type: object
+      required: [email, consent]
+      properties:
+        email: {type: string, format: email}
+        name: {type: string}
+        source: {type: string, enum: [footer, blog, event, popup, checkout]}
+        consent: {type: boolean}
+        consentText: {type: string}
+        website: {type: string, description: honeypot, must stay empty}
+    CmsContactRequest:
+      type: object
+      required: [name, email, message]
+      properties:
+        name: {type: string}
+        email: {type: string, format: email}
+        phone: {type: string}
+        topic: {type: string, enum: [GENERAL, BOOKING, EVENTS, MEMBERSHIP, FEEDBACK, PRESS, OTHER]}
+        message: {type: string, minLength: 10, maxLength: 5000}
+        website: {type: string}
+    # <<< cms schemas <<<
