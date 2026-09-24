@@ -93,10 +93,11 @@ class PaymentService
 
             // ---- 4. Balances (fresh: we hold the order locks) and allocation validation. -------------------------------
             $paidBefore = Ledger::paidByOrder(array_keys($orders));
+            $pending = Ledger::pendingByOrder(array_keys($orders)); // unconfirmed waiter collections reserve the balance (WAITER_COLLECTION.md)
             if ($tabMode) {
-                [$allocations, $tenders] = $this->tabAllocations($orders, $paidBefore, $in['tenders']);
+                [$allocations, $tenders] = $this->tabAllocations($orders, $paidBefore, $in['tenders'], $pending);
             } else {
-                $allocations = $this->validatedAllocations($in['allocations'], $orders, $paidBefore, $facilityId, $tab);
+                $allocations = $this->validatedAllocations($in['allocations'], $orders, $paidBefore, $facilityId, $tab, $pending);
                 $tenders = $in['tenders'];
                 $sumT = '0';
                 foreach ($tenders as $t) {
@@ -212,7 +213,7 @@ class PaymentService
      * @param  array<string, string>  $paid
      * @return array{0: list<array{orderId: string, amount: string}>, 1: list<array<string, mixed>>}
      */
-    private function tabAllocations(array $orders, array $paid, array $tenders): array
+    private function tabAllocations(array $orders, array $paid, array $tenders, array $pending = []): array
     {
         $allocations = [];
         $due = '0.0000';
@@ -222,6 +223,9 @@ class PaymentService
             }
             $this->assertPayable($o);
             $balance = bcsub($o['total'], $paid[$oid], 4);
+            if (bccomp($balance, '0', 4) > 0 && bccomp($pending[$oid] ?? '0', '0', 4) > 0) {
+                throw ApiProblem::conflict('pending_collection_exists', 'Money collected at a table is awaiting confirmation for an order on this tab; confirm or reject it first.', ['orderId' => $oid, 'balanceDue' => $balance, 'pendingCollected' => $pending[$oid]]);
+            }
             if (bccomp($balance, '0', 4) > 0) {
                 $allocations[] = ['orderId' => $oid, 'amount' => $balance];
                 $due = bcadd($due, $balance, 4);
@@ -270,7 +274,7 @@ class PaymentService
      * @param  array<string, string>  $paid
      * @return list<array{orderId: string, amount: string}>
      */
-    private function validatedAllocations(array $requested, array $orders, array $paid, string $facilityId, ?array $tab): array
+    private function validatedAllocations(array $requested, array $orders, array $paid, string $facilityId, ?array $tab, array $pending = []): array
     {
         $out = [];
         foreach ($requested as $a) {
@@ -288,7 +292,12 @@ class PaymentService
                 throw ApiProblem::conflict('balance_changed', 'The order has no balance due (it may have just been paid).', ['orderId' => $oid, 'balanceDue' => '0.0000']);
             }
             $this->assertPayable($o);
-            if (bccomp($amount, $balance, 4) > 0) {
+            $reserved = $pending[$oid] ?? '0.0000';
+            $available = bcsub($balance, $reserved, 4);
+            if (bccomp($amount, $available, 4) > 0) {
+                if (bccomp($reserved, '0', 4) > 0) {
+                    throw ApiProblem::conflict('pending_collection_exists', 'Part of this balance was collected at the table and awaits confirmation.', ['orderId' => $oid, 'balanceDue' => $balance, 'pendingCollected' => $reserved, 'collectable' => bccomp($available, '0', 4) > 0 ? $available : '0.0000']);
+                }
                 throw ApiProblem::conflict('balance_changed', 'The order balance is lower than the amount you are allocating.', ['orderId' => $oid, 'balanceDue' => $balance]);
             }
             $out[] = ['orderId' => $oid, 'amount' => $amount];

@@ -25,7 +25,7 @@ interface OrderPort
      * Lock the given orders (FOR UPDATE, ascending id). Orders that do not exist are absent from the result.
      *
      * @param  list<string>  $orderIds
-     * @return array<string, array{id: string, number: string, facilityId: string, paymentFacilityId: ?string, status: string, total: string, subtotal: string, discountTotal: string, taxTotal: string, currency: string, tabId: ?string}>
+     * @return array<string, array{id: string, number: string, facilityId: string, paymentFacilityId: ?string, status: string, total: string, subtotal: string, discountTotal: string, taxTotal: string, currency: string, tabId: ?string, billPrintedAt: ?string, createdBy: ?string, tableId: ?string}>
      */
     public function lockOrders(array $orderIds): array;
 

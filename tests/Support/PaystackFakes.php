@@ -31,6 +31,12 @@ final class PaystackFakes
                     'authorization_url' => 'https://checkout.paystack.com/'.substr($ref, -8), 'access_code' => 'ac_'.substr($ref, -8), 'reference' => $ref,
                 ]]);
             },
+            'api.paystack.co/charge' => function (Request $r) {
+                return Http::response(['status' => true, 'message' => 'Charge attempted', 'data' => [
+                    'reference' => $r['reference'], 'status' => 'pay_offline', 'account_number' => '9912345678', 'account_name' => '007 RESORT TEST',
+                    'bank' => ['name' => 'Test Bank', 'slug' => 'test-bank'], 'account_expires_at' => $r['bank_transfer']['account_expires_at'] ?? null,
+                ]]);
+            },
             'api.paystack.co/transaction/verify/*' => function (Request $r) use ($verifyStatus, $verifyKobo, $currency) {
                 $ref = rawurldecode(substr((string) strrchr($r->url(), '/'), 1));
                 $amount = $verifyKobo ?? (int) (self::$lastInitKobo[$ref] ?? 0);

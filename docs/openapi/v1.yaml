@@ -84,6 +84,16 @@ tags:
   description: Settings
 - name: Realtime
   description: Reverb auth
+- name: Bills
+  description: Pre-bill printing and order freeze (additive)
+- name: Collections
+  description: Waiter collection, confirmation, auto-confirm (additive)
+- name: Cash handover
+  description: Waiter cash-in-hand and handover to the cashier (additive)
+- name: Payment terminals
+  description: Card terminal registry and adapters (additive)
+- name: Collection policy
+  description: Per-staff waiter cash-holding policy (additive)
 paths:
   /system/info:
     get:
@@ -2657,10 +2667,13 @@ paths:
       - Payments
       summary: List payments
       x-permission: payment.view
-      description: 'Required permission: `payment.view`.'
+      description: 'Required permission: `payment.view` (or `payment.confirm`) at the facility (a Reception cashier also sees collections of orders settled there); without a facility filter only your own takings/collections. Additive: top-level `status`, `facilityId`, `collectedBy` (staff uuid; a waiter may pass their own id), `orderId`, `tenderType` are accepted as well as `filter[...]`; the cashier pending list is `GET /payments?status=PENDING_CONFIRMATION&facilityId=...` (AUTHORIZING = awaiting provider).'
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
+      - {name: status, in: query, required: false, schema: {type: string}, x-additive: true}
+      - {name: facilityId, in: query, required: false, schema: {$ref: '#/components/schemas/Uuid'}, x-additive: true}
+      - {name: collectedBy, in: query, required: false, schema: {$ref: '#/components/schemas/Uuid'}, x-additive: true}
       - name: filter[facilityId]
         in: query
         required: false
@@ -8442,6 +8455,799 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  # ---- Waiter collection (bill, collect, confirm, cash handover, terminals, policy; `x-additive: true`; see docs/WAITER_COLLECTION.md) ----
+  /orders/{orderId}/bill:
+    post:
+      operationId: printBill
+      tags:
+      - Bills
+      summary: Print (or reprint) the pre-bill and freeze the order
+      x-additive: true
+      x-permission: bill.print
+      description: 'Freezes the order (no line/send/discount/void changes, 409 `order_billed`) and returns the 80mm pre-bill, clearly NOT a receipt. A repeat is a reprint (counted, audited). Order `status`
+        is unchanged; see `billState`. If the bill was cancelled before and rule `pre_bill_requires_supervisor_if_reopened` is true, an approver or `X-Step-Up-Token` is required (403 `supervisor_required`).
+        Errors: 409 `order_state_invalid`, `order_billed`.'
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Pre-bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /orders/{orderId}/bill/cancel:
+    post:
+      operationId: cancelBill
+      tags:
+      - Bills
+      summary: Cancel the bill and reopen the order
+      x-additive: true
+      x-permission: bill.cancel.execute
+      description: Holders of `bill.cancel.approve` (supervisor) or a valid `X-Step-Up-Token` reopen at once (200); others create an approval (202, action `bill.cancel`, decide via `/approvals/{id}/decision`).
+        409 `collections_pending` while any collection is pending or captured; 409 `bill_not_printed`.
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+      responses:
+        '200':
+          description: Reopened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '202':
+          description: Approval requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillCancelPending'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /orders/{orderId}/collections:
+    post:
+      operationId: collectPayment
+      tags:
+      - Collections
+      summary: Waiter collects money at the table (pending confirmation)
+      x-additive: true
+      x-permission: payment.collect
+      description: 'Creates a payment in `PENDING_CONFIRMATION` (or `AUTHORIZING` for PAY_LINK / Paystack transfer). The order is NOT settled and its captured balance is unchanged; `pendingCollected` rises.
+        The caller must be on a tablet checked out to them. Errors: 403 `device_not_checked_out`, `cash_holding_not_allowed`; 409 `collection_disabled`, `order_not_billed`, `order_state_invalid`, `over_collection`,
+        `cash_limit_exceeded`, `duplicate_reference`, `concurrency_conflict`; 422 `terminal_unavailable`.'
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionRequest'
+      responses:
+        '201':
+          description: Collected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResult'
+        '200':
+          description: 'Replay of an earlier collection with the same client `id` (`Idempotent-Replayed: true`)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payments/{paymentId}/confirm:
+    post:
+      operationId: confirmCollection
+      tags:
+      - Collections
+      summary: Cashier/supervisor confirms a pending collection
+      x-additive: true
+      x-permission: payment.confirm
+      description: PENDING_CONFIRMATION -> CAPTURED, order settled, receipt issued. Idempotent (a second confirm returns 200 + `Idempotent-Replayed`). Not the collector (403 `self_confirmation_forbidden`).
+        409 `payment_state_invalid` (rejected/expired/cancelled), `auto_confirm_only`, `balance_changed`, `cash_session_required`.
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                matchedReference:
+                  type: string
+                  maxLength: 128
+                note:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Confirmed payment + order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payments/{paymentId}/reject:
+    post:
+      operationId: rejectCollection
+      tags:
+      - Collections
+      summary: Cashier/supervisor rejects a pending collection
+      x-additive: true
+      x-permission: payment.confirm
+      description: PENDING_CONFIRMATION -> REJECTED with audit, `security_event payment.collection_rejected` and a realtime alert. Reject after confirm is 409 `payment_state_invalid`.
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+      responses:
+        '200':
+          description: Rejected payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payments/{paymentId}/cancel:
+    post:
+      operationId: cancelCollection
+      tags:
+      - Collections
+      summary: Cancel an unpaid pay-link / provider-transfer collection
+      x-additive: true
+      x-permission: payment.collect
+      description: 'The collector (AUTHORIZING pay link / transfer only) or a `payment.confirm` holder. Asks Paystack first: 409 `already_paid` if it was paid.'
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Cancelled payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payments/terminal-callbacks/{provider}:
+    post:
+      operationId: terminalCallback
+      tags:
+      - Payment terminals
+      summary: Provider callback for an integrated card terminal
+      x-additive: true
+      x-permission: signature
+      description: Signature-authenticated by the provider adapter. Providers without callbacks (MANUAL_BANK) answer 400. A `CONFIRMED` result captures the collection with mode PROVIDER.
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  duplicate:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /payment-terminals:
+    get:
+      operationId: listPaymentTerminals
+      tags:
+      - Payment terminals
+      summary: List payment terminals
+      x-additive: true
+      x-permission: payment.collect | device.manage
+      description: Filter by facility/status.
+      parameters:
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Terminals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentTerminal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      operationId: createPaymentTerminal
+      tags:
+      - Payment terminals
+      summary: Register a payment terminal
+      x-additive: true
+      x-permission: device.manage
+      description: '`provider`: MANUAL_BANK (default) or PAYSTACK_TERMINAL.'
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentTerminalInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTerminal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /payment-terminals/{terminalId}:
+    get:
+      operationId: getPaymentTerminal
+      tags:
+      - Payment terminals
+      summary: Get a payment terminal
+      x-additive: true
+      x-permission: payment.collect | device.manage
+      description: ''
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Terminal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTerminal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      operationId: updatePaymentTerminal
+      tags:
+      - Payment terminals
+      summary: Update / retire a payment terminal
+      x-additive: true
+      x-permission: device.manage
+      description: Set `status` RETIRED to retire; assign a device/staff (null clears).
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentTerminalPatch'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTerminal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /cash-handovers:
+    get:
+      operationId: listCashHandovers
+      tags:
+      - Cash handover
+      summary: List cash handovers
+      x-additive: true
+      x-permission: cash_handover.view (or own)
+      description: 'Filter: status, waiterId, facilityId. Cursor paged.'
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: waiterId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashHandoverPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      operationId: declareCashHandover
+      tags:
+      - Cash handover
+      summary: Waiter declares cash to hand over
+      x-additive: true
+      x-permission: cash_handover.create
+      description: 403 `cash_holding_not_allowed` when holding is denied and nothing is in hand; 422 `amount_mismatch` when declared exceeds cash-in-hand.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - declaredAmount
+              properties:
+                id:
+                  $ref: '#/components/schemas/Uuid'
+                facilityId:
+                  $ref: '#/components/schemas/Uuid'
+                declaredAmount:
+                  $ref: '#/components/schemas/Money'
+                note:
+                  type: string
+                  maxLength: 255
+      responses:
+        '201':
+          description: Declared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashHandover'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /cash-handovers/{handoverId}:
+    get:
+      operationId: getCashHandover
+      tags:
+      - Cash handover
+      summary: Get a cash handover
+      x-additive: true
+      x-permission: cash_handover.view (or own)
+      description: ''
+      parameters:
+      - name: handoverId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Handover
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashHandover'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /cash-handovers/{handoverId}/receive:
+    post:
+      operationId: receiveCashHandover
+      tags:
+      - Cash handover
+      summary: Cashier receives and counts the handed-over cash
+      x-additive: true
+      x-permission: cash_handover.receive
+      description: Records variance (counted - declared), reduces the waiter cash-in-hand by the declared amount. Above `cash_handover_max_variance` the status is PENDING_SIGNOFF. 409 `already_received`.
+      parameters:
+      - name: handoverId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - countedAmount
+              properties:
+                countedAmount:
+                  $ref: '#/components/schemas/Money'
+                note:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashHandover'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /cash-handovers/{handoverId}/signoff:
+    post:
+      operationId: signoffCashHandover
+      tags:
+      - Cash handover
+      summary: Supervisor signs off a handover variance
+      x-additive: true
+      x-permission: cash_handover.signoff
+      description: Not the receiver.
+      parameters:
+      - name: handoverId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Signed off
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashHandover'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /staff/{staffId}/cash-in-hand:
+    get:
+      operationId: getCashInHand
+      tags:
+      - Cash handover
+      summary: A waiter cash-in-hand position
+      x-additive: true
+      x-permission: own | cash_handover.view
+      description: ''
+      parameters:
+      - name: staffId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashInHand'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /staff/{staffId}/collection-policy:
+    get:
+      operationId: getCollectionPolicy
+      tags:
+      - Collection policy
+      summary: EFFECTIVE waiter collection policy
+      x-additive: true
+      x-permission: own | staff.manage
+      description: '`facilityId` (query) selects the facility whose rules apply; default = the staff member''s active tablet checkout facility or first facility.'
+      parameters:
+      - name: staffId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Effective policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    patch:
+      operationId: updateCollectionPolicy
+      tags:
+      - Collection policy
+      summary: Set the per-staff cash-holding override
+      x-additive: true
+      x-permission: staff.manage
+      description: '`cashHolding` INHERIT | ALLOW | DENY and optional personal `cashLimit` (null = use the facility limit). Audited, outbox-synced.'
+      parameters:
+      - name: staffId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cashHolding:
+                  type: string
+                  enum:
+                  - INHERIT
+                  - ALLOW
+                  - DENY
+                cashLimit:
+                  oneOf:
+                  - $ref: '#/components/schemas/Money'
+                  - type: 'null'
+      responses:
+        '200':
+          description: Updated effective policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -9811,6 +10617,17 @@ components:
           $ref: '#/components/schemas/Money'
         amountPaid:
           $ref: '#/components/schemas/Money'
+        billState:
+          type: string
+          enum: [OPEN, BILL_PRINTED]
+          x-additive: true
+          description: Additive. BILL_PRINTED = order frozen, awaiting payment (order `status` is unchanged).
+        billPrintedAt: {type: [string, 'null'], format: date-time, x-additive: true}
+        billPrintCount: {type: integer, x-additive: true}
+        billReopenCount: {type: integer, x-additive: true}
+        awaitingPayment: {type: boolean, x-additive: true}
+        pendingCollected: {$ref: '#/components/schemas/Money', x-additive: true, description: Sum of pending (unconfirmed / awaiting provider) collections}
+        collectable: {$ref: '#/components/schemas/Money', x-additive: true, description: total - captured - pending}
         balanceDue:
           $ref: '#/components/schemas/Money'
         currency:
@@ -9883,6 +10700,17 @@ components:
           $ref: '#/components/schemas/OrderStatus'
         total:
           $ref: '#/components/schemas/Money'
+        billState:
+          type: string
+          enum: [OPEN, BILL_PRINTED]
+          x-additive: true
+          description: Additive. BILL_PRINTED = order frozen, awaiting payment (order `status` is unchanged).
+        billPrintedAt: {type: [string, 'null'], format: date-time, x-additive: true}
+        billPrintCount: {type: integer, x-additive: true}
+        billReopenCount: {type: integer, x-additive: true}
+        awaitingPayment: {type: boolean, x-additive: true}
+        pendingCollected: {$ref: '#/components/schemas/Money', x-additive: true, description: Sum of pending (unconfirmed / awaiting provider) collections}
+        collectable: {$ref: '#/components/schemas/Money', x-additive: true, description: total - captured - pending}
         balanceDue:
           $ref: '#/components/schemas/Money'
         lineCount:
@@ -10325,6 +11153,15 @@ components:
           - PARTIALLY_REFUNDED
           - REFUNDED
           - REVERSED
+          - PENDING_CONFIRMATION
+          - REJECTED
+          - EXPIRED
+        collection:
+          oneOf:
+          - $ref: '#/components/schemas/CollectionInfo'
+          - type: 'null'
+          x-additive: true
+          description: Present on waiter collections. `tenderType` shows the LEDGER type (CARD_TERMINAL -> POS_TERMINAL, PAY_LINK -> CARD); the collected tender is `collection.tender`.
         amount:
           $ref: '#/components/schemas/Money'
         tendered:
@@ -13575,3 +14412,545 @@ components:
         name: {type: string}
         scope: {type: string, example: public.read}
         oldTokenExpiresAt: {type: [string, 'null'], format: date-time}
+    PreBill:
+      type: object
+      description: 80mm pre-bill. NOT a receipt.
+      properties:
+        kind:
+          type: string
+          enum:
+          - PRE_BILL
+        title:
+          type: string
+          example: BILL - NOT A RECEIPT
+        orderId:
+          $ref: '#/components/schemas/Uuid'
+        orderNumber:
+          type: string
+        facility:
+          type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              type: string
+        tableLabel:
+          type:
+          - string
+          - 'null'
+        waiter:
+          type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              type:
+              - string
+              - 'null'
+        printedAt:
+          $ref: '#/components/schemas/Timestamp'
+        printCount:
+          type: integer
+        reprint:
+          type: boolean
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              quantity:
+                type: integer
+              unitPrice:
+                $ref: '#/components/schemas/Money'
+              lineTotal:
+                $ref: '#/components/schemas/Money'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        discountTotal:
+          $ref: '#/components/schemas/Money'
+        taxLines:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              amount:
+                $ref: '#/components/schemas/Money'
+        taxTotal:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        amountPaid:
+          $ref: '#/components/schemas/Money'
+        balanceDue:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+        payLink:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            reference:
+              type:
+              - string
+              - 'null'
+            url:
+              type:
+              - string
+              - 'null'
+            qrPayload:
+              type:
+              - string
+              - 'null'
+        disclaimer:
+          type: string
+        printLines:
+          type: array
+          items:
+            type: string
+          description: Text lines for an 80mm printer (48 columns).
+    BillResult:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        bill:
+          $ref: '#/components/schemas/PreBill'
+        reprint:
+          type: boolean
+    BillCancelPending:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        approval:
+          type: object
+          additionalProperties: true
+    CollectionTender:
+      type: string
+      enum:
+      - CASH
+      - CARD_TERMINAL
+      - TRANSFER
+      - PAY_LINK
+    CollectionRequest:
+      type: object
+      required:
+      - tenderType
+      - amount
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+          description: Client UUIDv7 (offline / retry safe).
+        tenderType:
+          $ref: '#/components/schemas/CollectionTender'
+        amount:
+          $ref: '#/components/schemas/Money'
+        tendered:
+          oneOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: CASH only; change = tendered - amount.
+        terminalId:
+          $ref: '#/components/schemas/Uuid'
+        approvalCode:
+          type: string
+          maxLength: 64
+        slipReference:
+          type: string
+          maxLength: 64
+        last4:
+          type: string
+          pattern: ^\d{4}$
+        bankReference:
+          type: string
+          maxLength: 128
+        channel:
+          type: string
+          enum:
+          - MANUAL
+          - PAYSTACK
+          description: TRANSFER only; PAYSTACK = per-bill dynamic virtual account.
+        customerEmail:
+          type: string
+          format: email
+        note:
+          type: string
+          maxLength: 255
+        clientCreatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    CollectionInfo:
+      type: object
+      properties:
+        tender:
+          $ref: '#/components/schemas/CollectionTender'
+        channel:
+          type: string
+        collectedByStaffId:
+          $ref: '#/components/schemas/Uuid'
+        collectedDeviceId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        terminalId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        approvalCode:
+          type:
+          - string
+          - 'null'
+        slipReference:
+          type:
+          - string
+          - 'null'
+        last4:
+          type:
+          - string
+          - 'null'
+        bankReference:
+          type:
+          - string
+          - 'null'
+        note:
+          type:
+          - string
+          - 'null'
+        clientCreatedAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        autoConfirm:
+          type: boolean
+          description: true = only the server (provider) can confirm.
+        decision:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CONFIRMED
+          - REJECTED
+          - EXPIRED
+          - CANCELLED
+          - null
+        confirmationMode:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MANUAL
+          - PROVIDER
+          - SYSTEM
+          - null
+        decidedByStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        decidedAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        decisionReason:
+          type:
+          - string
+          - 'null'
+        matchedReference:
+          type:
+          - string
+          - 'null'
+    CollectionResult:
+      type: object
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        order:
+          $ref: '#/components/schemas/OrderSummary'
+        payLink:
+          type:
+          - object
+          - 'null'
+          properties:
+            authorizationUrl:
+              type: string
+            accessCode:
+              type:
+              - string
+              - 'null'
+            reference:
+              type: string
+        transferAccount:
+          type:
+          - object
+          - 'null'
+          properties:
+            bankName:
+              type: string
+            accountNumber:
+              type: string
+            accountName:
+              type: string
+            expiresAt:
+              oneOf:
+              - $ref: '#/components/schemas/Timestamp'
+              - type: 'null'
+    ConfirmResult:
+      type: object
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        order:
+          $ref: '#/components/schemas/OrderSummary'
+        receiptId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+    PaymentTerminal:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        facilityId:
+          $ref: '#/components/schemas/Uuid'
+        provider:
+          type: string
+          enum:
+          - MANUAL_BANK
+          - PAYSTACK_TERMINAL
+        label:
+          type: string
+        serial:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - RETIRED
+        assignedDeviceId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        assignedStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        rowVersion:
+          type: integer
+    PaymentTerminalInput:
+      type: object
+      required:
+      - facilityId
+      - label
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        facilityId:
+          $ref: '#/components/schemas/Uuid'
+        provider:
+          type: string
+          enum:
+          - MANUAL_BANK
+          - PAYSTACK_TERMINAL
+          default: MANUAL_BANK
+        label:
+          type: string
+          maxLength: 120
+        serial:
+          type: string
+          maxLength: 120
+        assignedDeviceId:
+          $ref: '#/components/schemas/Uuid'
+        assignedStaffId:
+          $ref: '#/components/schemas/Uuid'
+    PaymentTerminalPatch:
+      type: object
+      properties:
+        label:
+          type: string
+        serial:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - RETIRED
+        assignedDeviceId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        assignedStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+    CashHandover:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        facilityId:
+          $ref: '#/components/schemas/Uuid'
+        waiterStaffId:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          enum:
+          - PENDING_RECEIPT
+          - RECEIVED
+          - PENDING_SIGNOFF
+          - SIGNED_OFF
+        expectedInHand:
+          $ref: '#/components/schemas/Money'
+        declaredAmount:
+          $ref: '#/components/schemas/Money'
+        countedAmount:
+          oneOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        variance:
+          oneOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: counted - declared; negative = short.
+        varianceKind:
+          type:
+          - string
+          - 'null'
+          enum:
+          - EXACT
+          - OVER
+          - SHORT
+          - null
+        requiresSignoff:
+          type: boolean
+        note:
+          type:
+          - string
+          - 'null'
+        receivedByStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        receivedAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        signedOffByStaffId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        signedOffAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+    CashHandoverPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashHandover'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    CashInHand:
+      type: object
+      properties:
+        staffId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+        cashInHand:
+          $ref: '#/components/schemas/Money'
+        limit:
+          oneOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        handoverRequired:
+          type: boolean
+        cashHoldingAllowed:
+          type: boolean
+        oldestUncollectedAt:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        pendingCollections:
+          type: integer
+        pendingCollectionsAmount:
+          $ref: '#/components/schemas/Money'
+        openHandovers:
+          type: integer
+        unsignedShortfall:
+          $ref: '#/components/schemas/Money'
+    CollectionPolicy:
+      type: object
+      properties:
+        staffId:
+          $ref: '#/components/schemas/Uuid'
+        facilityId:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        collectionEnabled:
+          type: boolean
+        cashHolding:
+          type: object
+          properties:
+            allowed:
+              type: boolean
+            source:
+              type: string
+              enum:
+              - facility
+              - staff
+            limit:
+              oneOf:
+              - $ref: '#/components/schemas/Money'
+              - type: 'null'
+            limitSource:
+              type:
+              - string
+              - 'null'
+              enum:
+              - facility
+              - staff
+              - null
+        allowedTenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionTender'
+        staffOverride:
+          type: object
+          properties:
+            cashHolding:
+              type: string
+              enum:
+              - INHERIT
+              - ALLOW
+              - DENY
+            cashLimit:
+              oneOf:
+              - $ref: '#/components/schemas/Money'
+              - type: 'null'
+        facilityRule:
+          type: object
+          properties:
+            waiterCashHolding:
+              type: boolean
+            waiterCashInHandLimit:
+              oneOf:
+              - $ref: '#/components/schemas/Money'
+              - type: 'null'

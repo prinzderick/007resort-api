@@ -355,7 +355,7 @@ final class OrderService
         Authz::require('order.serve', Ids::fromBinary($pre->facility_unit_id));
 
         return DB::transaction(function () use ($orderId, $ifMatch) {
-            $order = $this->lockMutable($orderId, $ifMatch, ['SENT', 'IN_PREPARATION', 'READY']);
+            $order = $this->lockMutable($orderId, $ifMatch, ['SENT', 'IN_PREPARATION', 'READY'], allowBilled: true);
             $facilityId = Ids::fromBinary($order->facility_unit_id);
             $tickets = DB::table('prep_ticket')->where('order_id', $order->id)->where('status', '!=', 'CANCELLED')->lockForUpdate()->get();
             $notReady = $tickets->filter(fn ($t) => ! in_array($t->status, ['READY', 'DISPENSED'], true));
@@ -423,8 +423,20 @@ final class OrderService
         });
     }
 
+    /** A printed bill freezes the order (docs/WAITER_COLLECTION.md): cancel the bill to change it. */
+    public function assertNotBilled(object $order): void
+    {
+        if ($order->bill_printed_at !== null) {
+            throw ApiProblem::conflict('order_billed', 'The bill has been printed; the order is frozen. Cancel the bill to change the order.', ['billPrintedAt' => Fmt::ts($order->bill_printed_at)]);
+        }
+    }
+
     private function assertVoidable(object $order): void
     {
+        $this->assertNotBilled($order);
+        if (DB::table('payment_collection as c')->join('payment as p', 'p.id', '=', 'c.payment_id')->where('c.order_id', $order->id)->whereIn('p.status', ['PENDING_CONFIRMATION', 'AUTHORIZING'])->exists()) {
+            throw ApiProblem::conflict('collections_pending', 'Money collected at the table is awaiting confirmation for this order.');
+        }
         if ($order->status === 'PENDING_APPROVAL') {
             throw ApiProblem::conflict('approval_pending', 'This order already has a pending approval.', ['approvalId' => Fmt::u($order->pending_approval_id)]);
         }
@@ -503,6 +515,7 @@ final class OrderService
             if (in_array($order->status, ['SETTLED', 'VOIDED'], true)) {
                 throw ApiProblem::conflict('order_state_invalid', "An order that is {$order->status} cannot be adjusted.");
             }
+            $this->assertNotBilled($order);
             $line = DB::table('order_line')->where('id', Ids::toBinary($lineId))->where('order_id', $order->id)->lockForUpdate()->first();
             if (! $line || in_array($line->status, ['REMOVED', 'VOIDED'], true)) {
                 throw ApiProblem::notFound('not_found', 'Line not found on this order.');
@@ -619,10 +632,13 @@ final class OrderService
      *
      * @param  string|list<string>  $allowed
      */
-    private function lockMutable(string $orderId, ?int $ifMatch, string|array $allowed): object
+    private function lockMutable(string $orderId, ?int $ifMatch, string|array $allowed, bool $allowBilled = false): object
     {
         $order = $this->lock($orderId);
         Concurrency::assertVersion((int) $order->row_version, $ifMatch, 'order');
+        if (! $allowBilled) {
+            $this->assertNotBilled($order);
+        }
         if ($order->status === 'PENDING_APPROVAL') {
             throw ApiProblem::conflict('approval_pending', 'This order has a pending approval; it cannot be changed until it is decided.', ['approvalId' => Fmt::u($order->pending_approval_id)]);
         }

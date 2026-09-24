@@ -24,6 +24,23 @@ return [
         'columns' => (int) env('RECEIPT_COLUMNS', 48),          // 80mm = 48, 58mm = 32
     ],
 
+    // Base URL printed on the pre-bill as the customer pay link / QR (rule bill_pay_link_enabled). Empty = no URL.
+    'pay_link_base_url' => env('PAY_LINK_BASE_URL'),
+
+    // Waiter collection (docs/WAITER_COLLECTION.md). Facility rules override these defaults.
+    'collection' => [
+        'expiry_minutes' => (int) env('PAYMENTS_COLLECTION_EXPIRY_MINUTES', 30),
+        'handover_max_variance' => env('PAYMENTS_HANDOVER_MAX_VARIANCE', '500'),
+        'transfer_account_ttl_minutes' => (int) env('PAYMENTS_TRANSFER_ACCOUNT_TTL_MINUTES', 60),
+        // Paystack needs an email; used when the waiter does not capture the customer's.
+        'default_customer_email' => env('PAYMENTS_COLLECTION_DEFAULT_EMAIL', 'pay@collect.007resort.invalid'),
+    ],
+
+    // Card terminals (docs/WAITER_COLLECTION.md section 5). MANUAL_BANK is always available; the Paystack terminal is a disabled stub.
+    'terminals' => [
+        'paystack_enabled' => (bool) env('PAYMENTS_TERMINAL_PAYSTACK_ENABLED', false),
+    ],
+
     // A payment with NO cash session (non-cash tender at a facility that does not require one) can still be reversed for this long.
     'reversal_window_hours' => (int) env('PAYMENT_REVERSAL_WINDOW_HOURS', 24),
 ];

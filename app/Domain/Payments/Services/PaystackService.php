@@ -11,6 +11,7 @@ use App\Domain\Payments\Contracts\PayableSubjectResolver;
 use App\Domain\Payments\Contracts\PaymentProviderAdapter;
 use App\Domain\Payments\Provider\VerifiedTransaction;
 use App\Domain\Payments\Provider\WebhookEvent;
+use App\Domain\Payments\Support\CollectionCaptureConflict;
 use App\Domain\Payments\Support\Fmt;
 use App\Domain\Payments\Support\Ledger;
 use App\Domain\Payments\Support\Tenantless;
@@ -85,12 +86,16 @@ class PaystackService
                 $facilityId = $facilityIds[0];
                 $online || $this->authorize($staffId, $facilityId);
                 $paid = Ledger::paidByOrder(array_keys($orders));
+                $reserved = Ledger::pendingByOrder(array_keys($orders)); // waiter collections awaiting confirmation reserve the balance
                 $due = '0.0000';
                 $allocs = [];
                 foreach ($orders as $oid => $o) {
                     $balance = bcsub($o['total'], $paid[$oid], 4);
                     if (bccomp($balance, '0', 4) <= 0) {
                         throw ApiProblem::conflict('balance_changed', 'An order has no balance due.', ['orderId' => $oid, 'balanceDue' => '0.0000']);
+                    }
+                    if (bccomp($reserved[$oid], '0', 4) > 0) {
+                        throw ApiProblem::conflict('pending_collection_exists', 'Money collected at the table is awaiting confirmation for this order.', ['orderId' => $oid, 'balanceDue' => $balance, 'pendingCollected' => $reserved[$oid]]);
                     }
                     $this->payments->assertPayable($o, $online);
                     $due = bcadd($due, $balance, 4);
@@ -218,7 +223,13 @@ class PaystackService
 
                     return ['duplicate' => false];
                 }
-                $this->capture($p, $tx);
+                try {
+                    $this->capture($p, $tx);
+                } catch (CollectionCaptureConflict $e) {
+                    // Real money arrived for a collection whose order can no longer take it (e.g. an online payment landed first): leave it
+                    // AUTHORIZING for a human decision (refund) instead of failing the webhook forever.
+                    Audit::securityEvent('payment.collection_capture_conflict', 'CRITICAL', null, null, ['paymentId' => Ids::fromBinary($p->id), 'amount' => Money::normalize((string) $p->amount), 'detail' => $e->getMessage()]);
+                }
             } elseif ($tx->status === VerifiedTransaction::FAILED) {
                 DB::table('payment')->where('id', $p->id)->update(['status' => 'FAILED', 'failure_reason' => mb_substr((string) $tx->gatewayResponse, 0, 255) ?: 'provider_failed', 'row_version' => DB::raw('row_version + 1')]);
                 Audit::record('payment.failed', 'Payment', Ids::fromBinary($p->id), new: ['reason' => $tx->gatewayResponse], organizationId: Ids::fromBinary($p->organization_id), siteId: Ids::fromBinary($p->site_id), facilityUnitId: Ids::fromBinary($p->facility_unit_id));
@@ -246,7 +257,19 @@ class PaystackService
         $paidBefore = [];
         $unallocated = '0.0000';
         $receiptId = null;
-        if (! empty($intent['allocations'])) {
+        $reserved = DB::table('payment_allocation')->where('payment_id', $p->id)->orderBy('id')->get(['order_id', 'amount']); // waiter collections pre-allocate
+        if ($reserved->isNotEmpty()) {
+            $orders = $this->orders->lockOrders($reserved->map(fn ($a) => Ids::fromBinary($a->order_id))->all());
+            $paidBefore = Ledger::paidByOrder(array_keys($orders));
+            foreach ($reserved as $a) {
+                $oid = Ids::fromBinary($a->order_id);
+                $take = Money::normalize((string) $a->amount);
+                if (! isset($orders[$oid]) || in_array($orders[$oid]['status'], ['VOIDED', 'PENDING_APPROVAL'], true) || bccomp(bcadd($paidBefore[$oid], $take, 4), $orders[$oid]['total'], 4) > 0) {
+                    throw new CollectionCaptureConflict("Order {$oid} can no longer absorb the collected amount.");
+                }
+                $slices[] = ['orderId' => $oid, 'amount' => $take];
+            }
+        } elseif (! empty($intent['allocations'])) {
             $orders = $this->orders->lockOrders(array_map(fn ($a) => $a['orderId'], $intent['allocations'])); // payment -> orders (same as reversal)
             $paidBefore = Ledger::paidByOrder(array_keys($orders));
             $left = $amount;
@@ -275,14 +298,16 @@ class PaystackService
             $receipt = $this->receipts->issue([
                 'organizationId' => $orgId, 'siteId' => $siteId, 'facilityId' => $facilityId, 'groupId' => $groupId, 'staffId' => $staffId,
                 'deviceId' => Fmt::uuid($p->device_id), 'orders' => $receiptOrders, 'details' => $this->orders->details(array_keys($allocatedNow)),
-                'tenders' => [['tenderType' => 'CARD', 'amount' => $paidAmount, 'reference' => $p->provider_reference, 'tendered' => null, 'changeGiven' => '0.0000']],
+                'tenders' => [['tenderType' => $p->tender_type, 'amount' => $paidAmount, 'reference' => $p->provider_reference, 'tendered' => null, 'changeGiven' => '0.0000']],
                 'amountPaid' => $paidAmount, 'balanceDue' => $balanceDue,
             ]);
             $receiptId = $receipt['id'];
-            foreach ($slices as $s) {
-                DB::table('payment_allocation')->insert([
-                    'id' => Ids::toBinary(Ids::uuid7()), 'payment_id' => $p->id, 'order_id' => Ids::toBinary($s['orderId']), 'amount' => $s['amount'],
-                ]);
+            if ($reserved->isEmpty()) {
+                foreach ($slices as $s) {
+                    DB::table('payment_allocation')->insert([
+                        'id' => Ids::toBinary(Ids::uuid7()), 'payment_id' => $p->id, 'order_id' => Ids::toBinary($s['orderId']), 'amount' => $s['amount'],
+                    ]);
+                }
             }
         }
 
@@ -299,7 +324,7 @@ class PaystackService
             $this->effects->syncOrders($orders, $paidBefore, $allocatedNow, $groupId);
         }
         $this->effects->captured([[
-            'id' => $paymentId, 'tenderType' => 'CARD', 'amount' => $amount, 'reference' => $p->provider_reference, 'tendered' => null, 'changeGiven' => '0.0000',
+            'id' => $paymentId, 'tenderType' => $p->tender_type, 'amount' => $amount, 'reference' => $p->provider_reference, 'tendered' => null, 'changeGiven' => '0.0000',
             'cashSessionId' => null, 'receiptId' => $receiptId, 'takenByStaffId' => $staffId, 'allocations' => $slices,
         ]], [
             'organizationId' => $orgId, 'siteId' => $siteId, 'facilityId' => $facilityId, 'groupId' => $groupId, 'provider' => 'PAYSTACK', 'staffId' => null,

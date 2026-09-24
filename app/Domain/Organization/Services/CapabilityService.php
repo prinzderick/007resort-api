@@ -27,6 +27,15 @@ class CapabilityService
         'allow_offline_orders' => 'bool',
         'allow_offline_payments' => 'payments',
         'hold_ttl_seconds' => 'int',
+        // Waiter collection (docs/WAITER_COLLECTION.md section 7; consumed by Payments' CollectionRules)
+        'waiter_collection_enabled' => 'bool',
+        'waiter_cash_holding' => 'bool',
+        'waiter_cash_in_hand_limit' => 'money',
+        'collection_requires_confirmation' => 'list',
+        'pending_collection_expiry_minutes' => 'int',
+        'pre_bill_requires_supervisor_if_reopened' => 'bool',
+        'bill_pay_link_enabled' => 'bool',
+        'cash_handover_max_variance' => 'money',
     ];
 
     /** @return list<string> enabled capability codes, sorted */
@@ -93,6 +102,14 @@ class CapabilityService
             'allowOfflineOrders' => $has('POS') || $has('TABLE_SERVICE'),
             'allowOfflinePayments' => $has('PAYMENT_ACCEPTANCE') ? 'CASH_ONLY' : 'NONE',
             'holdTtlSeconds' => 900,
+            'waiterCollectionEnabled' => $has('TABLE_SERVICE'),
+            'waiterCashHolding' => false,
+            'waiterCashInHandLimit' => null,
+            'collectionRequiresConfirmation' => ['CASH', 'CARD_TERMINAL', 'TRANSFER'],
+            'pendingCollectionExpiryMinutes' => (int) config('payments.collection.expiry_minutes', 30),
+            'preBillRequiresSupervisorIfReopened' => true,
+            'billPayLinkEnabled' => false,
+            'cashHandoverMaxVariance' => Money::normalize((string) config('payments.collection.handover_max_variance', '500')),
         ];
         foreach ($stored as $key => $value) {
             [$name, $typed] = $this->typed($key, $value);

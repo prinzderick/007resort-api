@@ -26,6 +26,17 @@ interface PaymentProviderAdapter
     public function initialize(string $reference, string $amount, string $currency, string $email, ?string $callbackUrl, array $metadata): array;
 
     /**
+     * Per-bill transfer: ask the provider for a dynamic (single-use, expiring) virtual account the customer pays by bank transfer.
+     * The payment is then confirmed exactly like a card payment: webhook / `verify($reference)`.
+     *
+     * @param  array<string, mixed>  $metadata
+     * @return array{bankName: string, accountNumber: string, accountName: string, expiresAt: ?string}
+     *
+     * @throws ApiProblem 502 provider_error / 501 when the provider has no such channel
+     */
+    public function createTransferAccount(string $reference, string $amount, string $currency, string $email, array $metadata): array;
+
+    /**
      * Ask the provider (server to server) what really happened to a transaction. This - not a webhook body, not a
      * client redirect - is the only thing allowed to make a payment CAPTURED.
      *

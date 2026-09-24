@@ -34,3 +34,10 @@ Table names (schema commit `e4d52a9`): `product_category, product, price_list, p
 * Lists use the contract envelope `{items, nextCursor}`.
 * Extra endpoints beyond the contract: `POST/PATCH /catalog/categories|products`, `PUT /catalog/products/{id}/price`, `GET /catalog/prep-routes|tax-rates`, `POST /tables/{id}/assign|transfer`.
 * `Product.active` is false when the product is inactive OR 86'd at that facility OR has no price (clients hide inactive items).
+
+## Bill (pre-bill) - added for waiter collection
+
+`BillService` (`POST /orders/{id}/bill`, `/bill/cancel`; `docs/WAITER_COLLECTION.md`). Printing sets `order.bill_printed_at` (+ count, printer, device): the order **status is unchanged** and
+`billState`/`awaitingPayment`/`pendingCollected`/`collectable` are additive fields on Order and OrderSummary. While billed, `addLine`, `removeLine`, `send`, adjustments and void answer 409 `order_billed`
+(`serve` still works); a bill cannot be cancelled or the order voided while money is pending or captured against it (409 `collections_pending`). `bill.cancel` is an approval action (handler registered in `OrdersServiceProvider`).
+`OperatingRules::forFacility()` now also returns `raw` (every stored rule key/value) for modules that own their own rule keys (Payments' `CollectionRules`).

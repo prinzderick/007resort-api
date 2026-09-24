@@ -102,6 +102,14 @@ for 80mm printers (`RECEIPT_COLUMNS=32` for 58mm). Reprints are counted in `rece
 `RECEIPT_FOOTER`, `RECEIPT_TIMEZONE`, `RECEIPT_COLUMNS`, `PAYMENT_REVERSAL_WINDOW_HOURS`. Configure the webhook URL in the Paystack
 dashboard as `https://<cloud-host>/api/v1/payments/webhooks/paystack` (Cloud node is the public receiver).
 
+## Waiter collection (added later; full design in `docs/WAITER_COLLECTION.md`)
+
+`payment` gained the statuses `PENDING_CONFIRMATION` (inserted directly; a waiter can never capture), `REJECTED`, `EXPIRED`; allowed transitions (trigger `trg_payment_guard_update`, rebuilt):
+`PENDING_CONFIRMATION -> CAPTURED | REJECTED | EXPIRED | CANCELLED`; `cash_session_id` may be set once (NULL -> value) exactly at that confirmation. `Ledger::pendingByOrder` = allocations of
+`PENDING_CONFIRMATION` and `AUTHORIZING` collections; `PaymentService` / tab settle / Paystack initialize subtract it (409 `pending_collection_exists`). New tables: `payment_collection` (facts, insert-only),
+`payment_collection_decision` (one row per payment, insert-only), `cash_in_hand_entry` (insert-only), `cash_handover`, `staff_collection_policy`, `payment_terminal`. Waiter-collected Paystack tenders
+(pay link, per-bill transfer) pre-allocate at initialize, so `PaystackService::capture` reuses those allocation rows.
+
 ## Known gaps
 
 Paystack refund API call (refunds of PAYSTACK payments are recorded with `providerActionRequired`), settlement/reconciliation
