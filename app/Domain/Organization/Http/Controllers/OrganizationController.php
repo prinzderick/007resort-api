@@ -68,7 +68,9 @@ class OrganizationController
     {
         $f = $this->find($facilityId);
 
-        return response()->json(['facilityId' => $f->id] + $this->capabilities->effective($f->id));
+        $effective = $this->capabilities->effective($f->id);
+
+        return Etag::json(['facilityId' => $f->id] + $effective, $effective['version']);
     }
 
     private function find(string $facilityId): FacilityUnit
