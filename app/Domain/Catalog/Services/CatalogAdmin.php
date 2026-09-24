@@ -2,12 +2,15 @@
 
 namespace App\Domain\Catalog\Services;
 
+use App\Domain\Config\Support\ConfigIds;
+use App\Domain\Config\Support\ConfigVersion;
 use App\Support\Api\Concurrency;
 use App\Support\Api\Fmt;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use App\Support\Money\Money;
+use App\Support\Sync\Outbox;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
@@ -28,6 +31,7 @@ final class CatalogAdmin
                 'name' => $in['name'], 'sort_order' => $in['sortOrder'] ?? 0,
             ]);
             Audit::record('catalog.category.create', 'ProductCategory', $id, new: ['name' => $in['name'], 'parentId' => $in['parentId'] ?? null]);
+            Outbox::record('ConfigurationUpdated', 'ProductCategory', $id, ['domain' => 'productCategory', 'changes' => $this->category($id) + ['organizationId' => $org]], 1);
 
             return $this->category($id);
         });
@@ -54,6 +58,7 @@ final class CatalogAdmin
             $upd['row_version'] = $row->row_version + 1;
             DB::table('product_category')->where('id', $row->id)->update($upd);
             Audit::record('catalog.category.update', 'ProductCategory', $id, old: ['name' => $row->name, 'sortOrder' => $row->sort_order, 'active' => (bool) $row->is_active], new: $in);
+            Outbox::record('ConfigurationUpdated', 'ProductCategory', $id, ['domain' => 'productCategory', 'changes' => $this->category($id)], (int) $upd['row_version']);
 
             return $this->category($id);
         });
@@ -74,16 +79,24 @@ final class CatalogAdmin
             if (DB::table('product')->where('organization_id', Ids::toBinary($org))->where('sku', $in['sku'])->exists()) {
                 throw ApiProblem::conflict('sku_taken', 'A product with that SKU already exists.');
             }
+            $this->assertBarcodeFree($org, $in['barcode'] ?? null, null);
             $id = Ids::uuid7();
             DB::table('product')->insert([
                 'id' => Ids::toBinary($id), 'organization_id' => Ids::toBinary($org), 'category_id' => Ids::toBinary($in['categoryId']),
                 'sku' => $in['sku'], 'name' => $in['name'], 'kind' => $in['kind'] ?? 'GOOD',
                 'tax_rate_id' => Fmt::b($in['taxRateId'] ?? null), 'tax_exempt' => ! empty($in['taxExempt']) ? 1 : 0,
                 'prep_route_id' => Fmt::b($in['prepRouteId'] ?? null), 'track_stock' => ! empty($in['trackStock']) ? 1 : 0,
-                'image_url' => $in['imageUrl'] ?? null,
+                'image_url' => $in['imageUrl'] ?? null, 'description' => $in['description'] ?? null, 'barcode' => $in['barcode'] ?? null,
+                'modifiers' => isset($in['modifiers']) ? json_encode($in['modifiers']) : null,
             ]);
+            // the product's event goes out before anything that references it (facility links, prices) so a peer can apply them in order
+            Outbox::record('ConfigurationUpdated', 'Product', $id, ['domain' => 'product', 'changes' => $this->syncSnapshot($id)], 1);
             foreach ($in['facilityIds'] ?? [] as $fid) {
-                DB::table('product_facility')->insertOrIgnore(['product_id' => Ids::toBinary($id), 'facility_unit_id' => Ids::toBinary($fid)]);
+                if (DB::table('product_facility')->insertOrIgnore(['product_id' => Ids::toBinary($id), 'facility_unit_id' => Ids::toBinary($fid)]) > 0) {
+                    Outbox::record('ConfigurationUpdated', 'ProductFacility', ConfigIds::pair($id, $fid),
+                        ['domain' => 'productFacility', 'changes' => ['productId' => $id, 'facilityId' => $fid, 'available' => true, 'reason' => null, 'kdsStationId' => null, 'sortOrder' => 0]],
+                        ConfigVersion::next(ConfigIds::pair($id, $fid)), facilityId: $fid);
+                }
             }
             if (isset($in['price'])) {
                 $this->writePrice($id, $in['price'], null);
@@ -104,8 +117,14 @@ final class CatalogAdmin
                 throw ApiProblem::notFound();
             }
             Concurrency::assertVersion($row->row_version, $ifMatch, 'product');
-            $map = ['name' => 'name', 'kind' => 'kind', 'imageUrl' => 'image_url'];
+            $map = ['name' => 'name', 'kind' => 'kind', 'imageUrl' => 'image_url', 'description' => 'description', 'barcode' => 'barcode'];
+            if (array_key_exists('barcode', $in)) {
+                $this->assertBarcodeFree($org, $in['barcode'], $row->id);
+            }
             $upd = [];
+            if (array_key_exists('modifiers', $in)) {
+                $upd['modifiers'] = $in['modifiers'] === null ? null : json_encode($in['modifiers']);
+            }
             foreach ($map as $k => $col) {
                 if (array_key_exists($k, $in)) {
                     $upd[$col] = $in[$k];
@@ -128,6 +147,7 @@ final class CatalogAdmin
             DB::table('product')->where('id', $row->id)->update($upd);
             Audit::record('catalog.product.update', 'Product', $id,
                 old: ['name' => $row->name, 'kind' => $row->kind, 'active' => (bool) $row->is_active], new: $in);
+            Outbox::record('ConfigurationUpdated', 'Product', $id, ['domain' => 'product', 'changes' => $this->syncSnapshot($id)], (int) $upd['row_version']);
 
             return $this->product($id);
         });
@@ -146,6 +166,7 @@ final class CatalogAdmin
             }
             $old = $this->writePrice($productId, $amount, $facilityId);
             DB::table('product')->where('id', $row->id)->update(['row_version' => $row->row_version + 1]);
+            Outbox::record('ConfigurationUpdated', 'Product', $productId, ['domain' => 'product', 'changes' => $this->syncSnapshot($productId)], (int) $row->row_version + 1); // the price change bumped the product version: keep the peer in step
             Audit::record('catalog.price.set', 'Product', $productId, old: ['amount' => $old, 'facilityId' => $facilityId], new: ['amount' => Money::normalize($amount), 'facilityId' => $facilityId], facilityUnitId: $facilityId);
 
             return $this->product($productId);
@@ -158,6 +179,7 @@ final class CatalogAdmin
         if (! $list) {
             $lid = Ids::uuid7();
             DB::table('price_list')->insert(['id' => Ids::toBinary($lid), 'organization_id' => Ids::toBinary(Tenant::organizationId()), 'name' => 'Standard', 'is_default' => 1]);
+            Outbox::record('ConfigurationUpdated', 'PriceList', $lid, ['domain' => 'priceList', 'changes' => ['organizationId' => Tenant::organizationId(), 'name' => 'Standard', 'currency' => 'NGN', 'isDefault' => true, 'active' => true]], 1);
             $listBin = Ids::toBinary($lid);
         } else {
             $listBin = $list->id;
@@ -166,13 +188,48 @@ final class CatalogAdmin
         $facilityId === null ? $q->whereNull('facility_unit_id') : $q->where('facility_unit_id', Ids::toBinary($facilityId));
         $prev = (clone $q)->value('amount');
         $now = Fmt::now();
-        $q->update(['is_active' => 0, 'valid_to' => $now]);
+        $supersededRows = (clone $q)->get(['id', 'row_version']);
+        $q->update(['is_active' => 0, 'valid_to' => $now, 'row_version' => DB::raw('row_version + 1')]);
+        foreach ($supersededRows as $sr) {
+            Outbox::record('ConfigurationUpdated', 'Price', Ids::fromBinary($sr->id), ['domain' => 'price', 'changes' => ['active' => false, 'validTo' => Fmt::ts($now)]], (int) $sr->row_version + 1, facilityId: $facilityId);
+        }
+        $newId = Ids::uuid7();
         DB::table('price')->insert([
-            'id' => Ids::toBinary(Ids::uuid7()), 'price_list_id' => $listBin, 'product_id' => Ids::toBinary($productId),
+            'id' => Ids::toBinary($newId), 'price_list_id' => $listBin, 'product_id' => Ids::toBinary($productId),
             'facility_unit_id' => Fmt::b($facilityId), 'amount' => Money::normalize($amount), 'valid_from' => $now,
         ]);
+        Outbox::record('ConfigurationUpdated', 'Price', $newId, ['domain' => 'price', 'changes' => [
+            'priceListId' => Ids::fromBinary($listBin), 'productId' => $productId, 'facilityId' => $facilityId, 'amount' => Money::normalize($amount),
+            'validFrom' => Fmt::ts($now), 'validTo' => null, 'active' => true]], 1, facilityId: $facilityId);
 
         return $prev === null ? null : Money::normalize($prev);
+    }
+
+    private function assertBarcodeFree(string $org, ?string $barcode, ?string $exceptProductBin): void
+    {
+        if ($barcode === null || $barcode === '') {
+            return;
+        }
+        $q = DB::table('product')->where('organization_id', Ids::toBinary($org))->where('barcode', $barcode);
+        if ($exceptProductBin !== null) {
+            $q->where('id', '!=', $exceptProductBin);
+        }
+        if ($q->exists()) {
+            throw ApiProblem::conflict('barcode_taken', 'Another product already uses that barcode.');
+        }
+    }
+
+    /** Sync snapshot of the editable product columns (camelCase, syncable by the Config product target). @return array<string, mixed> */
+    public function syncSnapshot(string $id): array
+    {
+        $r = DB::table('product')->where('id', Ids::toBinary($id))->first();
+
+        return [
+            'organizationId' => Ids::fromBinary($r->organization_id), 'categoryId' => Ids::fromBinary($r->category_id), 'sku' => $r->sku, 'name' => $r->name, 'kind' => $r->kind,
+            'taxRateId' => Fmt::u($r->tax_rate_id), 'taxExempt' => (bool) $r->tax_exempt, 'prepRouteId' => Fmt::u($r->prep_route_id), 'trackStock' => (bool) $r->track_stock,
+            'imageUrl' => $r->image_url, 'description' => $r->description, 'barcode' => $r->barcode, 'modifiers' => $r->modifiers === null ? null : json_decode($r->modifiers, true),
+            'isActive' => (bool) $r->is_active,
+        ];
     }
 
     private function mustExist(string $table, string $id, string $org): void
@@ -201,6 +258,7 @@ final class CatalogAdmin
             'kind' => CatalogService::contractKind($r->kind, $r->route_kind ?? 'NONE'), 'commercialKind' => $r->kind,
             'prepRouteId' => Fmt::u($r->prep_route_id), 'taxRateId' => Fmt::u($r->tax_rate_id), 'taxExempt' => (bool) $r->tax_exempt,
             'trackStock' => (bool) $r->track_stock, 'active' => (bool) $r->is_active, 'imageUrl' => $r->image_url,
+            'description' => $r->description, 'barcode' => $r->barcode, 'modifiers' => $r->modifiers === null ? null : json_decode($r->modifiers, true),
             'prices' => $prices->map(fn ($p) => ['facilityId' => Fmt::u($p->facility_unit_id), 'amount' => Money::normalize($p->amount)])->all(),
             'rowVersion' => (int) $r->row_version,
         ];

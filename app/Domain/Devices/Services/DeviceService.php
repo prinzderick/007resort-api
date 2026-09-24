@@ -117,6 +117,7 @@ class DeviceService
             'status' => $d->status(),
             'facilityId' => $checkout && $checkout->checked_in_at === null ? $checkout->facility_unit_id : null,
             'homeFacilityId' => $d->facility_unit_id,
+            'operatingPointId' => $d->operating_point_id,
             'homeFacility' => $this->homeFacility($d),
             'platform' => $d->platform,
             'appVersion' => $d->app_version,

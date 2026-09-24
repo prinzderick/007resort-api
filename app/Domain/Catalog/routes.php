@@ -9,7 +9,7 @@ Route::middleware(['auth:staff,customer,service', 'device:optional', 'throttle:c
 
 Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::get('catalog/categories', [CatalogController::class, 'categories']);
-    Route::get('catalog/products/{productId}', [CatalogController::class, 'product']);
+    Route::get('catalog/products/{productId}', [CatalogController::class, 'product'])->whereUuid('productId'); // 'export' is a Config route
     Route::get('catalog/availability', [CatalogController::class, 'availability']);
     Route::get('catalog/prep-routes', [CatalogController::class, 'prepRoutes']);
     Route::get('catalog/tax-rates', [CatalogController::class, 'taxRates']);

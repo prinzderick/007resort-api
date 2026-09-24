@@ -17,7 +17,7 @@ Route::prefix('devices')->group(function () {
     });
 
     Route::middleware(['auth:staff', 'device:optional'])->group(function () {
-        Route::get('/', [DeviceController::class, 'index'])->middleware('permission:device.register|device.view');
+        Route::get('/', [DeviceController::class, 'index'])->middleware('permission:device.register|device.view|device.manage');
         Route::post('registration-codes', [DeviceController::class, 'issueCode'])->middleware('permission:device.register');
         Route::post('{deviceId}/checkout', [DeviceController::class, 'checkout'])->middleware('idempotent');
         Route::post('{deviceId}/checkin', [DeviceController::class, 'checkin'])->middleware('idempotent');

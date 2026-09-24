@@ -29,7 +29,7 @@ class OrganizationController
     public function facilities(): JsonResponse
     {
         $rows = FacilityUnit::query()->where('site_id', Tenant::siteId())->whereNull('deleted_at')
-            ->orderBy('created_at')->orderBy('code')->get();
+            ->orderBy('sort_order')->orderBy('created_at')->orderBy('code')->get();
         $caps = $this->capabilities->capabilitiesFor($rows->pluck('id')->all());
 
         $nodes = [];
@@ -68,7 +68,9 @@ class OrganizationController
     {
         $f = $this->find($facilityId);
 
-        return response()->json(['facilityId' => $f->id] + $this->capabilities->effective($f->id));
+        $effective = $this->capabilities->effective($f->id);
+
+        return Etag::json(['facilityId' => $f->id] + $effective, $effective['version']);
     }
 
     private function find(string $facilityId): FacilityUnit

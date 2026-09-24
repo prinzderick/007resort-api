@@ -4,6 +4,7 @@ namespace App\Domain\Catalog\Http\Controllers;
 
 use App\Domain\Catalog\Services\CatalogAdmin;
 use App\Domain\Catalog\Services\CatalogService;
+use App\Domain\Config\Support\ProductInput;
 use App\Domain\Customer\Services\PublicCatalog;
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Customer\Support\TicketCatalog;
@@ -136,11 +137,15 @@ class CatalogController
         return response()->json(['items' => $rows->map(fn ($r) => ['id' => Fmt::u($r->id), 'code' => $r->code, 'name' => $r->name, 'kind' => $r->kind])->all(), 'nextCursor' => null]);
     }
 
-    public function taxRates(): JsonResponse
+    public function taxRates(Request $request): JsonResponse
     {
-        $rows = DB::table('tax_rate')->where('organization_id', Ids::toBinary(Tenant::organizationId()))->where('is_active', 1)->orderBy('code')->get();
+        $q = DB::table('tax_rate')->where('organization_id', Ids::toBinary(Tenant::organizationId()));
+        if (! filter_var($request->query('includeInactive'), FILTER_VALIDATE_BOOL)) {
+            $q->where('is_active', 1);
+        }
+        $rows = $q->orderBy('code')->get();
 
-        return response()->json(['items' => $rows->map(fn ($r) => ['id' => Fmt::u($r->id), 'code' => $r->code, 'name' => $r->name, 'ratePercent' => rtrim(rtrim($r->rate_percent, '0'), '.') ?: '0'])->all(), 'nextCursor' => null]);
+        return response()->json(['items' => $rows->map(fn ($r) => ['id' => Fmt::u($r->id), 'code' => $r->code, 'name' => $r->name, 'ratePercent' => rtrim(rtrim($r->rate_percent, '0'), '.') ?: '0', 'active' => (bool) $r->is_active, 'rowVersion' => (int) $r->row_version])->all(), 'nextCursor' => null]);
     }
 
     // ---- admin (catalog.manage / pricing.manage) -------------------------------------------------------------
@@ -169,6 +174,7 @@ class CatalogController
             'prepRouteId' => ['nullable', 'uuid'], 'taxRateId' => ['nullable', 'uuid'], 'taxExempt' => ['nullable', 'boolean'],
             'trackStock' => ['nullable', 'boolean'], 'imageUrl' => ['nullable', 'url', 'max:500'],
             'facilityIds' => ['nullable', 'array'], 'facilityIds.*' => ['uuid'], 'price' => ['nullable', 'string', 'regex:/^\d{1,15}(\.\d{1,4})?$/'],
+            ...ProductInput::rules(),
         ]);
         $p = $this->admin->createProduct($d);
 
@@ -182,6 +188,7 @@ class CatalogController
             'kind' => ['sometimes', Rule::in(['GOOD', 'SERVICE', 'TICKET', 'RENTAL', 'MEMBERSHIP', 'FEE'])],
             'prepRouteId' => ['sometimes', 'nullable', 'uuid'], 'taxRateId' => ['sometimes', 'nullable', 'uuid'], 'taxExempt' => ['sometimes', 'boolean'],
             'trackStock' => ['sometimes', 'boolean'], 'active' => ['sometimes', 'boolean'], 'imageUrl' => ['sometimes', 'nullable', 'url', 'max:500'],
+            ...ProductInput::rules(),
         ]);
         $p = $this->admin->updateProduct($this->id($id), $d, Concurrency::ifMatch($request, false));
 

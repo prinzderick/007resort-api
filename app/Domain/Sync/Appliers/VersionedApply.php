@@ -5,6 +5,7 @@ namespace App\Domain\Sync\Appliers;
 use App\Domain\Sync\Support\ApplyResult;
 use App\Domain\Sync\Support\InboundEvent;
 use App\Support\Ids;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -25,12 +26,16 @@ final class VersionedApply
     public static function apply(InboundEvent $event, VersionedTarget $target): ApplyResult
     {
         $changes = $event->payload['changes'] ?? null;
-        if (! is_array($changes) || $changes === []) {
+        $owned = $target->creator !== null || $target->after !== null; // the target's hooks own keys that are not plain columns
+        if (! is_array($changes) || ($changes === [] && ! $owned)) {
             throw new InvalidArgumentException('Versioned sync payload needs a non-empty "changes" object.');
         }
         $set = [];
         foreach ($changes as $key => $value) {
             if (! isset($target->columns[$key])) {
+                if ($owned || $target->lenient) {
+                    continue;
+                }
                 throw new InvalidArgumentException("'{$key}' is not a syncable field of {$target->table}.");
             }
             [$column, $type] = $target->columns[$key];
@@ -38,8 +43,19 @@ final class VersionedApply
         }
 
         $id = Ids::toBinary($event->entityId);
-        $row = DB::table($target->table)->where('id', $id)->lockForUpdate()->first();
+        $row = DB::table($target->table)->where($target->keyColumn, $id)->lockForUpdate()->first();
         if ($row === null) {
+            if (($target->upsert || $target->creator !== null) && $event->entityVersion === 1) {
+                if ($target->creator !== null) {
+                    ($target->creator)($event, $changes);
+                } else {
+                    DB::table($target->table)->insert([$target->keyColumn => $id] + $set + [$target->versionColumn => 1]);
+                }
+                $target->after !== null && ($target->after)($event, $changes);
+
+                return ApplyResult::applied('created');
+            }
+
             return ApplyResult::deferred("{$target->table} {$event->entityId} does not exist locally yet");
         }
 
@@ -53,7 +69,8 @@ final class VersionedApply
             return ApplyResult::deferred("version gap on {$target->table}: local v{$local}, incoming v{$incoming}");
         }
 
-        DB::table($target->table)->where('id', $id)->update($set + [$target->versionColumn => $incoming]);
+        DB::table($target->table)->where($target->keyColumn, $id)->update($set + [$target->versionColumn => $incoming]);
+        $target->after !== null && ($target->after)($event, $changes);
 
         return ApplyResult::applied();
     }
@@ -89,7 +106,7 @@ final class VersionedApply
             'uuid' => Ids::toBinary((string) $v),
             'decimal' => is_string($v) && preg_match('/^-?\d+(\.\d+)?$/', $v) ? $v : throw new InvalidArgumentException('Decimals must be strings.'),
             'json' => json_encode($v, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            'datetime' => (string) $v,
+            'datetime' => CarbonImmutable::parse((string) $v)->utc()->format('Y-m-d H:i:s.u'),
             default => (string) $v,
         };
     }

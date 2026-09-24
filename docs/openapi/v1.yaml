@@ -506,6 +506,53 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooMany'
+    patch:
+      operationId: updateDevice
+      tags:
+      - Devices
+      summary: Edit a device (name, home facility, operating point, mode)
+      x-permission: 'device.manage'
+      x-additive: true
+      description: |-
+        Required permission: `device.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdateRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
   /devices/{deviceId}/checkout:
     post:
       operationId: checkoutDevice
@@ -735,6 +782,45 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooMany'
+    post:
+      operationId: createFacility
+      tags:
+      - Organization
+      summary: Create a facility (optionally from a template)
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Creates the facility with the template's capabilities, default operating rules and starter operating points. `code` is unique per site for ever. Audited; emits `ConfigurationUpdated` (`facilityFull`).
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FacilityCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityDetail'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /organization/facilities/{facilityId}:
     get:
       operationId: getFacility
@@ -766,6 +852,86 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooMany'
+    patch:
+      operationId: updateFacility
+      tags:
+      - Organization
+      summary: Edit facility details
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Optimistic concurrency via `If-Match`.
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FacilityUpdateRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityDetail'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+    delete:
+      operationId: deleteFacility
+      tags:
+      - Organization
+      summary: Delete an unused facility
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Only when nothing references the facility; otherwise `409 facility_has_history` (deactivate instead). Soft-deletes; the code stays reserved.
+
+        Required permission: `facility.manage`.
+      parameters:
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /organization/facilities/{facilityId}/operating-points:
     get:
       operationId: listOperatingPoints
@@ -796,6 +962,46 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooMany'
+    post:
+      operationId: createOperatingPoint
+      tags:
+      - Organization
+      summary: Create an operating point (counter, gate, area, KDS station...)
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatingPointCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingPoint'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /facilities/{facilityId}/capabilities:
     get:
       operationId: getFacilityCapabilities
@@ -848,6 +1054,55 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooMany'
+    put:
+      operationId: setFacilityCapabilities
+      tags:
+      - Organization
+      summary: Set the enabled capabilities of a facility
+      x-permission: 'config.manage.capabilities'
+      x-additive: true
+      description: |-
+        Complete desired set. `422 capability_dependency` (with field errors) when prerequisites are missing; `409 capability_in_use` (+ `blockers`) when turning one off would strand open orders/tabs/cash sessions/bookings/stock.
+
+        Required permission: `config.manage.capabilities`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCapabilitiesRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityCapabilities'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
   /staff:
     get:
       operationId: listStaff
@@ -1034,6 +1289,40 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooMany'
+    post:
+      operationId: createRole
+      tags:
+      - Identity
+      summary: Create a custom role
+      x-permission: 'role.manage'
+      x-additive: true
+      description: |-
+        Required permission: `role.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionMatrix'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /staff/{staffId}/role-assignments:
     get:
       operationId: listRoleAssignments
@@ -6995,6 +7284,40 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+    post:
+      operationId: createPrepRoute
+      tags:
+      - Catalog
+      summary: Create a prep route
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepRouteRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepRoute'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /catalog/tax-rates:
     get:
       operationId: listTaxRates
@@ -7012,6 +7335,40 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      operationId: createTaxRate
+      tags:
+      - Catalog
+      summary: Create a tax rate
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxRateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRate'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -7241,6 +7598,48 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+    get:
+      operationId: listResourceBlackouts
+      tags:
+      - Bookings
+      summary: Blackouts of a resource
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Blackout'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /bookings/{bookingId}/order:
     post:
       operationId: attachOrderToBooking
@@ -9248,6 +9647,2405 @@ paths:
         '422':
           $ref: '#/components/responses/Unprocessable'
 
+  # >>> config-admin paths (generated; x-additive) >>>
+  /organization/facilities/{facilityId}/deactivate:
+    post:
+      operationId: deactivateFacility
+      tags:
+      - Organization
+      summary: Deactivate a facility (never deletes)
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Refused with `409 facility_in_use` (+ `blockers`) while it has open orders, open tabs, open cash sessions, upcoming bookings, checked-out devices or active children (unless `cascade`).
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeactivateFacilityRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityDetail'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/facilities/{facilityId}/reactivate:
+    post:
+      operationId: reactivateFacility
+      tags:
+      - Organization
+      summary: Reactivate a facility
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityDetail'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/facilities/{facilityId}/move:
+    post:
+      operationId: moveFacility
+      tags:
+      - Organization
+      summary: Move a facility under another parent (cycle-safe)
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        `422 facility_cycle` if the new parent is the facility or one of its descendants.
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveFacilityRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityDetail'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/facility-templates:
+    get:
+      operationId: listFacilityTemplates
+      tags:
+      - Organization
+      summary: Facility templates
+      x-permission: 'config.view|facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|facility.manage`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacilityTemplateList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organization/capability-types:
+    get:
+      operationId: listCapabilityTypes
+      tags:
+      - Organization
+      summary: Capability catalogue with dependencies
+      x-permission: 'config.view|facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|facility.manage`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/CapabilityType'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organization/rule-definitions:
+    get:
+      operationId: listRuleDefinitions
+      tags:
+      - Organization
+      summary: Typed operating-rule catalogue
+      x-permission: 'config.view|config.manage.rules'
+      x-additive: true
+      description: |-
+        Every rule an admin may set: key, label, plain-language description, type, allowed values, default, unit, owning capability, danger level and enforcement.
+
+        Required permission: `config.view|config.manage.rules`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/RuleDefinition'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /facilities/{facilityId}/operating-rules:
+    get:
+      operationId: getFacilityOperatingRules
+      tags:
+      - Organization
+      summary: Effective typed operating rules of a facility
+      x-permission: 'config.view|config.manage.rules'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|config.manage.rules`.
+      parameters:
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingRulesView'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setFacilityOperatingRules
+      tags:
+      - Organization
+      summary: Change operating rules (validated against the catalogue)
+      x-permission: 'config.manage.rules'
+      x-additive: true
+      description: |-
+        Partial update; `null` resets a rule. Values are validated against `GET /organization/rule-definitions` (422 with `errors["rules.<key>"]`). High-danger rules need `confirm: true`. Audited with old/new; emits `ConfigurationUpdated` (`facilityRules`).
+
+        Required permission: `config.manage.rules`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetOperatingRulesRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingRulesView'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/operating-points:
+    get:
+      operationId: listOperatingPoints
+      tags:
+      - Organization
+      summary: List operating points (admin)
+      x-permission: 'config.view|facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|facility.manage`.
+      parameters:
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: includeInactive
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/OperatingPoint'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organization/operating-points/{operatingPointId}:
+    patch:
+      operationId: updateOperatingPoint
+      tags:
+      - Organization
+      summary: Edit an operating point
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: operatingPointId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatingPointUpdateRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingPoint'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/operating-points/{operatingPointId}/deactivate:
+    post:
+      operationId: deactivateOperatingPoint
+      tags:
+      - Organization
+      summary: Deactivate an operating point
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        `409 operating_point_in_use` while devices, open prep tickets or active tables depend on it.
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: operatingPointId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingPoint'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/operating-points/{operatingPointId}/reactivate:
+    post:
+      operationId: reactivateOperatingPoint
+      tags:
+      - Organization
+      summary: Reactivate an operating point
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: operatingPointId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingPoint'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/tables:
+    get:
+      operationId: listDiningTablesAdmin
+      tags:
+      - Organization
+      summary: List dining tables (admin)
+      x-permission: 'config.view|facility.manage|table.manage'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|facility.manage|table.manage`.
+      parameters:
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: operatingPointId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: includeInactive
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/DiningTable'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organization/facilities/{facilityId}/tables:
+    post:
+      operationId: createDiningTable
+      tags:
+      - Organization
+      summary: Create a dining table
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiningTableCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /organization/facilities/{facilityId}/tables/bulk:
+    post:
+      operationId: bulkCreateDiningTables
+      tags:
+      - Organization
+      summary: Bulk-create tables (T1-T20)
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Existing labels are skipped and reported. Max 500.
+
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiningTableBulkRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTableBulkResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /organization/tables/{tableId}:
+    patch:
+      operationId: updateDiningTable
+      tags:
+      - Organization
+      summary: Rename/resize/move a table
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: tableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiningTableUpdateRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/tables/{tableId}/deactivate:
+    post:
+      operationId: deactivateDiningTable
+      tags:
+      - Organization
+      summary: Deactivate a table
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: tableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/tables/{tableId}/reactivate:
+    post:
+      operationId: reactivateDiningTable
+      tags:
+      - Organization
+      summary: Reactivate a table
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: tableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/tables/{tableId}/merge:
+    post:
+      operationId: mergeDiningTable
+      tags:
+      - Organization
+      summary: Merge a table into another
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: tableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeTableRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /organization/tables/{tableId}/unmerge:
+    post:
+      operationId: unmergeDiningTable
+      tags:
+      - Organization
+      summary: Undo a table merge
+      x-permission: 'facility.manage'
+      x-additive: true
+      description: |-
+        Required permission: `facility.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: tableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiningTable'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /admin/catalog/products:
+    get:
+      operationId: adminListProducts
+      tags:
+      - Catalog
+      summary: Org-wide admin product list
+      x-permission: 'catalog.manage|pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage|pricing.manage`.
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/AdminProduct'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/catalog/products/{productId}:
+    get:
+      operationId: adminGetProduct
+      tags:
+      - Catalog
+      summary: Full admin view of a product
+      x-permission: 'catalog.manage|pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage|pricing.manage`.
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProduct'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /catalog/products/{productId}/facilities/{facilityId}:
+    put:
+      operationId: setProductFacility
+      tags:
+      - Catalog
+      summary: Sell a product at a facility (availability, station, price override)
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductFacilityRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProduct'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      operationId: removeProductFacility
+      tags:
+      - Catalog
+      summary: Stop selling a product at a facility
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProduct'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/price-lists:
+    get:
+      operationId: listPriceLists
+      tags:
+      - Catalog
+      summary: Price lists
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PriceList'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createPriceList
+      tags:
+      - Catalog
+      summary: Create a price list
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceListRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/price-lists/{priceListId}:
+    patch:
+      operationId: updatePriceList
+      tags:
+      - Catalog
+      summary: Edit a price list
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: priceListId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceListRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceList'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /catalog/prices:
+    get:
+      operationId: listPrices
+      tags:
+      - Catalog
+      summary: Price rows (effective-dated)
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      parameters:
+      - name: productId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: priceListId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PriceRow'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createPrice
+      tags:
+      - Catalog
+      summary: Create an effective-dated price
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        `409 price_overlap` when the window overlaps another price of the same product/list/facility.
+
+        Required permission: `pricing.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceRow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/prices/{priceId}:
+    patch:
+      operationId: updatePrice
+      tags:
+      - Catalog
+      summary: End-date or (if not yet effective) edit a price
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        `409 price_immutable` once effective: end-date it and create a new one.
+
+        Required permission: `pricing.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: priceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceRow'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /catalog/tax-rates/{taxRateId}:
+    patch:
+      operationId: updateTaxRate
+      tags:
+      - Catalog
+      summary: Edit a tax rate
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: taxRateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxRateRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRate'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /catalog/prep-routes/{prepRouteId}:
+    patch:
+      operationId: updatePrepRoute
+      tags:
+      - Catalog
+      summary: Edit a prep route
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: prepRouteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepRouteRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepRoute'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /catalog/prep-route-stations:
+    get:
+      operationId: listPrepRouteStations
+      tags:
+      - Catalog
+      summary: Facility x prep route -> KDS station mapping
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PrepRouteStation'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: setPrepRouteStation
+      tags:
+      - Catalog
+      summary: Map (facility, prep route) to a KDS station
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        `kdsStationId: null` removes the mapping.
+
+        Required permission: `catalog.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepRouteStation'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepRouteStation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/categories/{categoryId}/prep-route:
+    post:
+      operationId: setCategoryPrepRoute
+      tags:
+      - Catalog
+      summary: Apply a prep route to all products of a category
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryPrepRouteRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/products/{productId}/stock-links:
+    get:
+      operationId: getProductStockLinks
+      tags:
+      - Catalog
+      summary: Product to stock-item links
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLinks'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setProductStockLinks
+      tags:
+      - Catalog
+      summary: Replace the stock links of a product
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockLinks'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLinks'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/products/export:
+    get:
+      operationId: exportProductsCsv
+      tags:
+      - Catalog
+      summary: Export products as CSV
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        Required permission: `catalog.manage`.
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /catalog/prices/export:
+    get:
+      operationId: exportPricesCsv
+      tags:
+      - Catalog
+      summary: Export prices as CSV
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      responses:
+        '200':
+          description: CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /catalog/products/import:
+    post:
+      operationId: importProductsCsv
+      tags:
+      - Catalog
+      summary: Import products from CSV (dry-run validation report)
+      x-permission: 'catalog.manage'
+      x-additive: true
+      description: |-
+        `dryRun=true` (default) validates only (the dry run executes the real import in a rolled-back transaction). `dryRun=false` applies all-or-nothing. Idempotent by content: no Idempotency-Key needed. Body: text/csv or JSON `{csv}`.
+
+        Required permission: `catalog.manage`.
+      parameters:
+      - name: dryRun
+        in: query
+        required: false
+        schema:
+          type: boolean
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /catalog/prices/import:
+    post:
+      operationId: importPricesCsv
+      tags:
+      - Catalog
+      summary: Import prices from CSV (dry-run validation report)
+      x-permission: 'pricing.manage'
+      x-additive: true
+      description: |-
+        Required permission: `pricing.manage`.
+      parameters:
+      - name: dryRun
+        in: query
+        required: false
+        schema:
+          type: boolean
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /ticketing/ticket-types:
+    get:
+      operationId: listTicketTypes
+      tags:
+      - Ticketing
+      summary: Ticket types
+      x-permission: 'config.view|ticket_type.manage|ticket.issue'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|ticket_type.manage|ticket.issue`.
+      parameters:
+      - name: facilityId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/TicketType'}}
+                  nextCursor: {type: [string, 'null']}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createTicketType
+      tags:
+      - Ticketing
+      summary: Create a ticket type
+      x-permission: 'ticket_type.manage'
+      x-additive: true
+      description: |-
+        Required permission: `ticket_type.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketTypeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /ticketing/ticket-types/{ticketTypeId}:
+    patch:
+      operationId: updateTicketType
+      tags:
+      - Ticketing
+      summary: Edit a ticket type
+      x-permission: 'ticket_type.manage'
+      x-additive: true
+      description: |-
+        Required permission: `ticket_type.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: ticketTypeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketTypeRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketType'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /bookings/resources/{resourceId}/schedule:
+    get:
+      operationId: getResourceSchedule
+      tags:
+      - Bookings
+      summary: Weekly opening windows of a resource
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceSchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setResourceSchedule
+      tags:
+      - Bookings
+      summary: Replace the weekly opening windows
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceSchedule'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceSchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /bookings/blackouts/{blackoutId}:
+    delete:
+      operationId: deleteBlackout
+      tags:
+      - Bookings
+      summary: Remove a blackout
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - name: blackoutId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /bookings/blackouts:
+    post:
+      operationId: createFacilityBlackout
+      tags:
+      - Bookings
+      summary: Facility-wide blackout
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FacilityBlackoutRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Blackout'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /bookings/resources/{resourceId}/rules:
+    get:
+      operationId: getResourceRules
+      tags:
+      - Bookings
+      summary: Resource-level booking rule overrides
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        Required permission: `booking.configure`.
+      parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceRules'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setResourceRules
+      tags:
+      - Bookings
+      summary: Set resource-level booking rule overrides
+      x-permission: 'booking.configure'
+      x-additive: true
+      description: |-
+        `null` inherits the facility rule.
+
+        Required permission: `booking.configure`.
+      parameters:
+      - name: resourceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceRules'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceRules'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /admin/settings/business:
+    get:
+      operationId: getBusinessProfile
+      tags:
+      - Admin
+      summary: Business profile
+      x-permission: 'config.view'
+      x-additive: true
+      description: |-
+        Required permission: `config.view`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: updateBusinessProfile
+      tags:
+      - Admin
+      summary: Update business profile
+      x-permission: 'settings.manage'
+      x-additive: true
+      description: |-
+        Required permission: `settings.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessProfile'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /admin/settings/receipt:
+    get:
+      operationId: getReceiptSettings
+      tags:
+      - Admin
+      summary: Receipt settings
+      x-permission: 'config.view'
+      x-additive: true
+      description: |-
+        Required permission: `config.view`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptSettings'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: updateReceiptSettings
+      tags:
+      - Admin
+      summary: Update receipt settings
+      x-permission: 'settings.manage'
+      x-additive: true
+      description: |-
+        Required permission: `settings.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptSettings'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptSettings'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /facilities/{facilityId}/payment-methods:
+    get:
+      operationId: getFacilityPaymentMethods
+      tags:
+      - Admin
+      summary: Payment methods enabled at a facility
+      x-permission: 'config.view|settings.manage'
+      x-additive: true
+      description: |-
+        Required permission: `config.view|settings.manage`.
+      parameters:
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethods'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setFacilityPaymentMethods
+      tags:
+      - Admin
+      summary: Enable/disable payment methods at a facility
+      x-permission: 'settings.manage'
+      x-additive: true
+      description: |-
+        A disabled tender is refused by the payment service (`422 payment_method_disabled`).
+
+        Required permission: `settings.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: facilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodsRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethods'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /roles/{roleId}/permissions:
+    get:
+      operationId: getRolePermissionMatrix
+      tags:
+      - Identity
+      summary: Permission matrix of a role (UI-ready)
+      x-permission: 'role_assignment.manage|role.manage'
+      x-additive: true
+      description: |-
+        Required permission: `role_assignment.manage|role.manage`.
+      parameters:
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionMatrix'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setRolePermissions
+      tags:
+      - Identity
+      summary: Replace a role's permission set
+      x-permission: 'role.manage'
+      x-additive: true
+      description: |-
+        Anti-escalation: the caller must hold every permission added and every permission the role currently has. OWNER is immutable.
+
+        Required permission: `role.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRolePermissionsRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionMatrix'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+  /roles/{roleId}:
+    patch:
+      operationId: updateRole
+      tags:
+      - Identity
+      summary: Rename a custom role
+      x-permission: 'role.manage'
+      x-additive: true
+      description: |-
+        Required permission: `role.manage`.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionMatrix'
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '412':
+          description: 'Stale If-Match (concurrency_conflict); nothing changed.'
+        '428':
+          description: 'If-Match header missing (concurrency_conflict).'
+    delete:
+      operationId: deleteRole
+      tags:
+      - Identity
+      summary: Delete an unused custom role
+      x-permission: 'role.manage'
+      x-additive: true
+      description: |-
+        Required permission: `role.manage`.
+      parameters:
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /admin/setup-status:
+    get:
+      operationId: getSetupStatus
+      tags:
+      - Admin
+      summary: Onboarding checklist with counts
+      x-permission: 'config.view'
+      x-additive: true
+      description: |-
+        Required permission: `config.view`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/search:
+    get:
+      operationId: adminSearch
+      tags:
+      - Admin
+      summary: Global search, permissioned per result type
+      x-permission: 'any staff'
+      x-additive: true
+      description: |-
+        Types the caller may not read are omitted.
+
+        Required permission: `any staff`.
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: types
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  # <<< config-admin paths <<<
 components:
   securitySchemes:
     bearerAuth:
@@ -14954,3 +17752,474 @@ components:
               oneOf:
               - $ref: '#/components/schemas/Money'
               - type: 'null'
+    # >>> config-admin schemas (generated) >>>
+    FacilityDetail:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        siteId: {type: string, format: uuid}
+        parentId: {type: [string, 'null'], format: uuid}
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string}
+        description: {type: [string, 'null']}
+        timezone: {type: [string, 'null']}
+        sortOrder: {type: integer}
+        contact: {type: [object, 'null'], additionalProperties: true}
+        openingHours: {type: [object, 'null'], additionalProperties: true}
+        templateKey: {type: [string, 'null']}
+        active: {type: boolean}
+        status: {type: string, enum: [ACTIVE, INACTIVE]}
+        deactivatedAt: {type: [string, 'null']}
+        deactivationReason: {type: [string, 'null']}
+        capabilities: {type: array, items: {type: string}}
+        rowVersion: {type: integer}
+        operatingRules: {type: object, additionalProperties: true}
+        starterOperatingPoints: {type: array, items: {type: object, additionalProperties: true}}
+    FacilityCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$'}
+        name: {type: string}
+        kind: {type: string}
+        parentId: {type: [string, 'null'], format: uuid}
+        description: {type: [string, 'null']}
+        timezone: {type: [string, 'null']}
+        sortOrder: {type: integer}
+        active: {type: boolean}
+        contact: {type: [object, 'null'], additionalProperties: true}
+        openingHours: {type: [object, 'null'], additionalProperties: true}
+        templateKey: {type: [string, 'null']}
+        capabilities: {type: array, items: {type: string}}
+        operatingRules: {type: object, additionalProperties: true}
+        applyStarter: {type: boolean}
+    FacilityUpdateRequest:
+      type: object
+      properties:
+        name: {type: string}
+        kind: {type: string}
+        description: {type: [string, 'null']}
+        timezone: {type: [string, 'null']}
+        sortOrder: {type: integer}
+        contact: {type: [object, 'null'], additionalProperties: true}
+        openingHours: {type: [object, 'null'], additionalProperties: true}
+    DeactivateFacilityRequest:
+      type: object
+      properties:
+        reason: {type: [string, 'null']}
+        cascade: {type: boolean}
+    MoveFacilityRequest:
+      type: object
+      required: [parentId]
+      properties:
+        parentId: {type: [string, 'null'], format: uuid}
+    FacilityTemplateList:
+      type: object
+      properties:
+        items: {type: array, items: {type: object, additionalProperties: true}}
+        kinds: {type: array, items: {type: string}}
+        nextCursor: {type: [string, 'null']}
+    CapabilityType:
+      type: object
+      properties:
+        code: {type: string}
+        label: {type: string}
+        group: {type: string}
+        description: {type: string}
+        requires: {type: array, items: {type: string}}
+        ruleKeys: {type: array, items: {type: string}}
+    RuleDefinition:
+      type: object
+      properties:
+        key: {type: string}
+        name: {type: string}
+        label: {type: string}
+        description: {type: string}
+        group: {type: string}
+        type: {type: string, enum: [enum, multi_enum, number, bool, duration, money, facility]}
+        capability: {type: string}
+        capabilities: {type: array, items: {type: string}}
+        default: {}
+        unit: {type: [string, 'null']}
+        allowed: {type: [array, 'null'], items: {type: object, properties: {value: {type: string}, label: {type: string}}}}
+        min: {type: [number, 'null']}
+        max: {type: [number, 'null']}
+        integer: {type: boolean}
+        dangerLevel: {type: string, enum: [low, medium, high]}
+        enforcement: {type: string, enum: [server, client, planned]}
+    SetCapabilitiesRequest:
+      type: object
+      required: [capabilities]
+      properties:
+        capabilities: {type: array, items: {type: string}}
+    OperatingRulesView:
+      type: object
+      properties:
+        facilityId: {type: string, format: uuid}
+        version: {type: integer}
+        capabilities: {type: array, items: {type: string}}
+        values: {type: object, additionalProperties: true}
+        items: {type: array, items: {type: object, additionalProperties: true}}
+        notApplicable: {type: array, items: {type: string}}
+        changed: {type: array, items: {type: string}}
+    SetOperatingRulesRequest:
+      type: object
+      required: [rules]
+      properties:
+        rules: {type: object, additionalProperties: true}
+        confirm: {type: boolean}
+    OperatingPointCreateRequest:
+      type: object
+      required: [code, name, kind]
+      properties:
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string}
+        defaultPrepStationId: {type: [string, 'null'], format: uuid}
+        kdsStation: {type: [object, 'null'], additionalProperties: true}
+    OperatingPointUpdateRequest:
+      type: object
+      properties:
+        name: {type: string}
+        defaultPrepStationId: {type: [string, 'null'], format: uuid}
+        kdsStation: {type: [object, 'null'], additionalProperties: true}
+    DiningTableCreateRequest:
+      type: object
+      required: [label]
+      properties:
+        label: {type: string}
+        seats: {type: integer}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        sortOrder: {type: integer}
+    DiningTableBulkRequest:
+      type: object
+      properties:
+        prefix: {type: string}
+        from: {type: integer}
+        to: {type: integer}
+        padWidth: {type: integer}
+        labels: {type: array, items: {type: string}}
+        seats: {type: integer}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+    DiningTableBulkResult:
+      type: object
+      properties:
+        created: {type: array, items: {$ref: '#/components/schemas/AdminDiningTable'}}
+        skipped: {type: array, items: {type: string}}
+    DiningTableUpdateRequest:
+      type: object
+      properties:
+        label: {type: string}
+        seats: {type: integer}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        sortOrder: {type: integer}
+    MergeTableRequest:
+      type: object
+      required: [intoTableId]
+      properties:
+        intoTableId: {type: string, format: uuid}
+    DeviceUpdateRequest:
+      type: object
+      properties:
+        name: {type: string}
+        facilityId: {type: [string, 'null'], format: uuid}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        mode: {type: string}
+        active: {type: boolean}
+    AdminProduct:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        sku: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        barcode: {type: [string, 'null']}
+        categoryId: {type: string, format: uuid}
+        kind: {type: string}
+        taxRateId: {type: [string, 'null'], format: uuid}
+        taxExempt: {type: boolean}
+        prepRouteId: {type: [string, 'null'], format: uuid}
+        trackStock: {type: boolean}
+        imageUrl: {type: [string, 'null']}
+        modifiers: {type: [array, 'null'], items: {type: object, additionalProperties: true}}
+        active: {type: boolean}
+        prices: {type: array, items: {type: object, additionalProperties: true}}
+        facilities: {type: array, items: {type: object, additionalProperties: true}}
+        stockLinks: {type: array, items: {type: object, additionalProperties: true}}
+        rowVersion: {type: integer}
+    ProductFacilityRequest:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        unavailableReason: {type: [string, 'null']}
+        kdsStationId: {type: [string, 'null'], format: uuid}
+        sortOrder: {type: integer}
+        price: {type: [string, 'null'], example: '2500.0000'}
+    PriceList:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        currency: {type: string}
+        isDefault: {type: boolean}
+        active: {type: boolean}
+    PriceListRequest:
+      type: object
+      properties:
+        name: {type: string}
+        isDefault: {type: boolean}
+        active: {type: boolean}
+    PriceRow:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        priceListId: {type: string, format: uuid}
+        productId: {type: string, format: uuid}
+        facilityId: {type: [string, 'null'], format: uuid}
+        amount: {type: string, example: '5000.0000'}
+        validFrom: {type: string}
+        validTo: {type: [string, 'null']}
+        active: {type: boolean}
+        rowVersion: {type: integer}
+    PriceRequest:
+      type: object
+      properties:
+        productId: {type: string, format: uuid}
+        priceListId: {type: [string, 'null'], format: uuid}
+        facilityId: {type: [string, 'null'], format: uuid}
+        amount: {type: string, example: '5000.0000'}
+        validFrom: {type: string}
+        validTo: {type: [string, 'null']}
+        active: {type: boolean}
+    TaxRate:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        ratePercent: {type: string}
+        active: {type: boolean}
+    TaxRateRequest:
+      type: object
+      properties:
+        code: {type: string}
+        name: {type: string}
+        ratePercent: {type: string}
+        active: {type: boolean}
+    PrepRouteRequest:
+      type: object
+      properties:
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string}
+    PrepRouteStation:
+      type: object
+      properties:
+        facilityId: {type: string, format: uuid}
+        prepRouteId: {type: string, format: uuid}
+        kdsStationId: {type: [string, 'null'], format: uuid}
+    CategoryPrepRouteRequest:
+      type: object
+      properties:
+        prepRouteId: {type: [string, 'null'], format: uuid}
+        applyToProducts: {type: boolean}
+    StockLinks:
+      type: object
+      properties:
+        links: {type: array, items: {type: object, properties: {stockItemId: {type: string, format: uuid}, quantityPerUnit: {type: string}}}}
+    ImportReport:
+      type: object
+      properties:
+        dryRun: {type: boolean}
+        totalRows: {type: integer}
+        valid: {type: integer}
+        willCreate: {type: integer}
+        willUpdate: {type: integer}
+        unchanged: {type: integer}
+        createdCategories: {type: array, items: {type: string}}
+        errors: {type: array, items: {type: object, properties: {row: {type: integer}, field: {type: string}, message: {type: string}}}}
+        applied: {type: boolean}
+    TicketType:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        facilityId: {type: string, format: uuid}
+        format: {type: string}
+        validationMode: {type: string}
+        validityKind: {type: string}
+        validityMinutes: {type: [integer, 'null']}
+        earlyEntryMinutes: {type: integer}
+        active: {type: boolean}
+        productId: {type: [string, 'null'], format: uuid}
+        price: {type: [string, 'null']}
+        rowVersion: {type: integer}
+    TicketTypeRequest:
+      type: object
+      properties:
+        code: {type: string}
+        name: {type: string}
+        facilityId: {type: string, format: uuid}
+        format: {type: string}
+        validationMode: {type: string}
+        validityKind: {type: string}
+        validityMinutes: {type: [integer, 'null']}
+        earlyEntryMinutes: {type: integer}
+        active: {type: boolean}
+        price: {type: [string, 'null']}
+    ResourceSchedule:
+      type: object
+      properties:
+        windows: {type: array, items: {type: object, properties: {dayOfWeek: {type: integer, minimum: 1, maximum: 7}, open: {type: string}, close: {type: string}, validFrom: {type: [string, 'null']}, validTo: {type: [string, 'null']}}}}
+    Blackout:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        resourceId: {type: [string, 'null'], format: uuid}
+        facilityId: {type: [string, 'null'], format: uuid}
+        start: {type: string}
+        end: {type: string}
+        reason: {type: [string, 'null']}
+    FacilityBlackoutRequest:
+      type: object
+      required: [facilityId, start, end]
+      properties:
+        facilityId: {type: string, format: uuid}
+        start: {type: string}
+        end: {type: string}
+        reason: {type: [string, 'null']}
+    ResourceRules:
+      type: object
+      properties:
+        holdTtlSeconds: {type: [integer, 'null']}
+        minNoticeMinutes: {type: [integer, 'null']}
+        maxAdvanceDays: {type: [integer, 'null']}
+        cancelCutoffMinutes: {type: [integer, 'null']}
+        cancelFeePercent: {type: [number, 'null']}
+        rescheduleCutoffMinutes: {type: [integer, 'null']}
+        maxReschedules: {type: [integer, 'null']}
+        earlyEntryMinutes: {type: [integer, 'null']}
+    BusinessProfile:
+      type: object
+      properties:
+        organizationName: {type: string}
+        siteName: {type: string}
+        timezone: {type: string}
+        currency: {type: string}
+        address: {type: [string, 'null']}
+        phone: {type: [string, 'null']}
+        email: {type: [string, 'null']}
+        rowVersion: {type: integer}
+    ReceiptSettings:
+      type: object
+      properties:
+        businessName: {type: [string, 'null']}
+        address: {type: [string, 'null']}
+        phone: {type: [string, 'null']}
+        headerNote: {type: [string, 'null']}
+        footer: {type: [string, 'null']}
+        logoUrl: {type: [string, 'null']}
+        showTin: {type: boolean}
+        paperColumns: {type: integer}
+        tin: {type: [string, 'null']}
+        vatRegistered: {type: boolean}
+        rowVersion: {type: integer}
+    PaymentMethods:
+      type: object
+      properties:
+        facilityId: {type: string, format: uuid}
+        version: {type: integer}
+        restricted: {type: boolean}
+        methods: {type: object, additionalProperties: true}
+    PaymentMethodsRequest:
+      type: object
+      required: [methods]
+      properties:
+        methods: {type: object, additionalProperties: true}
+    RolePermissionMatrix:
+      type: object
+      properties:
+        role: {type: object, additionalProperties: true}
+        groups: {type: array, items: {type: object, additionalProperties: true}}
+    SetRolePermissionsRequest:
+      type: object
+      required: [permissions]
+      properties:
+        permissions: {type: array, items: {type: object, properties: {code: {type: string}, requiresApproval: {type: boolean}}}}
+    RoleRequest:
+      type: object
+      properties:
+        name: {type: string}
+        description: {type: [string, 'null']}
+        permissions: {type: array, items: {type: string}}
+    SetupStatus:
+      type: object
+      properties:
+        percent: {type: integer}
+        complete: {type: boolean}
+        steps: {type: array, items: {type: object, additionalProperties: true}}
+        counts: {type: object, additionalProperties: true}
+        missing: {type: array, items: {type: string}}
+    SearchResults:
+      type: object
+      properties:
+        q: {type: string}
+        results: {type: object, additionalProperties: true}
+    AdminFacilityCapabilities:
+      type: object
+      properties:
+        facilityId: {type: string, format: uuid}
+        capabilities: {type: array, items: {type: string}}
+        operatingRules: {type: object, additionalProperties: true}
+        version: {type: integer}
+        changed: {type: boolean}
+    AdminOperatingPoint:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        facilityId: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [TABLE_AREA, COUNTER, GATE, STORE_WINDOW, STATION, ROOM]}
+        defaultPrepStationId: {type: [string, 'null'], format: uuid}
+        active: {type: boolean}
+        rowVersion: {type: integer}
+        kdsStation: {type: [object, 'null'], additionalProperties: true}
+    AdminDiningTable:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        facilityId: {type: string, format: uuid}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        label: {type: string}
+        seats: {type: integer}
+        status: {type: string}
+        active: {type: boolean}
+        sortOrder: {type: integer}
+        mergedIntoId: {type: [string, 'null'], format: uuid}
+        mergedTableIds: {type: array, items: {type: string, format: uuid}}
+        effectiveSeats: {type: integer}
+        rowVersion: {type: integer}
+    AdminDevice:
+      type: object
+      description: Device presentation (existing schema fields retained; additive `operatingPointId`).
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: string}
+        mode: {type: [string, 'null']}
+        facilityId: {type: [string, 'null'], format: uuid}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        status: {type: string}
+        rowVersion: {type: integer}
+    AdminPrepRoute:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [KITCHEN, BAR, NONE]}
+    # <<< config-admin schemas <<<
