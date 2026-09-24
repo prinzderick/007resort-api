@@ -1,0 +1,2 @@
+# False positive in an earlier commit of this branch: a throwaway literal in a test, since replaced. No real secret.
+0d6472248ad0415793844fb088482d383955bb11:tests/Feature/Identity/StaffAdminTest.php:generic-api-key:145

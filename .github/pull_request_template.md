@@ -11,13 +11,14 @@
 
 ## Checklist
 
-- [ ] Tests added or updated; `dotnet build` and `dotnet test` pass locally
-- [ ] Database migrations (if any) reviewed: forward-only, `V{NNNN}__{description}.sql`, no edits to merged migrations, safe on a live site
-- [ ] No secrets, credentials, connection strings, keys or `.env` files committed
-- [ ] Money uses `decimal` / `DECIMAL(19,4)`; timestamps are UTC; sync-sensitive IDs are UUIDs
-- [ ] Public API changes use contracts/DTOs (no entities exposed) and are versioned; OpenAPI still accurate
-- [ ] Mutating endpoints accept an idempotency key where applicable
-- [ ] Authorization considered (permission checks, facility/operating-point scoping)
-- [ ] Sensitive actions are audited; financial records are immutable (reversals only)
+- [ ] Tests added or updated; `composer lint` and `composer test` pass locally (real MySQL 8.4 + Redis)
+- [ ] Migrations (if any) live in the owning module's `Migrations/`, are new files (no edits to merged migrations / V0001), and are safe on a live site
+- [ ] No secrets, credentials, keys or `.env` files committed
+- [ ] Money is a decimal string / `DECIMAL(19,4)`; timestamps UTC `DATETIME(6)`; ids UUIDv7 `BINARY(16)`
+- [ ] Public API changes documented in `docs/openapi/v1.yaml`; errors are `ApiProblem`s with stable codes
+- [ ] Mutating endpoints use the `idempotent` middleware where applicable
+- [ ] Authorization is permission-based (`permission:<code>`), never role-name-based
+- [ ] Sensitive actions call `Audit::record` in the same transaction; cross-node events use `Outbox::record`; financial records immutable
+- [ ] Scarce-resource operations have a real concurrent test
 - [ ] Logs contain no secrets or personal data beyond what is necessary
-- [ ] Docs updated (README / CONTRIBUTING / ADR / module README)
+- [ ] Docs updated (README / CONTRIBUTING / docs/MODULES.md / ADR)
