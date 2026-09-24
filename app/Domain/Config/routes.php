@@ -4,7 +4,9 @@ use App\Domain\Config\Http\Controllers\BookingConfigController;
 use App\Domain\Config\Http\Controllers\CatalogConfigController;
 use App\Domain\Config\Http\Controllers\DeviceAdminController;
 use App\Domain\Config\Http\Controllers\FacilityAdminController;
+use App\Domain\Config\Http\Controllers\InsightController;
 use App\Domain\Config\Http\Controllers\OperatingPointAdminController;
+use App\Domain\Config\Http\Controllers\RoleAdminController;
 use App\Domain\Config\Http\Controllers\SettingsController;
 use App\Domain\Config\Http\Controllers\TicketTypeAdminController;
 use Illuminate\Support\Facades\Route;
@@ -105,4 +107,17 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::put('admin/settings/receipt', [SettingsController::class, 'updateReceipt'])->middleware('permission:settings.manage');
     Route::get('facilities/{facilityId}/payment-methods', [SettingsController::class, 'paymentMethods'])->middleware('permission:config.view|settings.manage');
     Route::put('facilities/{facilityId}/payment-methods', [SettingsController::class, 'setPaymentMethods'])->middleware('permission:settings.manage');
+
+    // ---- Roles & permission matrix ------------------------------------------------------------------------------------------------
+    Route::get('roles/{roleId}/permissions', [RoleAdminController::class, 'matrix'])->middleware('permission:role_assignment.manage|role.manage');
+    Route::middleware('permission:role.manage')->group(function () {
+        Route::put('roles/{roleId}/permissions', [RoleAdminController::class, 'setPermissions']);
+        Route::post('roles', [RoleAdminController::class, 'store'])->middleware('idempotent');
+        Route::patch('roles/{roleId}', [RoleAdminController::class, 'update']);
+        Route::delete('roles/{roleId}', [RoleAdminController::class, 'destroy']);
+    });
+
+    // ---- Setup progress & search -----------------------------------------------------------------------------------------------------
+    Route::get('admin/setup-status', [InsightController::class, 'setupStatus'])->middleware('permission:config.view');
+    Route::get('admin/search', [InsightController::class, 'search']);
 });

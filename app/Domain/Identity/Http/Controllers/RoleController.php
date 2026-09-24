@@ -18,7 +18,7 @@ class RoleController
             ->whereIn('rp.role_id', $page->items->pluck('id')->all())->orderBy('p.code')->get(['rp.role_id', 'p.code', 'rp.requires_approval'])->groupBy('role_id');
 
         return response()->json($page->toArray(fn (Role $r) => [
-            'id' => $r->public_id, 'code' => $r->code, 'name' => $r->name, 'description' => $r->description,
+            'id' => $r->public_id, 'code' => $r->code, 'name' => $r->name, 'description' => $r->description, 'system' => (bool) $r->is_system, 'rowVersion' => (int) $r->row_version,
             'permissions' => ($bundles[$r->id] ?? collect())->pluck('code')->values()->all(),
             'approvalRequired' => ($bundles[$r->id] ?? collect())->where('requires_approval', 1)->pluck('code')->values()->all(),
         ]));
