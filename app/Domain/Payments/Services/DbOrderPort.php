@@ -41,7 +41,7 @@ class DbOrderPort implements OrderPort
         sort($bins, SORT_STRING);
         $in = implode(',', array_fill(0, count($bins), '?'));
         $rows = DB::select(
-            "SELECT id, order_number, facility_unit_id, payment_facility_unit_id, status, total, subtotal, discount_total, tax_total, currency, tab_id
+            "SELECT id, order_number, facility_unit_id, payment_facility_unit_id, status, total, subtotal, discount_total, tax_total, currency, tab_id, bill_printed_at, created_by, dining_table_id
              FROM `order` WHERE id IN ($in) ORDER BY id FOR UPDATE",
             $bins,
         );
@@ -59,6 +59,9 @@ class DbOrderPort implements OrderPort
                 'taxTotal' => Money::normalize((string) $r->tax_total),
                 'currency' => $r->currency,
                 'tabId' => Fmt::uuid($r->tab_id),
+                'billPrintedAt' => $r->bill_printed_at,
+                'createdBy' => Fmt::uuid($r->created_by),
+                'tableId' => Fmt::uuid($r->dining_table_id),
             ];
         }
 

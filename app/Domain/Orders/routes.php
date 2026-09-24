@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Orders\Http\Controllers\ApprovalController;
+use App\Domain\Orders\Http\Controllers\BillController;
 use App\Domain\Orders\Http\Controllers\OrderController;
 use App\Domain\Orders\Http\Controllers\TabController;
 use App\Domain\Orders\Http\Controllers\TableController;
@@ -23,6 +24,9 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::delete('orders/{orderId}/lines/{lineId}', [OrderController::class, 'removeLine'])->middleware(['permission:order.line.remove_unsent', 'idempotent']);
     Route::post('orders/{orderId}/send', [OrderController::class, 'send'])->middleware(['permission:order.send', 'idempotent']);
     Route::post('orders/{orderId}/serve', [OrderController::class, 'serve'])->middleware(['permission:order.serve', 'idempotent']);
+    // Pre-bill (freezes the order; permission checked in the service against the order's facility)
+    Route::post('orders/{orderId}/bill', [BillController::class, 'print'])->middleware(['permission:bill.print', 'idempotent']);
+    Route::post('orders/{orderId}/bill/cancel', [BillController::class, 'cancel'])->middleware('idempotent');
     // void/adjust: the "may request" vs "may execute" split is decided in the service (permission gate + approval workflow)
     Route::post('orders/{orderId}/void', [OrderController::class, 'void'])->middleware('idempotent');
     Route::post('orders/{orderId}/lines/{lineId}/adjustments', [OrderController::class, 'adjust'])->middleware('idempotent');

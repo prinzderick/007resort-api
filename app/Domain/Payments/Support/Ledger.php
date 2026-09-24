@@ -44,6 +44,37 @@ final class Ledger
         return $out;
     }
 
+    /** Statuses of waiter collections that RESERVE balance while they await confirmation / the provider. */
+    public const PENDING = ['PENDING_CONFIRMATION', 'AUTHORIZING'];
+
+    /**
+     * Money collected by waiters / pay links that is not yet confirmed (reserves the order balance; NOT counted as paid).
+     * Only rows that have a `payment_collection` fact row count, so ordinary online payments in AUTHORIZING never reserve.
+     *
+     * @param  list<string>  $orderIds
+     * @return array<string, string> order id => pending amount (4dp)
+     */
+    public static function pendingByOrder(array $orderIds): array
+    {
+        $out = array_fill_keys(array_map(Ids::normalize(...), $orderIds), Money::zero()->amount);
+        if ($orderIds === []) {
+            return $out;
+        }
+        $in = implode(',', array_fill(0, count($orderIds), '?'));
+        $rows = DB::select(
+            "SELECT pa.order_id, SUM(pa.amount) AS pending FROM payment_allocation pa
+             JOIN payment p ON p.id = pa.payment_id JOIN payment_collection c ON c.payment_id = p.id
+             WHERE pa.order_id IN ($in) AND p.status IN ('PENDING_CONFIRMATION','AUTHORIZING')
+             GROUP BY pa.order_id",
+            array_map(Ids::toBinary(...), $orderIds),
+        );
+        foreach ($rows as $r) {
+            $out[Ids::fromBinary($r->order_id)] = Money::normalize((string) $r->pending);
+        }
+
+        return $out;
+    }
+
     /** Sum of cash-in-drawer effects of a session, computed from the immutable ledger. */
     public static function cashTotals(string $sessionId): array
     {

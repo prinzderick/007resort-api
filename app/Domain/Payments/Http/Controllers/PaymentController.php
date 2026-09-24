@@ -70,22 +70,45 @@ class PaymentController
     public function index(Request $request): JsonResponse
     {
         $staff = $this->staffId();
-        $f = (array) $request->query('filter', []);
+        // `filter[x]` (contract) or plain `x` (waiter collection: ?status=PENDING_CONFIRMATION&facilityId=&collectedBy=)
+        $f = array_merge($request->query(), (array) $request->query('filter', []));
+        $facility = ! empty($f['facilityId']) && is_string($f['facilityId']) && Ids::isUuid($f['facilityId']) ? Ids::normalize($f['facilityId']) : null;
+        $collectedBy = ! empty($f['collectedBy']) && is_string($f['collectedBy']) && Ids::isUuid($f['collectedBy']) ? Ids::normalize($f['collectedBy']) : null;
         $q = DB::table('payment');
-        if (! empty($f['facilityId']) && Ids::isUuid($f['facilityId'])) {
-            $this->requireAt($staff, 'payment.view', $f['facilityId']);
-            $q->where('facility_unit_id', Ids::toBinary($f['facilityId']));
-        } elseif (! $this->holdsSiteWide($staff, 'payment.view')) {
-            $q->where('taken_by_staff_id', Ids::toBinary($staff)); // without a facility scope you only see your own takings...
-        } // ...unless you hold payment.view site-wide (owner/accountant): then no facility filter = the whole property
-        if (! empty($f['cashSessionId']) && Ids::isUuid($f['cashSessionId'])) {
+        if ($facility !== null) {
+            if ($collectedBy !== $staff) { // a waiter may always list their own collections
+                $this->requireAnyAt($staff, ['payment.view', 'payment.confirm'], $facility);
+            }
+            // also waiter collections of OTHER facilities' orders that are settled here (e.g. Pool Bar orders paid at Reception)
+            $q->where(fn ($w) => $w->where('facility_unit_id', Ids::toBinary($facility))->orWhereExists(
+                fn ($s) => $s->selectRaw('1')->from('payment_collection as cf')->join('payment_allocation as pf', 'pf.payment_id', '=', 'cf.payment_id')
+                    ->join('order as of', 'of.id', '=', 'pf.order_id')->whereColumn('cf.payment_id', 'payment.id')->where('of.payment_facility_unit_id', Ids::toBinary($facility))
+            ));
+        } else {
+            // without a facility scope you only see your own takings... unless you hold payment.view / payment.confirm site-wide (owner/accountant/supervisor)
+            $siteWide = $this->holdsSiteWide($staff, 'payment.view') || $this->holdsSiteWide($staff, 'payment.confirm');
+            if ($collectedBy !== null && $collectedBy !== $staff && ! $siteWide) {
+                throw ApiProblem::permissionDenied('payment.view'); // someone else's collections need a facility scope
+            }
+            if (! $siteWide) {
+                $q->where('taken_by_staff_id', Ids::toBinary($staff));
+            }
+        }
+        if ($collectedBy !== null) {
+            $q->whereExists(fn ($s) => $s->selectRaw('1')->from('payment_collection as pc')->whereColumn('pc.payment_id', 'payment.id')->where('pc.collected_by_staff_id', Ids::toBinary($collectedBy)));
+            if ($collectedBy === $staff) {
+                $q->where('taken_by_staff_id', Ids::toBinary($staff));
+            }
+        }
+        if (! empty($f['cashSessionId']) && is_string($f['cashSessionId']) && Ids::isUuid($f['cashSessionId'])) {
             $q->where('cash_session_id', Ids::toBinary($f['cashSessionId']));
         }
-        if (! empty($f['status'])) {
-            $q->where('status', strtoupper((string) $f['status']));
+        if (! empty($f['status']) && is_string($f['status'])) {
+            $q->whereIn('status', array_map('strtoupper', explode(',', $f['status'])));
         }
-        if (! empty($f['tenderType'])) {
-            $q->where('tender_type', strtoupper((string) $f['tenderType']));
+        if (! empty($f['tenderType']) && is_string($f['tenderType'])) {
+            $t = strtoupper($f['tenderType']);
+            $q->where(fn ($w) => $w->where('tender_type', $t)->orWhereExists(fn ($s) => $s->selectRaw('1')->from('payment_collection as pt')->whereColumn('pt.payment_id', 'payment.id')->where('pt.tender', $t)));
         }
         // filter[from] (inclusive) / filter[to] (exclusive; a bare YYYY-MM-DD `to` includes that whole UTC day) on created_at
         $range = validator($f, ['from' => ['nullable', 'date'], 'to' => ['nullable', 'date']])->validate();
@@ -96,10 +119,10 @@ class PaymentController
             $to = CarbonImmutable::parse($range['to'], 'UTC')->utc();
             $q->where('created_at', '<', ($this->bareDate($range['to']) ? $to->addDay() : $to)->format('Y-m-d H:i:s.u'));
         }
-        if (! empty($f['groupId']) && Ids::isUuid($f['groupId'])) {
+        if (! empty($f['groupId']) && is_string($f['groupId']) && Ids::isUuid($f['groupId'])) {
             $q->where('group_id', Ids::toBinary($f['groupId']));
         }
-        if (! empty($f['orderId']) && Ids::isUuid($f['orderId'])) {
+        if (! empty($f['orderId']) && is_string($f['orderId']) && Ids::isUuid($f['orderId'])) {
             $q->whereExists(fn ($s) => $s->selectRaw('1')->from('payment_allocation as pa')->whereColumn('pa.payment_id', 'payment.id')->where('pa.order_id', Ids::toBinary($f['orderId'])));
         }
         $page = CursorPage::paginate($q, $request, 'id', 'desc');
@@ -207,6 +230,17 @@ class PaymentController
     private function replayable(array $r): JsonResponse
     {
         return response()->json($r['body'], 201, $r['replayed'] ? ['Idempotent-Replayed' => 'true'] : []);
+    }
+
+    /** @param list<string> $permissions holding ANY of them at the facility */
+    private function requireAnyAt(string $staffId, array $permissions, string $facilityId): void
+    {
+        foreach ($permissions as $p) {
+            if ($this->permissions->can($staffId, $p, Scope::facility($facilityId))) {
+                return;
+            }
+        }
+        throw ApiProblem::permissionDenied($permissions[0]);
     }
 
     private function bareDate(string $v): bool

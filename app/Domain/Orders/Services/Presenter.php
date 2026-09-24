@@ -34,6 +34,7 @@ final class Presenter
             'total' => Fmt::money($o->total),
             'amountPaid' => Fmt::money($o->amount_paid),
             'balanceDue' => $o->status === 'VOIDED' ? '0.0000' : Money::of($o->total)->sub(Money::of($o->amount_paid))->amount,
+            ...$this->billFields($o),
             'currency' => $o->currency,
             'createdByStaffId' => Ids::fromBinary($o->created_by),
             'deviceId' => Fmt::u($o->device_id),
@@ -86,8 +87,44 @@ final class Presenter
             'total' => Fmt::money($o->total),
             'balanceDue' => $o->status === 'VOIDED' ? '0.0000' : Money::of($o->total)->sub(Money::of($o->amount_paid))->amount,
             'lineCount' => $lineCount,
+            ...$this->billFields($o),
             'createdAt' => Fmt::ts($o->created_at),
         ];
+    }
+
+    /**
+     * Bill / collection state (docs/WAITER_COLLECTION.md). `status` is untouched; `billState` BILL_PRINTED = frozen, awaiting payment.
+     * `pendingCollected` = money collected by waiters/links that is not yet confirmed (reserves the balance).
+     *
+     * @return array<string, mixed>
+     */
+    public function billFields(object $o): array
+    {
+        $billed = $o->bill_printed_at ?? null;
+        $balance = $o->status === 'VOIDED' ? '0.0000' : Money::of($o->total)->sub(Money::of($o->amount_paid))->amount;
+        $pending = ($billed !== null && $o->status !== 'VOIDED') ? $this->pendingCollected($o->id) : '0.0000';
+        $collectable = bccomp(bcsub($balance, $pending, 4), '0', 4) > 0 ? bcsub($balance, $pending, 4) : '0.0000';
+
+        return [
+            'billState' => $billed !== null ? 'BILL_PRINTED' : 'OPEN',
+            'billPrintedAt' => Fmt::ts($billed),
+            'billPrintCount' => (int) ($o->bill_print_count ?? 0),
+            'billReopenCount' => (int) ($o->bill_reopen_count ?? 0),
+            'awaitingPayment' => $billed !== null && bccomp($balance, '0', 4) > 0,
+            'pendingCollected' => $pending,
+            'collectable' => $collectable,
+        ];
+    }
+
+    /** Sum of unconfirmed collections on the order (read-only lookup of the Payments ledger). */
+    public function pendingCollected(string $orderBin): string
+    {
+        $v = DB::selectOne(
+            "SELECT COALESCE(SUM(pa.amount), 0) AS s FROM payment_allocation pa
+             JOIN payment p ON p.id = pa.payment_id JOIN payment_collection c ON c.payment_id = p.id
+             WHERE pa.order_id = ? AND p.status IN ('PENDING_CONFIRMATION','AUTHORIZING')", [$orderBin]);
+
+        return Money::normalize((string) $v->s);
     }
 
     /** @return array<string, mixed> DiningTable */

@@ -83,6 +83,14 @@ The effective `operatingRules` object of `GET /facilities/{id}/capabilities` exp
 | `require_cash_session` | bool |  | true |  | PAYMENT_ACCEPTANCE | high | server | Cash payments can only be taken while the cashier has an open cash-drawer session. Turning this off removes a key cash control. |
 | `allow_offline_payments` | enum |  | CASH_ONLY | NONE, CASH_ONLY, ALL | PAYMENT_ACCEPTANCE | high | client | What the apps may accept when the connection to the property server is down. Card and transfer cannot be verified offline. |
 | `allow_offline_orders` | bool |  | true |  | POS / TABLE_SERVICE | low | client | Staff may keep taking orders when the connection is down; they sync when it returns. |
+| `waiter_collection_enabled` | bool |  | false |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | high | server | Waiters may collect payment at the table with their tablet (pending until confirmed where required). |
+| `waiter_cash_holding` | bool |  | false |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | high | server | Waiters may keep cash collected at tables until they hand it over. |
+| `waiter_cash_in_hand_limit` | money | NGN | 0.0000 |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | high | server | A waiter must hand over cash once they hold more than this. 0 means no limit. |
+| `collection_requires_confirmation` | multi_enum |  | [] | CASH, CARD_TERMINAL, TRANSFER | TABLE_SERVICE / PAYMENT_ACCEPTANCE | high | server | Tender types whose table collections stay pending until a cashier confirms them. |
+| `pending_collection_expiry_minutes` | duration | minutes | 30 | 1 .. 10080 | TABLE_SERVICE / PAYMENT_ACCEPTANCE | medium | server | A collection not confirmed within this time expires automatically. |
+| `pre_bill_requires_supervisor_if_reopened` | bool |  | true |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | medium | server | Printing a pre-bill again after a cancelled bill needs supervisor approval. |
+| `bill_pay_link_enabled` | bool |  | false |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | low | server | Print the pay reference / QR code on the pre-bill. |
+| `cash_handover_max_variance` | money | NGN | 500.0000 |  | TABLE_SERVICE / PAYMENT_ACCEPTANCE | high | server | A handover whose counted cash differs from expected by more than this needs supervisor sign-off. |
 | `approval_threshold_amount` | money | NGN | 0.0000 |  | POS / PAYMENT_ACCEPTANCE | high | server | Amounts above this need a supervisor. 0 means every discount by a non-approver needs approval. |
 | `require_approval_for` | multi_enum |  | [] | order.void, order.discount, order.comp, order.price_override, payment.refund, payment.reversal | POS / PAYMENT_ACCEPTANCE | high | server | These actions always need supervisor approval from anyone who is not a supervisor, whatever the amount. |
 | `approval_threshold_void_amount` | money | NGN | 0.0000 |  | POS | high | planned | Voids of orders worth more than this need a supervisor. |
@@ -154,7 +162,6 @@ The effective `operatingRules` object of `GET /facilities/{id}/capabilities` exp
 | `CAFE` | CAFE | POS, PAYMENT_ACCEPTANCE, RECEIPT_PRINTING, INVENTORY | {"require_cash_session":true,"stock_consumption_timing":"SEND","payment_timing":"PAY_FIRST"} | COUNTER_1 (COUNTER) |
 | `STORE_ROOM` | STORE | INVENTORY | [] | STORE_WINDOW (STORE_WINDOW) |
 | `KITCHEN` | KITCHEN | INVENTORY | {"stock_consumption_timing":"SEND"} | ; KDS PASS |
-
 
 ## 3. Operating points, KDS stations `[built]`
 

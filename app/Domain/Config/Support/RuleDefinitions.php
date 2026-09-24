@@ -175,6 +175,16 @@ final class RuleDefinitions
             ['allow_offline_orders', 'Orders while offline', 'Staff may keep taking orders when the connection is down; they sync when it returns.',
                 'Payments & cash', 'bool', ['POS', 'TABLE_SERVICE'], true, null, 'low', 'client', []],
 
+            ['waiter_collection_enabled', 'Waiters collect at the table', 'Waiters may collect payment at the table with their tablet (pending until confirmed where required).', 'Payments & cash', 'bool', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], false, null, 'high', 'server', []],
+            ['waiter_cash_holding', 'Waiters may hold cash', 'Waiters may keep cash collected at tables until they hand it over.', 'Payments & cash', 'bool', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], false, null, 'high', 'server', []],
+            ['waiter_cash_in_hand_limit', 'Waiter cash-in-hand limit', 'A waiter must hand over cash once they hold more than this. 0 means no limit.', 'Payments & cash', 'money', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], '0.0000', 'NGN', 'high', 'server', []],
+            ['collection_requires_confirmation', 'Collections that need confirmation', 'Tender types whose table collections stay pending until a cashier confirms them.', 'Payments & cash', 'multi_enum', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], ['CASH', 'CARD_TERMINAL', 'TRANSFER'], null, 'high', 'server',
+                ['allowed' => $opts(['CASH' => 'Cash', 'CARD_TERMINAL' => 'Card terminal', 'TRANSFER' => 'Bank transfer'])]],
+            ['pending_collection_expiry_minutes', 'Pending collection expiry', 'A collection not confirmed within this time expires automatically.', 'Payments & cash', 'duration', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], 30, 'minutes', 'medium', 'server', ['min' => 1, 'max' => 10080]],
+            ['pre_bill_requires_supervisor_if_reopened', 'Reprinted bill needs a supervisor', 'Printing a pre-bill again after a cancelled bill needs supervisor approval.', 'Payments & cash', 'bool', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], true, null, 'medium', 'server', []],
+            ['bill_pay_link_enabled', 'Pay reference on the pre-bill', 'Print the pay reference / QR code on the pre-bill.', 'Payments & cash', 'bool', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], false, null, 'low', 'server', []],
+            ['cash_handover_max_variance', 'Cash handover variance allowed', 'A handover whose counted cash differs from expected by more than this needs supervisor sign-off.', 'Payments & cash', 'money', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], '500.0000', 'NGN', 'high', 'server', []],
+
             // ---- Approvals -------------------------------------------------------------------------------------------------
             ['approval_threshold_amount', 'Approval threshold (discounts and refunds)', 'Amounts above this need a supervisor. 0 means every discount by a non-approver needs approval.',
                 'Approvals', 'money', ['POS', 'PAYMENT_ACCEPTANCE'], '0.0000', 'NGN', 'high', 'server', []],
