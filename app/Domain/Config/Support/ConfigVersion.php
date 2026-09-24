@@ -10,10 +10,11 @@ final class ConfigVersion
 {
     public static function next(string $entityId): int
     {
-        DB::statement('INSERT INTO config_entity_version (entity_id, version) VALUES (?, 1) ON DUPLICATE KEY UPDATE version = LAST_INSERT_ID(version + 1)', [Ids::toBinary($entityId)]);
-        $row = DB::selectOne('SELECT LAST_INSERT_ID() AS v');
-        $v = (int) $row->v;
+        $affected = DB::affectingStatement('INSERT INTO config_entity_version (entity_id, version) VALUES (?, 1) ON DUPLICATE KEY UPDATE version = LAST_INSERT_ID(version + 1)', [Ids::toBinary($entityId)]);
+        if ($affected === 1) { // fresh insert
+            return 1;
+        }
 
-        return $v === 0 ? 1 : $v;
+        return (int) DB::selectOne('SELECT LAST_INSERT_ID() AS v')->v;
     }
 }

@@ -1,9 +1,12 @@
 <?php
 
+use App\Domain\Config\Http\Controllers\BookingConfigController;
 use App\Domain\Config\Http\Controllers\CatalogConfigController;
 use App\Domain\Config\Http\Controllers\DeviceAdminController;
 use App\Domain\Config\Http\Controllers\FacilityAdminController;
 use App\Domain\Config\Http\Controllers\OperatingPointAdminController;
+use App\Domain\Config\Http\Controllers\SettingsController;
+use App\Domain\Config\Http\Controllers\TicketTypeAdminController;
 use Illuminate\Support\Facades\Route;
 
 // Loaded under /api/v1 with the `api` middleware group. Permission-based only; every write is audited + outboxed (docs/CONFIG_ADMIN_API.md).
@@ -78,4 +81,28 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
         Route::get('catalog/prices/export', [CatalogConfigController::class, 'exportPrices']);
         Route::post('catalog/prices/import', [CatalogConfigController::class, 'importPrices']);
     });
+
+    // ---- Ticket types ---------------------------------------------------------------------------------------------------------
+    Route::get('ticketing/ticket-types', [TicketTypeAdminController::class, 'index'])->middleware('permission:config.view|ticket_type.manage|ticket.issue');
+    Route::post('ticketing/ticket-types', [TicketTypeAdminController::class, 'store'])->middleware(['permission:ticket_type.manage', 'idempotent']);
+    Route::patch('ticketing/ticket-types/{ticketTypeId}', [TicketTypeAdminController::class, 'update'])->middleware('permission:ticket_type.manage');
+
+    // ---- Booking configuration ---------------------------------------------------------------------------------------------------
+    Route::middleware('permission:booking.configure')->prefix('bookings')->group(function () {
+        Route::get('resources/{resourceId}/schedule', [BookingConfigController::class, 'schedule']);
+        Route::put('resources/{resourceId}/schedule', [BookingConfigController::class, 'setSchedule']);
+        Route::get('resources/{resourceId}/blackouts', [BookingConfigController::class, 'blackouts']);
+        Route::post('blackouts', [BookingConfigController::class, 'createBlackout'])->middleware('idempotent');
+        Route::delete('blackouts/{blackoutId}', [BookingConfigController::class, 'deleteBlackout']);
+        Route::get('resources/{resourceId}/rules', [BookingConfigController::class, 'rules']);
+        Route::put('resources/{resourceId}/rules', [BookingConfigController::class, 'setRules']);
+    });
+
+    // ---- Settings ----------------------------------------------------------------------------------------------------------------------
+    Route::get('admin/settings/business', [SettingsController::class, 'business'])->middleware('permission:config.view|settings.manage');
+    Route::put('admin/settings/business', [SettingsController::class, 'updateBusiness'])->middleware('permission:settings.manage');
+    Route::get('admin/settings/receipt', [SettingsController::class, 'receipt'])->middleware('permission:config.view|settings.manage');
+    Route::put('admin/settings/receipt', [SettingsController::class, 'updateReceipt'])->middleware('permission:settings.manage');
+    Route::get('facilities/{facilityId}/payment-methods', [SettingsController::class, 'paymentMethods'])->middleware('permission:config.view|settings.manage');
+    Route::put('facilities/{facilityId}/payment-methods', [SettingsController::class, 'setPaymentMethods'])->middleware('permission:settings.manage');
 });

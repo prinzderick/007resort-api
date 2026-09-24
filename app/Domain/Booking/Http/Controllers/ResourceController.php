@@ -100,6 +100,9 @@ class ResourceController
                 'ends_at' => CarbonImmutable::parse($data['end'])->utc(), 'reason' => $data['reason'] ?? null, 'created_by' => RequestContext::staffId(),
             ]);
             Audit::record('booking.blackout.create', 'Blackout', $b->id, null, ['resourceId' => $resource->id, 'start' => $data['start'], 'end' => $data['end']], organizationId: $resource->organization_id, siteId: $resource->site_id, facilityUnitId: $resource->facility_unit_id);
+            \App\Support\Sync\Outbox::record('ConfigurationUpdated', 'Blackout', $b->id, ['domain' => 'blackout', 'changes' => ['blackout' => ['id' => $b->id, 'resourceId' => $resource->id, 'facilityId' => null,
+                'start' => CarbonImmutable::parse($data['start'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'end' => CarbonImmutable::parse($data['end'])->utc()->format('Y-m-d\TH:i:s.v\Z'), 'reason' => $data['reason'] ?? null],
+                'organizationId' => $resource->organization_id]], \App\Domain\Config\Support\ConfigVersion::next($b->id), organizationId: $resource->organization_id, siteId: $resource->site_id, facilityId: $resource->facility_unit_id);
 
             return $b;
         });

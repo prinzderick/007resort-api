@@ -64,13 +64,17 @@ class ReceiptService
             $cashier = $s ? trim($s->first_name.' '.$s->last_name) : 'Staff';
         }
         $terminal = $ctx['deviceId'] !== null ? DB::table('device')->where('id', Ids::toBinary($ctx['deviceId']))->value('name') : null;
+        $rs = \App\Domain\Config\Services\SettingsService::forReceipt($ctx['organizationId']); // admin-settable receipt settings (config/env values are the fallback)
 
         $payload = [
             'facilityId' => $ctx['facilityId'],
             'facilityName' => (string) $facility,
-            'businessName' => (string) (config('payments.receipt.business_name') ?: $org),
+            'businessName' => (string) ($rs['businessName'] ?: config('payments.receipt.business_name') ?: $org),
             'siteName' => (string) $site,
-            'siteAddress' => (string) config('payments.receipt.site_address', ''),
+            'siteAddress' => (string) ($rs['address'] ?: config('payments.receipt.site_address', '') ?: (DB::table('site')->where('id', Ids::toBinary($ctx['siteId']))->value('address') ?? '')),
+            'businessPhone' => $rs['phone'],
+            'headerNote' => $rs['headerNote'],
+            'logoUrl' => $rs['logoUrl'],
             'issuedAt' => Fmt::iso($issuedAt->format('Y-m-d H:i:s.u')),
             'cashierName' => $cashier,
             'terminal' => $terminal,
@@ -92,9 +96,9 @@ class ReceiptService
             'changeGiven' => $change,
             'vatRegistered' => $vatRegistered,
             'vatRatePercent' => $vatRegistered ? $vat['vatRatePercent'] : null,
-            'vatNumber' => $vatRegistered ? $vat['vatNumber'] : null,
+            'vatNumber' => $vatRegistered && $rs['showTin'] ? $vat['vatNumber'] : null,
             'qrPayload' => null,
-            'footer' => (string) config('payments.receipt.footer', ''),
+            'footer' => (string) ($rs['footer'] ?: config('payments.receipt.footer', '')),
         ];
 
         DB::table('receipt')->insert([
@@ -141,7 +145,8 @@ class ReceiptService
             'reprintCount' => $reprints,
             'duplicate' => $duplicate,
         ];
-        $out['printLines'] = ReceiptRenderer::lines($out, (int) config('payments.receipt.columns', 48));
+        $columns = \App\Domain\Config\Services\SettingsService::forReceipt(Ids::fromBinary($row->organization_id))['paperColumns'] ?? (int) config('payments.receipt.columns', 48);
+        $out['printLines'] = ReceiptRenderer::lines($out, $columns);
 
         return $out;
     }

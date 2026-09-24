@@ -111,6 +111,7 @@ class PaymentService
                 }
             }
             $tenders = $this->normalizedTenders($tenders);
+            app(\App\Domain\Config\Services\SettingsService::class)->assertTendersAllowed($facilityId, array_map(fn ($t) => $t['tenderType'], $tenders));
 
             // ---- 5. Cash session (shared lock: a concurrent close waits for us; after close we get cash_session_required). --
             $hasCash = (bool) array_filter($tenders, fn ($t) => $t['tenderType'] === 'CASH');
