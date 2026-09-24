@@ -189,7 +189,7 @@ class PaymentTakingTest extends TestCase
         foreach ([$voided, $pending] as $o) {
             $st = $this->orderStatus($o);
             $this->postJson('/api/v1/payments', $this->payBody([['orderId' => $o, 'amount' => '1000.0000']], [['tenderType' => 'TRANSFER', 'amount' => '1000.0000', 'reference' => 'R'.$st]]), $this->auth($this->cashierToken))
-                ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid')->assertJsonPath('status', $st);
+                ->assertStatus(409)->assertJsonPath('code', 'order_state_invalid')->assertJsonPath('status', 409)->assertJsonPath('entityStatus', $st);
         }
 
         // default (pay after service): a SENT order cannot be settled yet, a SERVED one can

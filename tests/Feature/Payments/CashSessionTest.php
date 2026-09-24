@@ -53,6 +53,17 @@ class CashSessionTest extends TestCase
         $this->postJson("/api/v1/cash-sessions/{$s}/movements", ['kind' => 'PAID_IN', 'amount' => '1.0000', 'reason' => 'late'], $this->auth($this->cashierToken))->assertStatus(409);
     }
 
+    public function test_empty_non_cash_totals_serialise_as_an_object_not_an_array(): void
+    {
+        // totals.nonCash is a tender => amount MAP; PHP would emit [] for an empty one, which strict clients (the POS) cannot parse.
+        $open = $this->open($this->cashierToken)->assertCreated();
+        $this->assertStringContainsString('"nonCash":{}', $open->getContent());
+        $s = $open->json('id');
+        $closed = $this->postJson("/api/v1/cash-sessions/{$s}/close", ['countedCash' => '5000.0000'], $this->auth($this->cashierToken))->assertOk();
+        $this->assertStringContainsString('"nonCash":{}', $closed->getContent());
+        $this->assertStringContainsString('"nonCash":{}', $this->getJson("/api/v1/cash-sessions/{$s}", $this->auth($this->cashierToken))->assertOk()->getContent());
+    }
+
     public function test_only_one_open_session_per_cashier_and_per_device_enforced_by_the_database(): void
     {
         $first = $this->open($this->cashierToken)->assertCreated()->json('id');
