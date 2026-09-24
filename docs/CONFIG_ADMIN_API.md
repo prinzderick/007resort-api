@@ -163,6 +163,8 @@ The effective `operatingRules` object of `GET /facilities/{id}/capabilities` exp
 | `STORE_ROOM` | STORE | INVENTORY | [] | STORE_WINDOW (STORE_WINDOW) |
 | `KITCHEN` | KITCHEN | INVENTORY | {"stock_consumption_timing":"SEND"} | ; KDS PASS |
 
+The waiter-collection rules (`waiter_collection_enabled`, `waiter_cash_holding`, `waiter_cash_in_hand_limit`, `collection_requires_confirmation`, `pending_collection_expiry_minutes`, `pre_bill_requires_supervisor_if_reopened`, `bill_pay_link_enabled`, `cash_handover_max_variance`) are in the catalogue above; behaviour is in `docs/WAITER_COLLECTION.md`. The per-staff `collection-policy` and `payment-terminals` endpoints owned by that module belong on the same admin screens (see that document).
+
 ## 3. Operating points, KDS stations `[built]`
 
 `kind`: `TABLE_AREA | COUNTER | GATE | STORE_WINDOW | STATION | ROOM`. A `STATION` can carry a KDS station (same id as the operating point, the convention Hospitality already uses).
