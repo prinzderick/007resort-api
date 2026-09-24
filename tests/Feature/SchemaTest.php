@@ -14,7 +14,7 @@ class SchemaTest extends TestCase
     public function test_seed_catalogs_are_present(): void
     {
         $this->assertSame(22, DB::table('capability_type')->count());
-        $this->assertSame(11, DB::table('role')->count());
+        $this->assertSame(12, DB::table('role')->count()); // 11 foundation roles + MARKETING (website CMS migration)
         // Modules add permissions in their own migrations, so the foundation count is a floor, not an exact number.
         $this->assertGreaterThanOrEqual(42, DB::table('permission')->count());
         $owner = DB::table('role')->where('code', 'OWNER')->value('id');
