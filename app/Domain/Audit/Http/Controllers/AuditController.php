@@ -4,7 +4,6 @@ namespace App\Domain\Audit\Http\Controllers;
 
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Support\Audit\Audit;
-use App\Support\Http\ApiProblem;
 use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\RequestContext;
@@ -18,7 +17,6 @@ class AuditController
     /** Entity types a `config.view` holder (without audit.view) may read: the configuration change history. */
     public const CONFIG_ENTITY_TYPES = ['Facility', 'OperatingPoint', 'DiningTable', 'Product', 'ProductCategory', 'ProductFacility', 'PriceList', 'Price', 'TaxRate', 'PrepRoute', 'TicketType', 'Role', 'Device',
         'ReceiptSetting', 'BusinessProfile', 'MembershipPlan', 'BookableResource', 'Blackout', 'OrganizationTaxSetting', 'Organization'];
-
 
     /**
      * GET /audit?entityType=&entityTypes=a,b&entityId=&actorStaffId=&action=&actionPrefix=&facilityId=&from=&to=&order=asc|desc&limit=&cursor=
