@@ -84,6 +84,7 @@ Response **201** `{payment, order, payLink?, transferAccount?}` (`Idempotent-Rep
 | POST | `/payments/{id}/cancel` `{reason}` | the collector (only for `AUTHORIZING` pay-link/transfer, never for cash) or `payment.confirm` | -> `CANCELLED` after asking Paystack (409 `already_paid` if it was paid) |
 | GET | `/payments?status=PENDING_CONFIRMATION&facilityId=&collectedBy=&orderId=&tenderType=` | `payment.view` or `payment.confirm` (facility) ; a waiter without a facility filter sees only their own | cursor page; also accepts `filter[...]` |
 
+* **Display fields for the cashier inbox** (additive): `payment.collection` also carries `orderId`, `orderNumber`, `tableLabel`, `collectedByName` and `terminalLabel`, resolved in batched queries, so the POS list needs no per-row lookups (null when absent, e.g. a takeaway has no table).
 * **Confirm is idempotent**: a second confirm of a payment already captured by confirmation returns 200 with the same body (`Idempotent-Replayed`), no second capture, receipt or outbox row.
   Confirm of `REJECTED`/`EXPIRED`/`CANCELLED` is 409 `payment_state_invalid`; **reject after confirm is 409 `payment_state_invalid`** (use refund/reversal). Reject is idempotent for the same reason.
   Confirm of an auto-confirm payment (`AUTHORIZING`) is 409 `auto_confirm_only`.
@@ -125,6 +126,7 @@ Waiter cash holding is **disabled by default**. Effective policy per waiter = st
 * Handover: `POST /cash-handovers {id?, declaredAmount, note?}` (`cash_handover.create`; 403 `cash_holding_not_allowed` if holding is denied and nothing is in hand; 422 if declared > cash in hand) creates `PENDING_RECEIPT`.
   `POST /cash-handovers/{id}/receive {countedAmount, note?}` (`cash_handover.receive`, not the waiter) records `variance = counted - declared` (negative = short, positive = over), reduces the waiter's cash-in-hand by `declaredAmount`, audits and raises `security_event cash_handover.variance` when non-zero.
   If `abs(variance) > cash_handover_max_variance` (rule, default 500.0000) the status is `PENDING_SIGNOFF` until `POST /cash-handovers/{id}/signoff {note}` (`cash_handover.signoff`, not the receiver); otherwise `RECEIVED`.
+  `GET /cash-in-hand?facilityId=` (`cash_handover.view` at the facility) lists every waiter holding cash there, largest first (same shape as the position plus `waiterName`); handovers also carry `waiterName`.
   `GET /cash-handovers`, `GET /cash-handovers/{id}`, `GET /staff/{id}/cash-in-hand` (own, or `cash_handover.view`): `{cashInHand, limit, handoverRequired, oldestUncollectedAt, pendingCollections, openHandovers, unsignedShortfall}`.
 * Outbox `CashHandoverRecorded`; realtime `cash-handover.received` to the waiter's device.
 

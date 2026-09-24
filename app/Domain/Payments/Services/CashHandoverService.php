@@ -186,7 +186,42 @@ class CashHandoverService
             'pendingCollections' => (clone $pending)->count(), 'pendingCollectionsAmount' => Money::normalize((string) ((clone $pending)->sum('p.amount') ?? '0')),
             'openHandovers' => (int) DB::table('cash_handover')->where('waiter_staff_id', $bin)->whereIn('status', ['PENDING_RECEIPT', 'PENDING_SIGNOFF'])->count(),
             'unsignedShortfall' => Money::normalize(ltrim(Money::normalize($short), '-')),
+            'waiterName' => $this->staffName($bin),
         ];
+    }
+
+    /**
+     * Every waiter who currently holds cash at a facility (positive cash-in-hand from collections at that facility), largest first.
+     * Lets the cashier's handover desk see who still owes a handover without knowing the waiters in advance.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function holdings(string $facilityId): array
+    {
+        $bin = Ids::toBinary($facilityId);
+        $staffIds = DB::table('cash_in_hand_entry')->where('facility_unit_id', $bin)->distinct()->pluck('staff_id')->all();
+        $rows = [];
+        foreach ($staffIds as $staff) {
+            $id = Ids::fromBinary($staff);
+            $position = $this->position($id, $facilityId);
+            if (bccomp($position['cashInHand'], '0', 4) > 0) {
+                $rows[] = $position;
+            }
+        }
+        usort($rows, fn ($a, $b) => bccomp($b['cashInHand'], $a['cashInHand'], 4));
+
+        return $rows;
+    }
+
+    private function staffName(?string $binaryId): ?string
+    {
+        if ($binaryId === null) {
+            return null;
+        }
+        $s = DB::table('staff')->where('id', $binaryId)->first(['first_name', 'last_name']);
+        $name = $s === null ? '' : trim($s->first_name.' '.$s->last_name);
+
+        return $name === '' ? null : $name;
     }
 
     /** @return array<string, mixed> */
@@ -202,6 +237,7 @@ class CashHandoverService
             'requiresSignoff' => (bool) $h->requires_signoff, 'note' => $h->note,
             'receivedByStaffId' => Fmt::uuid($h->received_by), 'receivedAt' => Fmt::iso($h->received_at),
             'signedOffByStaffId' => Fmt::uuid($h->signoff_by), 'signedOffAt' => Fmt::iso($h->signoff_at), 'createdAt' => Fmt::iso($h->created_at),
+            'waiterName' => $this->staffName($h->waiter_staff_id),
         ];
     }
 

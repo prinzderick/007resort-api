@@ -9528,6 +9528,41 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+  /cash-in-hand:
+    get:
+      operationId: listCashInHand
+      tags:
+      - Cash handover
+      summary: Every waiter holding cash at a facility
+      x-additive: true
+      x-permission: cash_handover.view
+      description: 'Waiters with a positive cash-in-hand from collections at the facility, largest first (the cashier handover desk). `facilityId` is required (422 otherwise).'
+      parameters:
+      - name: facilityId
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Positions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CashInHand'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /staff/{staffId}/cash-in-hand:
     get:
       operationId: getCashInHand
@@ -17384,6 +17419,31 @@ components:
     CollectionInfo:
       type: object
       properties:
+        orderId:
+          $ref: '#/components/schemas/Uuid'
+          x-additive: true
+        orderNumber:
+          type:
+          - string
+          - 'null'
+          x-additive: true
+          description: Display field for the cashier inbox (no lookups needed).
+        tableLabel:
+          type:
+          - string
+          - 'null'
+          x-additive: true
+        collectedByName:
+          type:
+          - string
+          - 'null'
+          x-additive: true
+          description: The collecting waiter's name.
+        terminalLabel:
+          type:
+          - string
+          - 'null'
+          x-additive: true
         tender:
           $ref: '#/components/schemas/CollectionTender'
         channel:
@@ -17653,6 +17713,11 @@ components:
           - type: 'null'
         createdAt:
           $ref: '#/components/schemas/Timestamp'
+        waiterName:
+          type:
+          - string
+          - 'null'
+          x-additive: true
     CashHandoverPage:
       type: object
       properties:
@@ -17693,6 +17758,11 @@ components:
           type: integer
         unsignedShortfall:
           $ref: '#/components/schemas/Money'
+        waiterName:
+          type:
+          - string
+          - 'null'
+          x-additive: true
     CollectionPolicy:
       type: object
       properties:
