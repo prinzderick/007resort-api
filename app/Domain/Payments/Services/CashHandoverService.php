@@ -15,7 +15,6 @@ use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\RequestContext;
 use App\Support\Sync\Outbox;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -93,7 +92,7 @@ class CashHandoverService
             }
             DB::selectOne('SELECT id FROM staff WHERE id = ? FOR UPDATE', [$h->waiter_staff_id]);
             $declared = Money::normalize((string) $h->declared_amount);
-            $inHand = $this->collections->cashInHand($waiter);
+            $inHand = $this->collections->cashInHand($waiter, locking: true); // fresh read after the staff-row lock
             if (bccomp($declared, $inHand, 4) > 0) {
                 throw ApiProblem::conflict('balance_changed', 'The waiter is holding less cash than declared.', ['cashInHand' => $inHand, 'declaredAmount' => $declared]);
             }

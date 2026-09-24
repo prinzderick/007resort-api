@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payments\Listeners;
 
-use App\Domain\Payments\Events\PaymentCaptured;
 use App\Domain\Payments\Services\CollectionService;
 
 /**
@@ -13,9 +12,9 @@ final class CollectionCaptureListener
 {
     public function __construct(private readonly CollectionService $collections) {}
 
-    public function handle(PaymentCaptured $e): void
+    public function handle(object $e): void
     {
-        if ($e->provider !== 'MANUAL') {
+        if (($e->provider ?? 'MANUAL') !== 'MANUAL' && isset($e->paymentId)) {
             $this->collections->afterProviderCapture($e->paymentId);
         }
     }

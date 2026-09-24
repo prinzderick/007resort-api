@@ -12,7 +12,6 @@ use App\Support\Money\Money;
 use App\Support\RequestContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /** POST /orders/{id}/collections, /payments/{id}/confirm|reject|cancel, terminal callbacks. */
 class CollectionController

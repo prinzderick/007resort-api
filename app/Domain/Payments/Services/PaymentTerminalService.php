@@ -30,7 +30,7 @@ class PaymentTerminalService
         $id = $in['id'] ?? Ids::uuid7();
         $this->assertAssignees($in);
 
-        return DB::transaction(function () use ($in, $facility, $f, $id) {
+        return DB::transaction(function () use ($in, $f, $id) {
             if (DB::table('payment_terminal')->where('id', Ids::toBinary($id))->exists()) {
                 throw ApiProblem::conflict('concurrency_conflict', 'A terminal with this id already exists.');
             }

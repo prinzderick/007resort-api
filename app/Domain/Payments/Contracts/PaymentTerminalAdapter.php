@@ -2,12 +2,14 @@
 
 namespace App\Domain\Payments\Contracts;
 
+use App\Domain\Payments\Provider\Terminal\ManualBankTerminalAdapter;
 use App\Domain\Payments\Provider\Terminal\TerminalCharge;
+use App\Domain\Payments\Services\TerminalAdapterRegistry;
 use App\Support\Http\ApiProblem;
 
 /**
  * Card-terminal adapter (docs/WAITER_COLLECTION.md section 5). Resolved per `payment_terminal.provider` by
- * {@see \App\Domain\Payments\Services\TerminalAdapterRegistry}. Today's default is {@see \App\Domain\Payments\Provider\Terminal\ManualBankTerminalAdapter}
+ * {@see TerminalAdapterRegistry}. Today's default is {@see ManualBankTerminalAdapter}
  * (a normal bank POS machine with no API: everything stays PENDING and the cashier confirms against the slip). A real
  * integration implements this interface and is registered under a provider code; endpoints do not change.
  *

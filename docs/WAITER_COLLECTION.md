@@ -67,7 +67,7 @@ Response **201** `{payment, order, payLink?, transferAccount?}` (`Idempotent-Rep
 
 * Ledger tender types stay the existing ones: `CARD_TERMINAL` -> `POS_TERMINAL`, `PAY_LINK` -> `CARD`. The API value is `payment.collection.tender`. `payment.takenByStaffId` = the waiter.
 * **Preconditions** (in this order): rule `waiter_collection_enabled` (409 `collection_disabled`); bill printed (409 `order_not_billed`); order payable (409 `order_state_invalid`, the facility payment timing rule still applies);
-  the caller's **device is a tablet currently checked out to that staff at that facility** (403 `device_not_checked_out`; fixed POS devices homed at the facility also pass);
+  the caller's **device is a tablet currently checked out to that staff at that facility** (403 `device_not_checked_out`; a device with no checkout, or checked out to someone else, is refused);
   the terminal (if given) exists, is ACTIVE, at this facility and not assigned to someone else (422 `terminal_unavailable`); tender allowed (see 6: 403 `cash_holding_not_allowed`, 409 `cash_limit_exceeded`).
 * **Over-collection**: under the order row lock, `amount <= total - captured - pending`. Pending = `PENDING_CONFIRMATION` collections + `AUTHORIZING` collections (pay links / provider transfers reserve the balance until they are paid, cancelled or expired). Violations: **409 `over_collection`** (`details: balanceDue, pendingCollected, collectable`). CASH may carry `tendered > amount` (change), nothing else may.
   A cashier taking a normal `POST /payments` / tab settle / Paystack initialize on the same bill subtracts the same pending amount (409 `pending_collection_exists`), so waiter + cashier can never over-collect.
@@ -149,7 +149,7 @@ They are exposed to apps in `GET /facilities/{id}/capabilities` -> `operatingRul
 
 `bill.print` (waiter, bartender, cashier, supervisor, manager), `bill.cancel.execute` (waiter, bartender, cashier: **requires approval**) and `bill.cancel.approve` (supervisor, manager),
 `payment.collect` (waiter, bartender), `payment.confirm` (cashier, supervisor), `cash_handover.create` (waiter, bartender), `cash_handover.receive` (cashier, supervisor), `cash_handover.signoff` (supervisor),
-`cash_handover.view` (cashier, supervisor, manager, accountant), `device.manage` (IT admin, manager). The **Manager role deliberately does not get `payment.confirm`**; grant it on the role if the owner wants it (authorization is permission-based, never role-name-based).
+`cash_handover.view` (cashier, supervisor, manager, accountant), `device.manage` (IT admin, manager). The seeded **Manager holds every collection permission** (Identity's escalation guard requires a role granter to hold every permission of the roles it may assign); authorization is permission-based, never role-name-based, so a custom role *named* Manager without `payment.confirm` is denied (tested).
 
 ## 9. Realtime (private channels, envelope of `api/realtime.md`)
 

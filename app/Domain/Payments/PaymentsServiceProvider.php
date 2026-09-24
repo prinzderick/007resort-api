@@ -3,19 +3,19 @@
 namespace App\Domain\Payments;
 
 use App\Domain\Orders\Approvals\ApprovalService;
+use App\Domain\Payments\Console\ExpirePendingCollectionsCommand;
 use App\Domain\Payments\Contracts\OrderPort;
 use App\Domain\Payments\Contracts\PayableSubjectResolver;
 use App\Domain\Payments\Contracts\PaymentProviderAdapter;
+use App\Domain\Payments\Events\PaymentCaptured;
+use App\Domain\Payments\Listeners\CollectionCaptureListener;
 use App\Domain\Payments\Provider\PaystackAdapter;
 use App\Domain\Payments\Services\DbOrderPort;
 use App\Domain\Payments\Services\NullPayableSubjectResolver;
 use App\Domain\Payments\Services\PaymentApprovalHandler;
 use App\Domain\Payments\Services\RefundService;
-use App\Domain\Payments\Support\FacilityRules;
-use App\Domain\Payments\Console\ExpirePendingCollectionsCommand;
-use App\Domain\Payments\Events\PaymentCaptured;
-use App\Domain\Payments\Listeners\CollectionCaptureListener;
 use App\Domain\Payments\Services\TerminalAdapterRegistry;
+use App\Domain\Payments\Support\FacilityRules;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -23,7 +23,7 @@ use Illuminate\Support\ServiceProvider;
 /**
  * Payments module (ADR-0009 / architecture/07). Auto-registered by App\Providers\ModuleServiceProvider (docs/MODULES.md).
  * Other modules integrate through the ports bound here: rebind OrderPort / PayableSubjectResolver in their own
- * provider to replace the defaults, and listen for {@see Events\PaymentCaptured}.
+ * provider to replace the defaults, and listen for {@see PaymentCaptured}.
  */
 class PaymentsServiceProvider extends ServiceProvider
 {

@@ -2,10 +2,8 @@
 
 namespace App\Domain\Payments\Services;
 
-use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Payments\Support\CollectionRules;
-use App\Domain\Payments\Support\Fmt;
 use App\Support\Api\Authz;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;

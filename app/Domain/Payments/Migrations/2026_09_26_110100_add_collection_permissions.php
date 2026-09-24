@@ -5,8 +5,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Permission codes of the waiter-collection workflow + role bundles (docs/WAITER_COLLECTION.md section 8).
- * Authorization stays permission-based: the MANAGER role deliberately does NOT hold `payment.confirm` / `cash_handover.receive`
- * (the owner grants them per role when wanted).
+ * Authorization stays permission-based (never role names): a custom role NAMED "Manager" without `payment.confirm` cannot confirm.
  */
 return new class extends Migration
 {
@@ -27,7 +26,8 @@ return new class extends Migration
         'BARTENDER' => ['payment.collect', 'cash_handover.create'],
         'CASHIER' => ['payment.confirm', 'cash_handover.receive', 'cash_handover.view'],
         'UNIT_SUPERVISOR' => ['payment.confirm', 'cash_handover.receive', 'cash_handover.signoff', 'cash_handover.view'],
-        'MANAGER' => ['cash_handover.view', 'device.manage'],
+        // MANAGER must stay a superset of the roles it may assign (Identity's escalation guard), so it holds every collection permission too.
+        'MANAGER' => ['payment.collect', 'payment.confirm', 'cash_handover.create', 'cash_handover.receive', 'cash_handover.signoff', 'cash_handover.view', 'device.manage'],
         'ACCOUNTANT' => ['cash_handover.view'],
         'IT_ADMIN' => ['device.manage'],
     ];

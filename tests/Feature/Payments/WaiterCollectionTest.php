@@ -2,15 +2,20 @@
 
 namespace Tests\Feature\Payments;
 
+use App\Domain\Payments\Broadcast\PaymentConfirmed;
+use App\Domain\Payments\Contracts\PaymentTerminalAdapter;
+use App\Domain\Payments\Provider\Terminal\TerminalCharge;
 use App\Domain\Payments\Services\CollectionService;
+use App\Domain\Payments\Services\TerminalAdapterRegistry;
 use App\Support\Audit\Audit;
 use App\Support\Ids;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\Support\CollectionWorld;
-use Tests\Support\TestData;
 use Tests\Support\PaystackFakes;
+use Tests\Support\TestData;
 use Tests\TestCase;
 
 /** Bill -> collect -> confirm/reject/expire (docs/WAITER_COLLECTION.md). */
@@ -228,7 +233,8 @@ class WaiterCollectionTest extends TestCase
 
         // the collector cannot confirm (and has no permission anyway); a Manager-named role lacking payment.confirm is denied too
         $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($this->waiterToken))->assertStatus(403)->assertJsonPath('code', 'permission_denied');
-        $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($this->managerToken))->assertStatus(403)->assertJsonPath('code', 'permission_denied')->assertJsonPath('permission', 'payment.confirm');
+        $namedManager = $this->roleToken('mgrnamed', ['payment.view', 'order.view', 'report.view'], 'Manager'); // permissions decide, never the role NAME
+        $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($namedManager))->assertStatus(403)->assertJsonPath('code', 'permission_denied')->assertJsonPath('permission', 'payment.confirm');
 
         $r = $this->postJson("/api/v1/payments/{$id}/confirm", ['matchedReference' => 'COUNTED-OK'], $this->auth($this->cashierToken))->assertOk();
         $this->assertSame('CAPTURED', $r->json('payment.status'));
@@ -391,7 +397,7 @@ class WaiterCollectionTest extends TestCase
         $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($this->cashierToken))->assertStatus(409)->assertJsonPath('code', 'auto_confirm_only');
         $this->postJson("/api/v1/payments/{$id}/reject", ['reason' => 'trying to reject'], $this->auth($this->cashierToken))->assertStatus(409)->assertJsonPath('code', 'auto_confirm_only');
 
-        Event::fake([\App\Domain\Payments\Broadcast\PaymentConfirmed::class]);
+        Event::fake([PaymentConfirmed::class]);
         $body = PaystackFakes::body($ref);
         $this->webhook($body)->assertOk()->assertJsonPath('duplicate', false);
         $this->webhook($body)->assertOk()->assertJsonPath('duplicate', true);
@@ -402,8 +408,8 @@ class WaiterCollectionTest extends TestCase
         $this->assertSame(1, DB::table('payment_collection_decision')->where('mode', 'PROVIDER')->count());
         $this->assertSame(1, DB::table('audit_log')->where('action', 'payment.collection.auto_confirm')->count());
         $this->assertSame('9000.0000', $this->paidOf($order));
-        Event::assertDispatchedTimes(\App\Domain\Payments\Broadcast\PaymentConfirmed::class, 1);
-        Event::assertDispatched(\App\Domain\Payments\Broadcast\PaymentConfirmed::class, fn ($e) => in_array('device.'.$this->deviceId, $e->channels, true) && $e->data['mode'] === 'PROVIDER');
+        Event::assertDispatchedTimes(PaymentConfirmed::class, 1);
+        Event::assertDispatched(PaymentConfirmed::class, fn ($e) => in_array('device.'.$this->deviceId, $e->channels, true) && $e->data['mode'] === 'PROVIDER');
     }
 
     public function test_paystack_transfer_returns_a_dynamic_account_and_unpaid_links_can_be_cancelled(): void
@@ -447,16 +453,39 @@ class WaiterCollectionTest extends TestCase
 
     public function test_an_integrated_terminal_adapter_that_reports_confirmed_captures_directly(): void
     {
-        $adapter = new class implements \App\Domain\Payments\Contracts\PaymentTerminalAdapter
+        $adapter = new class implements PaymentTerminalAdapter
         {
-            public function code(): string { return 'MANUAL_BANK'; }
-            public function initiateCharge(object $terminal, string $reference, string $amount, array $ctx): \App\Domain\Payments\Provider\Terminal\TerminalCharge { return new \App\Domain\Payments\Provider\Terminal\TerminalCharge('CONFIRMED', $reference, 'prov-1', $amount); }
-            public function queryStatus(object $terminal, string $reference): \App\Domain\Payments\Provider\Terminal\TerminalCharge { return new \App\Domain\Payments\Provider\Terminal\TerminalCharge('CONFIRMED', $reference); }
-            public function parseCallback(string $rawBody, ?string $signature): ?\App\Domain\Payments\Provider\Terminal\TerminalCharge { return null; }
-            public function void(object $terminal, string $reference): bool { return true; }
-            public function refund(object $terminal, string $reference, string $amount): bool { return true; }
+            public function code(): string
+            {
+                return 'MANUAL_BANK';
+            }
+
+            public function initiateCharge(object $terminal, string $reference, string $amount, array $ctx): TerminalCharge
+            {
+                return new TerminalCharge('CONFIRMED', $reference, 'prov-1', $amount);
+            }
+
+            public function queryStatus(object $terminal, string $reference): TerminalCharge
+            {
+                return new TerminalCharge('CONFIRMED', $reference);
+            }
+
+            public function parseCallback(string $rawBody, ?string $signature): ?TerminalCharge
+            {
+                return null;
+            }
+
+            public function void(object $terminal, string $reference): bool
+            {
+                return true;
+            }
+
+            public function refund(object $terminal, string $reference, string $amount): bool
+            {
+                return true;
+            }
         };
-        app(\App\Domain\Payments\Services\TerminalAdapterRegistry::class)->extend($adapter);
+        app(TerminalAdapterRegistry::class)->extend($adapter);
         $it = $this->roleToken('itadmin', ['device.manage']);
         $tid = $this->postJson('/api/v1/payment-terminals', ['facilityId' => $this->facility, 'label' => 'Smart POS'], $this->auth($it))->assertCreated()->json('id');
         $order = $this->billedOrder('3000.0000');
@@ -486,7 +515,7 @@ class WaiterCollectionTest extends TestCase
         $fail = function (callable $fn, string $why) {
             try {
                 $fn();
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 $this->assertMatchesRegularExpression('/R007_LEDGER_IMMUTABLE|Duplicate entry/', $e->getMessage(), $why);
 
                 return;

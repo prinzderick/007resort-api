@@ -16,6 +16,7 @@ use App\Domain\Payments\Contracts\PaymentProviderAdapter;
 use App\Domain\Payments\Provider\Terminal\TerminalCharge;
 use App\Domain\Payments\Provider\VerifiedTransaction;
 use App\Domain\Payments\Support\CollectionRules;
+use App\Domain\Payments\Support\FacilityRules;
 use App\Domain\Payments\Support\Fmt;
 use App\Domain\Payments\Support\Ledger;
 use App\Domain\Payments\Support\Tenantless;
@@ -126,7 +127,7 @@ class CollectionService
                         throw ApiProblem::forbidden('cash_holding_not_allowed', 'Cash holding is not enabled for you here. Please send the customer to the cashier to pay cash.');
                     }
                     DB::selectOne('SELECT id FROM staff WHERE id = ? FOR UPDATE', [Ids::toBinary($staffId)]);
-                    $inHand = $this->cashInHand($staffId);
+                    $inHand = $this->cashInHand($staffId, locking: true);
                     if ($p['limit'] !== null && bccomp(bcadd($inHand, $amount, 4), $p['limit'], 4) > 0) {
                         throw ApiProblem::conflict('cash_limit_exceeded', 'Your cash-in-hand limit would be exceeded. Hand over cash to the cashier first.', [
                             'cashInHand' => $inHand, 'limit' => $p['limit'], 'handoverRequired' => true,
@@ -156,7 +157,9 @@ class CollectionService
             $row = [
                 'id' => Ids::toBinary($paymentId), 'organization_id' => Ids::toBinary($orgId), 'site_id' => Ids::toBinary($siteId),
                 'facility_unit_id' => Ids::toBinary($facilityId), 'group_id' => Ids::toBinary($paymentId),
-                'tender_type' => match ($tender) {'CARD_TERMINAL' => 'POS_TERMINAL', 'PAY_LINK' => 'CARD', default => $tender},
+                'tender_type' => match ($tender) {
+                    'CARD_TERMINAL' => 'POS_TERMINAL', 'PAY_LINK' => 'CARD', default => $tender
+                },
                 'provider' => 'MANUAL', 'reference' => $reference !== '' ? $reference : null, 'status' => 'PENDING_CONFIRMATION',
                 'amount' => $amount, 'tendered' => $tendered, 'change_given' => $change, 'currency' => 'NGN',
                 'device_id' => Fmt::bin($deviceId), 'taken_by_staff_id' => Ids::toBinary($staffId),
@@ -250,6 +253,9 @@ class CollectionService
     {
         return DB::transaction(function () use ($paymentId, $in, $staffId) {
             $p = $this->lockCollection($paymentId); // FIRST statement: the payment row
+            if ($p->status === 'PENDING_CONFIRMATION') {
+                $this->lockOrdersOf($p); // orders BEFORE any plain read, so the ledger reads below are fresh (see PaymentService)
+            }
             $facility = Ids::fromBinary($p->facility_unit_id);
             $this->requireConfirm($staffId, $facility);
             $d = DB::table('payment_collection_decision')->where('payment_id', $p->id)->first();
@@ -385,6 +391,7 @@ class CollectionService
             if ($p->status !== 'PENDING_CONFIRMATION') {
                 return false;
             }
+            $this->lockOrdersOf($p);
             $this->capturePending($p, 'PROVIDER', null, $p->provider_reference, null);
 
             return true;
@@ -409,6 +416,7 @@ class CollectionService
                 try {
                     if ($this->provider->verify((string) $pre->provider_reference)->status === VerifiedTransaction::SUCCESS) {
                         app(PaystackService::class)->confirm((string) $pre->provider_reference, null); // paid after all: capture it
+
                         continue;
                     }
                 } catch (ApiProblem) {
@@ -456,6 +464,13 @@ class CollectionService
         }
 
         return $p;
+    }
+
+    /** Lock (FOR UPDATE, ascending id) the orders a collection is allocated to. Locking reads only: no snapshot is pinned yet. */
+    private function lockOrdersOf(object $p): void
+    {
+        $ids = array_map(fn ($a) => Ids::fromBinary($a->order_id), DB::select('SELECT order_id FROM payment_allocation WHERE payment_id = ? FOR SHARE', [$p->id]));
+        $this->orders->lockOrders($ids);
     }
 
     private function requireConfirm(string $staffId, string $facilityId): void
@@ -572,7 +587,7 @@ class CollectionService
         $in = implode(',', array_fill(0, count(array_unique($facilities)), '?'));
         $s = DB::selectOne("SELECT id FROM cash_session WHERE staff_id = ? AND status = 'OPEN' AND facility_unit_id IN ($in) ORDER BY opened_at DESC LIMIT 1 FOR SHARE",
             array_merge([Ids::toBinary($staffId)], array_map(Ids::toBinary(...), array_values(array_unique($facilities)))));
-        if ($s === null && $cash && app(\App\Domain\Payments\Support\FacilityRules::class)->requireCashSession($facilityId)) {
+        if ($s === null && $cash && app(FacilityRules::class)->requireCashSession($facilityId)) {
             throw ApiProblem::conflict('cash_session_required', 'Open a cash session before confirming cash.');
         }
 
@@ -619,8 +634,16 @@ class CollectionService
         return $t;
     }
 
-    public function cashInHand(string $staffId): string
+    /**
+     * The waiter's cash-in-hand. `$locking = true` MUST be used after taking the waiter's staff-row lock: InnoDB REPEATABLE READ pins its snapshot
+     * at the first plain read, which (permission checks etc.) precedes the lock wait, so only a locking read sees what the winner just committed.
+     */
+    public function cashInHand(string $staffId, bool $locking = false): string
     {
+        if ($locking) {
+            return Money::normalize((string) DB::selectOne('SELECT COALESCE(SUM(amount), 0) AS s FROM cash_in_hand_entry WHERE staff_id = ? FOR UPDATE', [Ids::toBinary($staffId)])->s);
+        }
+
         return Money::normalize((string) (DB::table('cash_in_hand_entry')->where('staff_id', Ids::toBinary($staffId))->sum('amount') ?? '0'));
     }
 
