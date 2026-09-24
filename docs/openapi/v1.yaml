@@ -16408,14 +16408,6 @@ components:
       required: [capabilities]
       properties:
         capabilities: {type: array, items: {type: string}}
-    FacilityCapabilities:
-      type: object
-      properties:
-        facilityId: {type: string, format: uuid}
-        capabilities: {type: array, items: {type: string}}
-        operatingRules: {type: object, additionalProperties: true}
-        version: {type: integer}
-        changed: {type: boolean}
     OperatingRulesView:
       type: object
       properties:
@@ -16432,18 +16424,6 @@ components:
       properties:
         rules: {type: object, additionalProperties: true}
         confirm: {type: boolean}
-    OperatingPoint:
-      type: object
-      properties:
-        id: {type: string, format: uuid}
-        facilityId: {type: string, format: uuid}
-        code: {type: string}
-        name: {type: string}
-        kind: {type: string, enum: [TABLE_AREA, COUNTER, GATE, STORE_WINDOW, STATION, ROOM]}
-        defaultPrepStationId: {type: [string, 'null'], format: uuid}
-        active: {type: boolean}
-        rowVersion: {type: integer}
-        kdsStation: {type: [object, 'null'], additionalProperties: true}
     OperatingPointCreateRequest:
       type: object
       required: [code, name, kind]
@@ -16459,21 +16439,6 @@ components:
         name: {type: string}
         defaultPrepStationId: {type: [string, 'null'], format: uuid}
         kdsStation: {type: [object, 'null'], additionalProperties: true}
-    DiningTable:
-      type: object
-      properties:
-        id: {type: string, format: uuid}
-        facilityId: {type: string, format: uuid}
-        operatingPointId: {type: [string, 'null'], format: uuid}
-        label: {type: string}
-        seats: {type: integer}
-        status: {type: string}
-        active: {type: boolean}
-        sortOrder: {type: integer}
-        mergedIntoId: {type: [string, 'null'], format: uuid}
-        mergedTableIds: {type: array, items: {type: string, format: uuid}}
-        effectiveSeats: {type: integer}
-        rowVersion: {type: integer}
     DiningTableCreateRequest:
       type: object
       required: [label]
@@ -16495,7 +16460,7 @@ components:
     DiningTableBulkResult:
       type: object
       properties:
-        created: {type: array, items: {$ref: '#/components/schemas/DiningTable'}}
+        created: {type: array, items: {$ref: '#/components/schemas/AdminDiningTable'}}
         skipped: {type: array, items: {type: string}}
     DiningTableUpdateRequest:
       type: object
@@ -16517,18 +16482,6 @@ components:
         operatingPointId: {type: [string, 'null'], format: uuid}
         mode: {type: string}
         active: {type: boolean}
-    Device:
-      type: object
-      description: Device presentation (existing schema fields retained; additive `operatingPointId`).
-      properties:
-        id: {type: string, format: uuid}
-        name: {type: string}
-        kind: {type: string}
-        mode: {type: [string, 'null']}
-        facilityId: {type: [string, 'null'], format: uuid}
-        operatingPointId: {type: [string, 'null'], format: uuid}
-        status: {type: string}
-        rowVersion: {type: integer}
     AdminProduct:
       type: object
       properties:
@@ -16610,13 +16563,6 @@ components:
         name: {type: string}
         ratePercent: {type: string}
         active: {type: boolean}
-    PrepRoute:
-      type: object
-      properties:
-        id: {type: string, format: uuid}
-        code: {type: string}
-        name: {type: string}
-        kind: {type: string, enum: [KITCHEN, BAR, NONE]}
     PrepRouteRequest:
       type: object
       properties:
@@ -16777,4 +16723,58 @@ components:
       properties:
         q: {type: string}
         results: {type: object, additionalProperties: true}
+    AdminFacilityCapabilities:
+      type: object
+      properties:
+        facilityId: {type: string, format: uuid}
+        capabilities: {type: array, items: {type: string}}
+        operatingRules: {type: object, additionalProperties: true}
+        version: {type: integer}
+        changed: {type: boolean}
+    AdminOperatingPoint:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        facilityId: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [TABLE_AREA, COUNTER, GATE, STORE_WINDOW, STATION, ROOM]}
+        defaultPrepStationId: {type: [string, 'null'], format: uuid}
+        active: {type: boolean}
+        rowVersion: {type: integer}
+        kdsStation: {type: [object, 'null'], additionalProperties: true}
+    AdminDiningTable:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        facilityId: {type: string, format: uuid}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        label: {type: string}
+        seats: {type: integer}
+        status: {type: string}
+        active: {type: boolean}
+        sortOrder: {type: integer}
+        mergedIntoId: {type: [string, 'null'], format: uuid}
+        mergedTableIds: {type: array, items: {type: string, format: uuid}}
+        effectiveSeats: {type: integer}
+        rowVersion: {type: integer}
+    AdminDevice:
+      type: object
+      description: Device presentation (existing schema fields retained; additive `operatingPointId`).
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: string}
+        mode: {type: [string, 'null']}
+        facilityId: {type: [string, 'null'], format: uuid}
+        operatingPointId: {type: [string, 'null'], format: uuid}
+        status: {type: string}
+        rowVersion: {type: integer}
+    AdminPrepRoute:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [KITCHEN, BAR, NONE]}
     # <<< config-admin schemas <<<
