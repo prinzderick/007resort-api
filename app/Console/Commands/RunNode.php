@@ -35,7 +35,11 @@ class RunNode extends Command
         $running = [];
         foreach ($procs as $name => $cmd) {
             // The PHP built-in server is single-threaded; several workers let tablets, KDS and long-polling clients overlap (macOS/Linux).
-            $p = new Process($cmd, base_path(), $name === 'serve' ? ['PHP_CLI_SERVER_WORKERS' => (string) (env('API_WORKERS') ?: 4)] : null, null, null);
+            $p = new Process($cmd, base_path(), $name === 'serve' ? [
+                'PHP_CLI_SERVER_WORKERS' => (string) (env('API_WORKERS') ?: 4),
+                // CMS image uploads (8 MB) need more than PHP's stock upload limits: add config/php/*.ini to the scan dirs (empty entry = the default dir).
+                'PHP_INI_SCAN_DIR' => (string) (getenv('PHP_INI_SCAN_DIR') ?: '').':'.base_path('config/php'),
+            ] : null, null, null);
             $p->start(fn ($type, $buffer) => $this->emit($name, $buffer));
             $running[$name] = $p;
         }

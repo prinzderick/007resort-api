@@ -47,7 +47,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-          extensions: bcmath, intl, pdo_mysql, sodium, mbstring
+          extensions: bcmath, intl, pdo_mysql, sodium, mbstring, gd, exif, fileinfo
           coverage: none
 
       - name: Get Composer cache dir

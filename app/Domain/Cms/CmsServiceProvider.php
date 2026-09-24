@@ -7,6 +7,7 @@ use App\Domain\Cms\Http\Controllers\PublicController;
 use App\Domain\Cms\Services\MediaService;
 use App\Domain\Cms\Support\MediaResolver;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -31,6 +32,10 @@ class CmsServiceProvider extends ServiceProvider
         RateLimiter::for('cms-token', fn (Request $r) => Limit::perMinute(30)->by('cms-tok:'.$client($r)));
 
         if ($this->app->runningInConsole()) {
+            // `artisan serve` strips unknown env vars from the PHP server it spawns; let PHP_INI_SCAN_DIR (upload limits, see RunNode) through.
+            if (! in_array('PHP_INI_SCAN_DIR', ServeCommand::$passthroughVariables, true)) {
+                ServeCommand::$passthroughVariables[] = 'PHP_INI_SCAN_DIR';
+            }
             $this->commands([CmsSeedCommand::class]);
         }
     }

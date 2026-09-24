@@ -83,10 +83,16 @@ class CmsContentSeeder
 
                 continue;
             }
-            $m = $this->mediaService->ingest($path, $e['file'], [
-                'alt' => $e['alt'] ?? '', 'credit' => ($e['credit'] ?? null) ? 'Photo: '.$e['credit'].' / Unsplash' : null, 'sourceUrl' => $e['sourceUrl'] ?? null,
-                'tags' => array_values(array_unique(array_merge([$e['category'] ?? 'misc'], $e['tags'] ?? []))),
-            ]);
+            try {
+                $m = $this->mediaService->ingest($path, $e['file'], [
+                    'alt' => $e['alt'] ?? '', 'credit' => ($e['credit'] ?? null) ? 'Photo: '.$e['credit'].' / Unsplash' : null, 'sourceUrl' => $e['sourceUrl'] ?? null,
+                    'tags' => array_values(array_unique(array_merge([$e['category'] ?? 'misc'], $e['tags'] ?? []))),
+                ]);
+            } catch (\Throwable $ex) {
+                ($this->say)('photo skipped ('.$e['file'].'): '.$ex->getMessage());
+
+                continue;
+            }
             $this->media[$e['file']] = $m['id'];
             $n++;
         }
@@ -141,12 +147,12 @@ class CmsContentSeeder
         }
         try {
             $d = $this->content->validate($res, ['slug' => $slug] + $data, true);
+            $row = $this->content->create($res, $d);
         } catch (ValidationException $e) {
             ($this->say)("skipped {$key}/{$slug}: ".json_encode($e->errors()));
 
             return null;
         }
-        $row = $this->content->create($res, $d);
         if ($publish) {
             $this->content->transition($res, $row['id'], 'publish', ($publishedAt ?? CarbonImmutable::now('UTC')->subDay())->toIso8601String());
         }
@@ -164,12 +170,12 @@ class CmsContentSeeder
         $res = $this->res('home-sections');
         try {
             $d = $this->content->validate($res, ['type' => $type, 'payload' => $payload, 'sortOrder' => $order], true);
+            $row = $this->content->create($res, $d);
         } catch (ValidationException $e) {
             ($this->say)("skipped {$type} '{$key}': ".json_encode($e->errors()));
 
             return;
         }
-        $row = $this->content->create($res, $d);
         $this->content->setEnabled($res, $row['id'], true);
     }
 

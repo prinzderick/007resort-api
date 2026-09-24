@@ -118,7 +118,7 @@ class MediaService
                 $widths[] = $width;
             }
             foreach ($widths as $w) {
-                $scaled = $w === $width ? $img : imagescale($img, $w, -1, IMG_BICUBIC);
+                $scaled = $w === $width ? $img : $this->resize($img, $w);
                 if (! $scaled instanceof GdImage) {
                     continue;
                 }
@@ -251,6 +251,18 @@ class MediaService
         };
 
         return (string) ob_get_clean();
+    }
+
+    private function resize(GdImage $img, int $w): ?GdImage
+    {
+        $h = max(1, (int) round(imagesy($img) * $w / imagesx($img)));
+        $out = imagecreatetruecolor($w, $h);
+        imagealphablending($out, false);
+        imagesavealpha($out, true);
+        imagefill($out, 0, 0, imagecolorallocatealpha($out, 0, 0, 0, 127));
+        imagecopyresampled($out, $img, 0, 0, 0, 0, $w, $h, imagesx($img), imagesy($img));
+
+        return $out;
     }
 
     private function flatten(GdImage $img): GdImage

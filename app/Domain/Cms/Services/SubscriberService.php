@@ -175,7 +175,7 @@ class SubscriberService
     {
         [$b, $sig] = array_pad(explode('.', $token, 2), 2, '');
         $bin = base64_decode(strtr($b, '-_', '+/'), true);
-        if ($bin === false || strlen($bin) !== 16 || $sig === '') {
+        if ($bin === false || strlen($bin) !== 16 || $sig === '' || rtrim(strtr(base64_encode($bin), '+/', '-_'), '=') !== $b) { // canonical encoding only (no padding-bit aliases)
             return null;
         }
         $id = Ids::fromBinary($bin);

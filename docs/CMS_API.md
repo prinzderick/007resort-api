@@ -167,7 +167,7 @@ List endpoints: `limit` (default 50, max 200), `cursor`, `q`, `status`. List ord
 Groups: `brand`, `contact`, `hours`, `social`, `seo`, `announcement`, `booking`, `footer` (shapes = section 3 `site`, but media as ids: `brand.logoMediaId`, `seo.ogImageMediaId`).
 * `GET /settings` [`cms.view`]: `{"groups": {"brand": {"value": {...}, "rowVersion": 3, "updatedAt": "..."}, ...}, "media": {"<id>": Media}}`.
 * `GET /settings/{group}` [`cms.view`]: `{"group", "value", "rowVersion", "updatedAt"}` + `ETag`.
-* `PUT /settings/{group}` [`cms.manage`] `If-Match` required, body `{"value": {...}}` replaces the whole group (validated, unknown keys rejected). Live immediately. Returns the same shape with the new `rowVersion`. `404 not_found` for an unknown group.
+* `PUT /settings/{group}` [`cms.manage`] `If-Match` required, body `{"value": {...}}` replaces the whole group (validated; unknown keys are dropped). Live immediately. Returns the same shape with the new `rowVersion`. `404 not_found` for an unknown group.
 
 ### 4.3 Home sections
 Fields (all optional unless `*`; strings are trimmed; `link` fields accept `/relative` paths or `http(s)://` URLs):
@@ -266,5 +266,6 @@ Subscribers and contact messages are Cloud-authoritative (they originate on the 
 ## 8. Operations
 
 * Migrations are auto-discovered. `php artisan r007:cms-seed` (idempotent; also run by `r007:demo-seed`) seeds settings defaults and demo content. Stock photos: `database/seeders/stock/` (credits in `CREDITS.md`).
-* Env: `CMS_WEB_URL` (email links), `CMS_MEDIA_DISK` (default `public`), `CMS_MEDIA_URL` (optional absolute base overriding the disk URL, e.g. a CDN), `CMS_SYNC_EMIT`, `MAIL_MAILER` (dev: `log`). Run `php artisan storage:link` once per node.
+* Env: `CMS_WEB_URL` (email links), `CMS_MEDIA_DISK` (default `public`), `CMS_MEDIA_URL` (optional absolute base overriding the disk URL, e.g. a CDN), `CMS_SYNC_EMIT`, `MAIL_MAILER` (dev: `log`). Run `php artisan storage:link` once per node (the API returns absolute URLs built from `APP_URL`/`CMS_MEDIA_URL`, so set `APP_URL` to the address clients reach the node on).
+* PHP upload limits: `upload_max_filesize >= 8M` and `post_max_size >= 10M` (PHP defaults are 2M/8M and would answer `413 media_too_large` first). `r007:run` (dev / Local node) loads `config/php/r007-uploads.ini` for its HTTP server automatically; for php-fpm/Apache/nginx set the same values in the pool/ini. Images are decoded with GD (WebP + AVIF support required for those uploads); memory for a 24-megapixel image is about 100-150 MB.
 * Queue: the confirmation email is a queued mailable (`QUEUE_CONNECTION`).
