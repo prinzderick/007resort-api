@@ -25,7 +25,7 @@ final class OperatingRules
     /** @var array<string, array<string, mixed>> */
     private array $cache = [];
 
-    /** @return array{paymentTiming: string, approvalThresholdAmount: string, requireApprovalFor: list<string>, allowOpenTabs: bool, capabilities: list<string>} */
+    /** @return array{paymentTiming: string, approvalThresholdAmount: string, requireApprovalFor: list<string>, allowOpenTabs: bool, capabilities: list<string>, raw: array<string, string>} (`raw` = every stored rule_key => rule_value; modules read their own keys from it) */
     public function forFacility(string $facilityId): array
     {
         if (isset($this->cache[$facilityId])) {
@@ -49,6 +49,7 @@ final class OperatingRules
             'requireApprovalFor' => array_values(array_filter(array_map('trim', explode(',', (string) ($rules['require_approval_for'] ?? ''))))),
             'allowOpenTabs' => in_array('OPEN_TAB', $codes, true) || $timing === self::OPEN_TAB,
             'capabilities' => $codes,
+            'raw' => $rules->map(fn ($v) => (string) $v)->all(),
         ];
     }
 

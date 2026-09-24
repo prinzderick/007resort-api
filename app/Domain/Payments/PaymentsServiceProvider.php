@@ -12,6 +12,12 @@ use App\Domain\Payments\Services\NullPayableSubjectResolver;
 use App\Domain\Payments\Services\PaymentApprovalHandler;
 use App\Domain\Payments\Services\RefundService;
 use App\Domain\Payments\Support\FacilityRules;
+use App\Domain\Payments\Console\ExpirePendingCollectionsCommand;
+use App\Domain\Payments\Events\PaymentCaptured;
+use App\Domain\Payments\Listeners\CollectionCaptureListener;
+use App\Domain\Payments\Services\TerminalAdapterRegistry;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -27,6 +33,7 @@ class PaymentsServiceProvider extends ServiceProvider
         $this->app->bind(PayableSubjectResolver::class, NullPayableSubjectResolver::class);
         $this->app->bind(PaymentProviderAdapter::class, PaystackAdapter::class);
         $this->app->scoped(FacilityRules::class);
+        $this->app->singleton(TerminalAdapterRegistry::class);
     }
 
     public function boot(): void
@@ -36,5 +43,15 @@ class PaymentsServiceProvider extends ServiceProvider
         $approvals = $this->app->make(ApprovalService::class);
         $approvals->registerHandler(RefundService::REFUND, $handler);
         $approvals->registerHandler(RefundService::REVERSAL, $handler);
+
+        // Waiter collection: provider-confirmed captures (Paystack) record their decision + tell the waiter's device.
+        Event::listen(PaymentCaptured::class, [CollectionCaptureListener::class, 'handle']);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([ExpirePendingCollectionsCommand::class]);
+        }
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+            $schedule->command('r007:payments:expire-pending-collections')->everyMinute()->withoutOverlapping(5)->runInBackground();
+        });
     }
 }

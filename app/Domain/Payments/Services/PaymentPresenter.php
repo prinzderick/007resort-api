@@ -23,7 +23,10 @@ class PaymentPresenter
         $ids = array_map(fn ($r) => $r->id, $rows);
         $alloc = DB::table('payment_allocation')->whereIn('payment_id', $ids)->orderBy('id')->get(['payment_id', 'order_id', 'amount'])->groupBy(fn ($a) => Ids::fromBinary($a->payment_id));
 
-        return array_map(function ($r) use ($alloc) {
+        $coll = DB::table('payment_collection')->whereIn('payment_id', $ids)->get()->keyBy(fn ($c) => Ids::fromBinary($c->payment_id));
+        $dec = $coll->isEmpty() ? collect() : DB::table('payment_collection_decision')->whereIn('payment_id', $ids)->get()->keyBy(fn ($d) => Ids::fromBinary($d->payment_id));
+
+        return array_map(function ($r) use ($alloc, $coll, $dec) {
             $id = Ids::fromBinary($r->id);
 
             return [
@@ -50,8 +53,35 @@ class PaymentPresenter
                 'capturedAt' => Fmt::iso($r->captured_at),
                 // additive (not in contract v1): unallocated online overpayment awaiting refund
                 'unallocatedAmount' => Money::normalize((string) $r->unallocated_amount),
+                'collection' => isset($coll[$id]) ? $this->collection($coll[$id], $dec[$id] ?? null) : null,
             ];
         }, $rows);
+    }
+
+    /** @return array<string, mixed> CollectionInfo (docs/WAITER_COLLECTION.md) */
+    private function collection(object $c, ?object $d): array
+    {
+        return [
+            'tender' => $c->tender,
+            'channel' => $c->channel,
+            'collectedByStaffId' => Ids::fromBinary($c->collected_by_staff_id),
+            'collectedDeviceId' => Fmt::uuid($c->device_id),
+            'terminalId' => Fmt::uuid($c->terminal_id),
+            'approvalCode' => $c->approval_code,
+            'slipReference' => $c->slip_reference,
+            'last4' => $c->last4,
+            'bankReference' => $c->bank_reference,
+            'note' => $c->note,
+            'clientCreatedAt' => Fmt::iso($c->client_created_at),
+            'expiresAt' => Fmt::iso($c->expires_at),
+            'autoConfirm' => (bool) $c->auto_confirm,
+            'decision' => $d?->decision,
+            'confirmationMode' => $d?->mode,
+            'decidedByStaffId' => $d ? Fmt::uuid($d->decided_by_staff_id) : null,
+            'decidedAt' => $d ? Fmt::iso($d->decided_at) : null,
+            'decisionReason' => $d?->reason,
+            'matchedReference' => $d?->matched_reference,
+        ];
     }
 
     /** @return array<string, mixed> */

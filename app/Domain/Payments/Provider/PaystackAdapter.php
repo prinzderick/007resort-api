@@ -44,6 +44,33 @@ class PaystackAdapter implements PaymentProviderAdapter
         return ['authorizationUrl' => $url, 'accessCode' => $body['data']['access_code'] ?? null];
     }
 
+    /** Paystack "Pay with Transfer": POST /charge with `bank_transfer` returns a dynamic virtual account for the reference. */
+    public function createTransferAccount(string $reference, string $amount, string $currency, string $email, array $metadata): array
+    {
+        $ttl = (int) config('payments.collection.transfer_account_ttl_minutes', 60);
+        $payload = array_filter([
+            'reference' => $reference,
+            'amount' => self::toKobo($amount),
+            'currency' => $currency,
+            'email' => $email,
+            'bank_transfer' => ['account_expires_at' => now('UTC')->addMinutes($ttl)->format('Y-m-d\TH:i:s\Z')],
+            'metadata' => $metadata === [] ? null : $metadata,
+        ], fn ($v) => $v !== null && $v !== '');
+        $body = $this->call(fn (PendingRequest $h) => $h->asJson()->post('/charge', $payload), 'transfer account');
+        $d = is_array($body['data'] ?? null) ? $body['data'] : [];
+        $d = $d + (is_array($d['authorization'] ?? null) ? $d['authorization'] : []);
+        $number = $d['account_number'] ?? null;
+        $bank = is_array($d['bank'] ?? null) ? ($d['bank']['name'] ?? null) : ($d['bank'] ?? $d['bank_name'] ?? null);
+        if (($body['status'] ?? false) !== true || ! is_string($number) || $number === '' || ! is_string($bank)) {
+            throw new ApiProblem(502, 'provider_error', 'Paystack did not return a transfer account.', 'Bad gateway');
+        }
+
+        return [
+            'bankName' => $bank, 'accountNumber' => $number, 'accountName' => (string) ($d['account_name'] ?? '007 Resort & Spa'),
+            'expiresAt' => isset($d['account_expires_at']) && is_string($d['account_expires_at']) ? $d['account_expires_at'] : null,
+        ];
+    }
+
     public function verify(string $reference): VerifiedTransaction
     {
         $response = null;

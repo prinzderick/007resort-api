@@ -4,7 +4,7 @@
  * DEV-ONLY fake Paystack (sandbox stand-in). Never deploy. Run:
  *   php -S 127.0.0.1:8093 scripts/dev-paystack.php
  * and point the API at it: PAYSTACK_BASE_URL=http://127.0.0.1:8093 PAYSTACK_SECRET_KEY=<any dev value>.
- * Implements just what PaystackAdapter uses: POST /transaction/initialize, GET /transaction/verify/{ref}; plus a hosted page
+ * Implements just what PaystackAdapter uses: POST /transaction/initialize, POST /charge (bank transfer / dynamic virtual account), GET /transaction/verify/{ref}; plus a hosted page
  * /pay/{ref} with "Pay" / "Decline" buttons that redirects to the callback URL like Paystack does. No real money, no real keys.
  */
 
@@ -26,6 +26,18 @@ if ($method === 'POST' && $path === '/transaction/initialize') {
     $d[$ref] = ['amount' => (int) ($in['amount'] ?? 0), 'currency' => $in['currency'] ?? 'NGN', 'email' => $in['email'] ?? '', 'callback' => $in['callback_url'] ?? null, 'status' => 'abandoned', 'id' => random_int(4000000000, 4999999999)];
     $save($d);
     $json(['status' => true, 'message' => 'Authorization URL created', 'data' => ['authorization_url' => 'http://127.0.0.1:8093/pay/'.rawurlencode($ref), 'access_code' => 'ac_'.substr($ref, -8), 'reference' => $ref]]);
+
+    return;
+}
+if ($method === 'POST' && $path === '/charge') {
+    // "Pay with Transfer": a dynamic virtual account for the reference. Open /pay/{ref} and press "Pay now" to simulate the customer's transfer.
+    $in = json_decode((string) file_get_contents('php://input'), true) ?: [];
+    $ref = (string) ($in['reference'] ?? bin2hex(random_bytes(6)));
+    $d = $load();
+    $d[$ref] = ['amount' => (int) ($in['amount'] ?? 0), 'currency' => $in['currency'] ?? 'NGN', 'email' => $in['email'] ?? '', 'callback' => null, 'status' => 'abandoned', 'id' => random_int(4000000000, 4999999999)];
+    $save($d);
+    $json(['status' => true, 'message' => 'Charge attempted', 'data' => ['reference' => $ref, 'status' => 'pay_offline', 'account_number' => '99'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+        'account_name' => '007 RESORT (DEV SANDBOX)', 'bank' => ['name' => 'Sandbox Bank', 'slug' => 'sandbox-bank'], 'account_expires_at' => $in['bank_transfer']['account_expires_at'] ?? null]]);
 
     return;
 }
