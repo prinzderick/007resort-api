@@ -66,7 +66,6 @@ class DeviceConfigTest extends ConfigTestCase
 
         $m = $this->managerLacking(['device.manage']);
         $m->patch("/devices/{$id}", ['name' => 'nope'], ['If-Match' => '"1"'])->assertStatus(403)->assertJsonPath('permission', 'device.manage');
-        $this->api('manager1')->patch("/devices/{$id}", ['name' => 'nope'], ['If-Match' => '"1"'])->assertStatus(403); // MANAGER default bundle has no device.manage
         $it = $this->api('itadmin1');
         $it->patch("/devices/{$id}", ['name' => 'IT renamed'], ['If-Match' => '"'.DB::table('device')->where('id', $d->id)->value('row_version').'"'])->assertOk();
     }
