@@ -2666,10 +2666,13 @@ paths:
       - Payments
       summary: List payments
       x-permission: payment.view
-      description: 'Required permission: `payment.view`.'
+      description: 'Required permission: `payment.view` (or `payment.confirm`) at the facility; without a facility filter only your own takings/collections. Additive: top-level `status`, `facilityId`, `collectedBy` (staff uuid; a waiter may pass their own id), `orderId`, `tenderType` are accepted as well as `filter[...]`; the cashier pending list is `GET /payments?status=PENDING_CONFIRMATION&facilityId=...` (AUTHORIZING = awaiting provider).'
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
+      - {name: status, in: query, required: false, schema: {type: string}, x-additive: true}
+      - {name: facilityId, in: query, required: false, schema: {$ref: '#/components/schemas/Uuid'}, x-additive: true}
+      - {name: collectedBy, in: query, required: false, schema: {$ref: '#/components/schemas/Uuid'}, x-additive: true}
       - name: filter[facilityId]
         in: query
         required: false
