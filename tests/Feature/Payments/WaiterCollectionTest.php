@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payments;
 
+use App\Domain\Payments\Broadcast\PaymentCollected;
 use App\Domain\Payments\Broadcast\PaymentConfirmed;
 use App\Domain\Payments\Contracts\PaymentTerminalAdapter;
 use App\Domain\Payments\Provider\Terminal\TerminalCharge;
@@ -319,6 +320,32 @@ class WaiterCollectionTest extends TestCase
         // a waiter (no payment.take) still only creates a pending collection
         $r = $this->collect($order, ['tenderType' => 'CARD_TERMINAL', 'amount' => '1000.0000', 'approvalCode' => 'R1'])->assertCreated();
         $this->assertSame('PENDING_CONFIRMATION', $r->json('payment.status'));
+    }
+
+    public function test_a_cashier_at_the_settlement_facility_can_confirm_and_sees_the_collection_and_its_realtime_hint(): void
+    {
+        // Pool-bar style: the order belongs to the restaurant but is paid at Reception (order.payment_facility_unit_id)
+        $reception = TestData::facility($this->t, 'reception')->id;
+        $other = TestData::facility($this->t, 'spa')->id;
+        $rc = TestData::staff($this->t, 'reccashier');
+        TestData::assign($rc, 'CASHIER', 'FACILITY_UNIT', $reception);
+        $oc = TestData::staff($this->t, 'spacashier');
+        TestData::assign($oc, 'CASHIER', 'FACILITY_UNIT', $other);
+        $rcToken = $this->loginToken('reccashier');
+        $ocToken = $this->loginToken('spacashier');
+        $order = $this->billedOrder('2500.0000');
+        DB::table('order')->where('id', Ids::toBinary($order))->update(['payment_facility_unit_id' => Ids::toBinary($reception)]);
+
+        Event::fake([PaymentCollected::class]);
+        $id = $this->collect($order, ['tenderType' => 'CARD_TERMINAL', 'amount' => '2500.0000', 'approvalCode' => 'PF1'])->assertCreated()->json('payment.id');
+        Event::assertDispatched(PaymentCollected::class, fn ($e) => in_array('facility.'.$this->facility.'.orders', $e->channels, true)
+            && in_array('facility.'.$reception.'.orders', $e->channels, true) && in_array('device.'.$this->deviceId, $e->channels, true));
+
+        $list = $this->getJson("/api/v1/payments?status=PENDING_CONFIRMATION&facilityId={$reception}", $this->auth($rcToken, null))->assertOk();
+        $this->assertSame([$id], array_column($list->json('items'), 'id'));
+        $this->assertSame([], $this->getJson("/api/v1/payments?status=PENDING_CONFIRMATION&facilityId={$other}", $this->auth($ocToken, null))->assertOk()->json('items'));
+        $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($ocToken))->assertStatus(403);
+        $this->postJson("/api/v1/payments/{$id}/confirm", [], $this->auth($rcToken))->assertOk()->assertJsonPath('payment.status', 'CAPTURED');
     }
 
     // ---- listing --------------------------------------------------------------------------------------------------------

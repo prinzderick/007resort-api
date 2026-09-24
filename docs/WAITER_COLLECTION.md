@@ -159,7 +159,8 @@ They are exposed to apps in `GET /facilities/{id}/capabilities` -> `operatingRul
 | `payment.collected` | `facility.{id}.orders` (cashier POS), `device.{collectingDeviceId}` | `{payment, orderId, orderNumber, tableLabel, collectedByStaffId, amount, tender}` |
 | `payment.confirmed` | `device.{collectingDeviceId}`, `facility.{id}.orders` | `{payment, orderId, mode: MANUAL\|PROVIDER, receiptId}` |
 | `payment.rejected` | `device.{collectingDeviceId}`, `facility.{id}.orders` | `{payment, orderId, reason}` |
-| `payment.expired` / `payment.alert` | `device.{collectingDeviceId}`, `facility.{id}.orders` | `{payment, kind: REJECTED\|EXPIRED\|VARIANCE, message}` (supervisor alerts) |
+| `payment.expired` | `device.{collectingDeviceId}`, `facility.{id}.orders` | `{payment, orderId, reason}` |
+| `payment.alert` | `facility.{id}.orders` only (supervisor POS / tablets) | `{kind: REJECTED\|EXPIRED, message, payment, orderId, reason}` |
 | `cash-handover.received` | `device.{waiterDeviceId}`, `facility.{id}.orders` | `{handover}` |
 
 Hints only: reload over REST after any of them.
@@ -167,9 +168,22 @@ Hints only: reload over REST after any of them.
 ## 10. Errors added
 
 `order_not_billed`, `order_billed`, `collections_pending`, `collection_disabled`, `device_not_checked_out`, `cash_holding_not_allowed`, `cash_limit_exceeded`, `over_collection`, `pending_collection_exists`,
-`duplicate_reference`, `self_confirmation_forbidden`, `payment_state_invalid`, `auto_confirm_only`, `already_paid`, `terminal_unavailable`, `terminal_provider_unavailable`, `supervisor_required`, `already_received`, all as RFC 7807 with `code`.
+`duplicate_reference`, `self_confirmation_forbidden`, `payment_state_invalid`, `auto_confirm_only`, `already_paid`, `terminal_unavailable`, `terminal_provider_unavailable` (501), `terminal_charge_failed`, `terminal_retired`,
+`supervisor_required`, `bill_not_printed`, `already_received`, `self_receipt_forbidden`, `self_signoff_forbidden`, `handover_state_invalid`, all as RFC 7807 with `code`.
 
-## 11. Known gaps
+## 11. Tests and how to run them
+
+`tests/Feature/Payments/WaiterCollectionTest.php`, `CashHandoverTest.php` (transactional, real MySQL) and `WaiterCollectionConcurrencyTest.php` (separate PHP processes released at the same instant):
+two waiters racing for one bill (exactly one wins), 10 partial collections (exactly 4 x 2000 fit into 9000), waiter vs cashier on the same bill, 6 simultaneous confirms of one payment (one capture / receipt),
+confirm-vs-reject race (one decision), Paystack webhook delivered 3x at once (one capture), cash limit under concurrency, one handover received once.
+Concurrency rule of thumb used here (same as PaymentService): take the row locks first; InnoDB REPEATABLE READ pins its snapshot at the first plain read, so anything read after a lock *wait* must be a locking read (`cashInHand(..., locking: true)`) or come after the lock.
+
+## 12. Cloud sync
+
+Outbox event types `PaymentCollected`, `PaymentConfirmed`, `PaymentRejected` (also carries `decision: EXPIRED|CANCELLED`), `CashHandoverRecorded`, `PaymentTerminalChanged`, `StaffCollectionPolicyChanged` are written in the business transaction.
+Like the existing `PaymentCompleted`, the Cloud node has no applier for them yet (the inbox marks unknown types FAILED until one exists).
+
+## 13. Known gaps
 
 Confirming several cash collections in one call at handover, per-line bill splitting, waiter-to-waiter table hand-off of pending collections, a personal-device (non-tablet) collection mode,
 real Paystack terminal integration (stub only), refunding a provider-captured collection through Paystack's refund API (recorded with `providerActionRequired`, see PAYMENTS.md).

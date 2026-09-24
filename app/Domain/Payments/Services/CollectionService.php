@@ -257,7 +257,7 @@ class CollectionService
                 $this->lockOrdersOf($p); // orders BEFORE any plain read, so the ledger reads below are fresh (see PaymentService)
             }
             $facility = Ids::fromBinary($p->facility_unit_id);
-            $this->requireConfirm($staffId, $facility);
+            $this->requireConfirm($staffId, $p);
             $d = DB::table('payment_collection_decision')->where('payment_id', $p->id)->first();
 
             if ($p->status !== 'PENDING_CONFIRMATION') {
@@ -288,7 +288,7 @@ class CollectionService
         return DB::transaction(function () use ($paymentId, $reason, $staffId) {
             $p = $this->lockCollection($paymentId);
             $facility = Ids::fromBinary($p->facility_unit_id);
-            $this->requireConfirm($staffId, $facility);
+            $this->requireConfirm($staffId, $p);
             if ($p->status === 'REJECTED') {
                 return ['body' => $this->presenter->one($p), 'replayed' => true];
             }
@@ -331,7 +331,10 @@ class CollectionService
             $facility = Ids::fromBinary($p->facility_unit_id);
             $c = DB::table('payment_collection')->where('payment_id', $p->id)->first();
             $isCollector = Ids::fromBinary($c->collected_by_staff_id) === $staffId;
-            $canConfirm = $this->permissions->can($staffId, 'payment.confirm', Scope::facility($facility));
+            $canConfirm = false;
+            foreach ($this->settlementFacilities($p) as $f) {
+                $canConfirm = $canConfirm || $this->permissions->can($staffId, 'payment.confirm', Scope::facility($f));
+            }
             if ($p->status === 'CANCELLED') {
                 return $this->presenter->one($p);
             }
@@ -473,11 +476,29 @@ class CollectionService
         $this->orders->lockOrders($ids);
     }
 
-    private function requireConfirm(string $staffId, string $facilityId): void
+    /**
+     * `payment.confirm` at the payment's facility OR at the facility where the order is settled (orders of bars/restaurants are often paid at
+     * Reception: `order.payment_facility_unit_id`), so a Reception cashier can confirm a Pool Bar waiter's collection.
+     */
+    private function requireConfirm(string $staffId, object $payment): void
     {
-        if (! $this->permissions->can($staffId, 'payment.confirm', Scope::facility($facilityId))) {
-            throw ApiProblem::permissionDenied('payment.confirm');
+        foreach ($this->settlementFacilities($payment) as $facility) {
+            if ($this->permissions->can($staffId, 'payment.confirm', Scope::facility($facility))) {
+                return;
+            }
         }
+        throw ApiProblem::permissionDenied('payment.confirm');
+    }
+
+    /** @return list<string> the payment's facility first, then the settlement facilities of its orders */
+    private function settlementFacilities(object $p): array
+    {
+        $out = [Ids::fromBinary($p->facility_unit_id)];
+        foreach (DB::select('SELECT DISTINCT o.payment_facility_unit_id AS f FROM payment_allocation pa JOIN `order` o ON o.id = pa.order_id WHERE pa.payment_id = ? AND o.payment_facility_unit_id IS NOT NULL', [$p->id]) as $r) {
+            $out[] = Ids::fromBinary($r->f);
+        }
+
+        return array_values(array_unique($out));
     }
 
     /** PENDING -> CAPTURED. Caller holds the payment row lock and the transaction. */
@@ -692,7 +713,7 @@ class CollectionService
     /** Realtime hint (after commit): the facility orders channel + (optionally) the collecting waiter's device channel. @param class-string $event */
     private function emit(string $event, object $paymentRow, array $data, bool $device = true): void
     {
-        $channels = [$this->realtime->facilityOrders(Ids::fromBinary($paymentRow->facility_unit_id))];
+        $channels = array_map($this->realtime->facilityOrders(...), $this->settlementFacilities($paymentRow));
         $collectingDevice = DB::table('payment_collection')->where('payment_id', $paymentRow->id)->value('device_id') ?? $paymentRow->device_id;
         if ($device && $collectingDevice !== null) {
             $channels[] = 'device.'.Ids::fromBinary($collectingDevice);

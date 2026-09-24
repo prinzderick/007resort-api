@@ -78,7 +78,11 @@ class PaymentController
             if ($collectedBy !== $staff) { // a waiter may always list their own collections
                 $this->requireAnyAt($staff, ['payment.view', 'payment.confirm'], $facility);
             }
-            $q->where('facility_unit_id', Ids::toBinary($facility));
+            // also waiter collections of OTHER facilities' orders that are settled here (e.g. Pool Bar orders paid at Reception)
+            $q->where(fn ($w) => $w->where('facility_unit_id', Ids::toBinary($facility))->orWhereExists(
+                fn ($s) => $s->selectRaw('1')->from('payment_collection as cf')->join('payment_allocation as pf', 'pf.payment_id', '=', 'cf.payment_id')
+                    ->join('order as of', 'of.id', '=', 'pf.order_id')->whereColumn('cf.payment_id', 'payment.id')->where('of.payment_facility_unit_id', Ids::toBinary($facility))
+            ));
         } else {
             if ($collectedBy !== null && $collectedBy !== $staff) {
                 throw ApiProblem::permissionDenied('payment.view'); // someone else's collections need a facility scope

@@ -197,7 +197,8 @@ paths:
                 summary: NFC badge
                 value:
                   credentialType: NFC_CARD
-                  secret: 04A2246B7C5E80
+                  identifier: 04A2246B7C5E80
+                  secret: '4821'
               password:
                 summary: Admin web
                 value:
@@ -2666,7 +2667,7 @@ paths:
       - Payments
       summary: List payments
       x-permission: payment.view
-      description: 'Required permission: `payment.view` (or `payment.confirm`) at the facility; without a facility filter only your own takings/collections. Additive: top-level `status`, `facilityId`, `collectedBy` (staff uuid; a waiter may pass their own id), `orderId`, `tenderType` are accepted as well as `filter[...]`; the cashier pending list is `GET /payments?status=PENDING_CONFIRMATION&facilityId=...` (AUTHORIZING = awaiting provider).'
+      description: 'Required permission: `payment.view` (or `payment.confirm`) at the facility (a Reception cashier also sees collections of orders settled there); without a facility filter only your own takings/collections. Additive: top-level `status`, `facilityId`, `collectedBy` (staff uuid; a waiter may pass their own id), `orderId`, `tenderType` are accepted as well as `filter[...]`; the cashier pending list is `GET /payments?status=PENDING_CONFIRMATION&facilityId=...` (AUTHORIZING = awaiting provider).'
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -4753,6 +4754,13 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
+      - name: order
+        in: query
+        required: false
+        description: Oldest first (`asc`, default) or newest first (`desc`). `from`/`to` are also accepted without the filter[] wrapper; a bare date `to` includes that whole day.
+        schema:
+          type: string
+          enum: [asc, desc]
       responses:
         '200':
           description: Success
@@ -8460,8 +8468,7 @@ paths:
         is unchanged; see `billState`. If the bill was cancelled before and rule `pre_bill_requires_supervisor_if_reopened` is true, an approver or `X-Step-Up-Token` is required (403 `supervisor_required`).
         Errors: 409 `order_state_invalid`, `order_billed`.'
       parameters:
-      - &id001
-        name: orderId
+      - name: orderId
         in: path
         required: true
         schema:
@@ -8484,15 +8491,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BillResult'
-        '401': &id002
+        '401':
           $ref: '#/components/responses/Unauthorized'
-        '403': &id003
+        '403':
           $ref: '#/components/responses/Forbidden'
-        '404': &id004
+        '404':
           $ref: '#/components/responses/NotFound'
-        '409': &id005
+        '409':
           $ref: '#/components/responses/Conflict'
-        '422': &id006
+        '422':
           $ref: '#/components/responses/Unprocessable'
   /orders/{orderId}/bill/cancel:
     post:
@@ -8505,7 +8512,11 @@ paths:
       description: Holders of `bill.cancel.approve` (supervisor) or a valid `X-Step-Up-Token` reopen at once (200); others create an approval (202, action `bill.cancel`, decide via `/approvals/{id}/decision`).
         409 `collections_pending` while any collection is pending or captured; 409 `bill_not_printed`.
       parameters:
-      - *id001
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -8533,11 +8544,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BillCancelPending'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /orders/{orderId}/collections:
     post:
       operationId: collectPayment
@@ -8550,7 +8566,11 @@ paths:
         The caller must be on a tablet checked out to them. Errors: 403 `device_not_checked_out`, `cash_holding_not_allowed`; 409 `collection_disabled`, `order_not_billed`, `order_state_invalid`, `over_collection`,
         `cash_limit_exceeded`, `duplicate_reference`, `concurrency_conflict`; 422 `terminal_unavailable`.'
       parameters:
-      - *id001
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -8560,16 +8580,27 @@ paths:
               $ref: '#/components/schemas/CollectionRequest'
       responses:
         '201':
-          description: 'Collected (`Idempotent-Replayed: true` on a replay)'
+          description: Collected
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResult'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '200':
+          description: 'Replay of an earlier collection with the same client `id` (`Idempotent-Replayed: true`)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payments/{paymentId}/confirm:
     post:
       operationId: confirmCollection
@@ -8581,8 +8612,7 @@ paths:
       description: PENDING_CONFIRMATION -> CAPTURED, order settled, receipt issued. Idempotent (a second confirm returns 200 + `Idempotent-Replayed`). Not the collector (403 `self_confirmation_forbidden`).
         409 `payment_state_invalid` (rejected/expired/cancelled), `auto_confirm_only`, `balance_changed`, `cash_session_required`.
       parameters:
-      - &id007
-        name: paymentId
+      - name: paymentId
         in: path
         required: true
         schema:
@@ -8608,11 +8638,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfirmResult'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payments/{paymentId}/reject:
     post:
       operationId: rejectCollection
@@ -8623,7 +8658,11 @@ paths:
       x-permission: payment.confirm
       description: PENDING_CONFIRMATION -> REJECTED with audit, `security_event payment.collection_rejected` and a realtime alert. Reject after confirm is 409 `payment_state_invalid`.
       parameters:
-      - *id007
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -8645,11 +8684,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payments/{paymentId}/cancel:
     post:
       operationId: cancelCollection
@@ -8660,7 +8704,11 @@ paths:
       x-permission: payment.collect
       description: 'The collector (AUTHORIZING pay link / transfer only) or a `payment.confirm` holder. Asks Paystack first: 409 `already_paid` if it was paid.'
       parameters:
-      - *id007
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -8679,11 +8727,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payments/terminal-callbacks/{provider}:
     post:
       operationId: terminalCallback
@@ -8754,11 +8807,16 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PaymentTerminal'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
     post:
       operationId: createPaymentTerminal
       tags:
@@ -8782,11 +8840,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentTerminal'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /payment-terminals/{terminalId}:
     get:
       operationId: getPaymentTerminal
@@ -8809,11 +8872,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentTerminal'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
     patch:
       operationId: updatePaymentTerminal
       tags:
@@ -8842,11 +8910,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentTerminal'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /cash-handovers:
     get:
       operationId: listCashHandovers
@@ -8879,11 +8952,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashHandoverPage'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
     post:
       operationId: declareCashHandover
       tags:
@@ -8919,11 +8997,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashHandover'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /cash-handovers/{handoverId}:
     get:
       operationId: getCashHandover
@@ -8946,11 +9029,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashHandover'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /cash-handovers/{handoverId}/receive:
     post:
       operationId: receiveCashHandover
@@ -8988,11 +9076,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashHandover'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /cash-handovers/{handoverId}/signoff:
     post:
       operationId: signoffCashHandover
@@ -9026,11 +9119,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashHandover'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /staff/{staffId}/cash-in-hand:
     get:
       operationId: getCashInHand
@@ -9053,11 +9151,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CashInHand'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /staff/{staffId}/collection-policy:
     get:
       operationId: getCollectionPolicy
@@ -9085,11 +9188,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionPolicy'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
     patch:
       operationId: updateCollectionPolicy
       tags:
@@ -9129,11 +9237,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionPolicy'
-        '401': *id002
-        '403': *id003
-        '404': *id004
-        '409': *id005
-        '422': *id006
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
 components:
   securitySchemes:
@@ -9495,10 +9608,10 @@ components:
           - NFC_CARD
         identifier:
           type: string
-          description: Staff username or staff number (PASSWORD, PIN). Omitted for NFC_CARD.
+          description: Staff username or staff number (PASSWORD, PIN). For NFC_CARD the card UID (a card alone never signs in).
         secret:
           type: string
-          description: Password, PIN, or NFC card UID/hash depending on credentialType.
+          description: Password or PIN (also for NFC_CARD, where it is the staff PIN that must accompany the card).
           writeOnly: true
         username:
           type: string
@@ -9521,8 +9634,9 @@ components:
       - required:
         - username
         - pin
-      description: 'Preferred: `{credentialType, identifier, secret}` (identifier is required for PASSWORD and PIN; NFC_CARD
-        carries the card UID in `secret`). Legacy: `{username, password}` or `{username, pin}` is still accepted.'
+      description: 'Preferred: `{credentialType, identifier, secret}`; `identifier` is required for every type. NFC_CARD is card + PIN in
+        ONE call: `identifier` = the card UID, `secret` = the staff PIN (NFC alone is refused). Legacy: `{username, password}` or `{username, pin}`
+        is still accepted.'
     Staff:
       type: object
       properties:
@@ -10023,6 +10137,10 @@ components:
         vatRatePercent:
           type: string
           example: '7.5'
+        paymentTiming:
+          type: string
+          description: 'PAY_FIRST (Reception: a DRAFT order can be paid) or PAY_AFTER_SERVICE / PAY_BEFORE_LEAVING (Restaurant/bars: only a SERVED order can be paid; alias values are emitted as configured), OPEN_TAB.'
+          example: PAY_FIRST
     FacilityCapabilities:
       type: object
       properties:
@@ -11276,6 +11394,19 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Money'
           - type: 'null'
+        totals:
+          type: object
+          description: 'Additive. Drawer totals (readable by a cashier without report.view). `nonCash` is a tender => amount MAP and is `{}` when empty.'
+          properties:
+            cashSales: {$ref: '#/components/schemas/Money'}
+            cashRefunds: {$ref: '#/components/schemas/Money'}
+            cashReversals: {$ref: '#/components/schemas/Money'}
+            paidIn: {$ref: '#/components/schemas/Money'}
+            paidOut: {$ref: '#/components/schemas/Money'}
+            drops: {$ref: '#/components/schemas/Money'}
+            nonCash:
+              type: object
+              additionalProperties: {$ref: '#/components/schemas/Money'}
         openedAt:
           $ref: '#/components/schemas/Timestamp'
         closedAt:
@@ -11382,6 +11513,11 @@ components:
                 type:
                 - string
                 - 'null'
+              tendered:
+                description: Additive. Cash handed over (CASH tenders).
+                oneOf:
+                - $ref: '#/components/schemas/Money'
+                - type: 'null'
             required:
             - tenderType
             - amount
@@ -11400,6 +11536,28 @@ components:
           type: integer
         footer:
           type: string
+        amountPaid:
+          $ref: '#/components/schemas/Money'
+          description: Additive. Money paid against the receipt's order(s) at issue time.
+        balanceDue:
+          $ref: '#/components/schemas/Money'
+          description: Additive. Still owed after this payment (partial settlement); clients print it as BALANCE DUE when > 0.
+        duplicate:
+          type: boolean
+          description: Additive. True on a counted reprint (`?reprint=true`).
+        businessName:
+          type: string
+          description: Additive. Legal/business name printed above the site name.
+        terminal:
+          type: string
+          description: Additive. Name of the device that took the payment.
+        vatRegistered:
+          type: boolean
+        printLines:
+          type: array
+          description: Additive. The node's own 48-column (80 mm) text layout; clients may print it as is.
+          items:
+            type: string
       required:
       - id
       - number
@@ -12158,6 +12316,11 @@ components:
             $ref: '#/components/schemas/EntitlementItem'
         issuedAt:
           $ref: '#/components/schemas/Timestamp'
+        groupEntitlementIds:
+          type: array
+          description: 'Additive. On `POST /entitlements` for an order of several individual tickets, every entitlement of the order (this one is the first).'
+          items:
+            $ref: '#/components/schemas/Uuid'
       required:
       - id
       - qrToken
