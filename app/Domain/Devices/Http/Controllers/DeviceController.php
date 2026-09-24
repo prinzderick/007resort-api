@@ -159,7 +159,7 @@ class DeviceController
         }
         $staff = RequestContext::staffId();
         if ($staff !== null) {
-            if ($this->permissions->can($staff, 'device.register') || $this->permissions->can($staff, 'device.view')) {
+            if ($this->permissions->can($staff, 'device.register') || $this->permissions->can($staff, 'device.view') || $this->permissions->can($staff, 'device.manage')) {
                 return $d;
             }
             if ($allowCheckedOutStaff && ($c = $this->devices->activeCheckout($d->id)) !== null && $c->staff_id === $staff) {

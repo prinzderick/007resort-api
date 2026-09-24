@@ -28,7 +28,7 @@ class TableController
         if (! Authz::can('order.create', $fid) && ! Authz::can('order.view', $fid)) {
             throw ApiProblem::forbidden('permission_denied', 'Missing permission: order.view.', ['permission' => 'order.view']);
         }
-        $q = DB::table('dining_table')->where('facility_unit_id', Ids::toBinary($fid))->where('is_active', 1);
+        $q = DB::table('dining_table')->where('facility_unit_id', Ids::toBinary($fid))->where('is_active', 1)->whereNull('merge_parent_id'); // merged-away tables are part of their parent
         if ($s = ((array) $request->query('filter', []))['status'] ?? null) {
             $q->whereIn('status', array_map('strtoupper', explode(',', (string) $s)));
         }

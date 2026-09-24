@@ -33,7 +33,7 @@ class Device extends Model
 
     protected $table = 'device';
 
-    protected array $uuidColumns = ['organization_id', 'site_id', 'facility_unit_id'];
+    protected array $uuidColumns = ['organization_id', 'site_id', 'facility_unit_id', 'operating_point_id'];
 
     protected function casts(): array
     {

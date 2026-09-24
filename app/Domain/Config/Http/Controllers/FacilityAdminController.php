@@ -99,7 +99,7 @@ class FacilityAdminController
 
     public function setCapabilities(Request $request, string $facilityId): JsonResponse
     {
-        $d = $request->validate(['capabilities' => ['required', 'array'], 'capabilities.*' => ['required', 'string', 'max:48']]);
+        $d = $request->validate(['capabilities' => ['present', 'array'], 'capabilities.*' => ['required', 'string', 'max:48']]);
         $r = $this->capabilities->set($facilityId, $d['capabilities'], Concurrency::ifMatch($request));
 
         return Concurrency::json(['facilityId' => $facilityId] + $this->effective->effective($facilityId) + ['changed' => $r['changed']], 200, $r['version']);
