@@ -19,9 +19,10 @@ class AuditController
     public const CONFIG_ENTITY_TYPES = ['Facility', 'OperatingPoint', 'DiningTable', 'Product', 'ProductCategory', 'ProductFacility', 'PriceList', 'Price', 'TaxRate', 'PrepRoute', 'TicketType', 'Role', 'Device',
         'ReceiptSetting', 'BusinessProfile', 'MembershipPlan', 'BookableResource', 'Blackout', 'OrganizationTaxSetting', 'Organization'];
 
+
     /**
      * GET /audit?entityType=&entityTypes=a,b&entityId=&actorStaffId=&action=&actionPrefix=&facilityId=&from=&to=&order=asc|desc&limit=&cursor=
-     * (oldest first unless order=desc). Rows include `actorName`.
+     * (oldest first unless order=desc; from/to are UTC dates or ISO instants, `to` inclusive for a bare date; `filter[from]`/`filter[to]` also accepted). Rows include `actorName`.
      */
     public function index(Request $request): JsonResponse
     {
@@ -39,15 +40,6 @@ class AuditController
         if (($v = $request->query('facilityId')) && Ids::isUuid($v)) {
             $q->where('facility_unit_id', Ids::toBinary($v));
         }
-        foreach (['from' => '>=', 'to' => '<='] as $param => $op) {
-            if (($v = $request->query($param)) !== null && $v !== '') {
-                try {
-                    $q->where('occurred_at', $op, CarbonImmutable::parse((string) $v)->utc()->format('Y-m-d H:i:s.u'));
-                } catch (\Throwable) {
-                    throw ApiProblem::unprocessable('validation_failed', "{$param} must be an ISO-8601 date/time.", [$param => ['Invalid date.']]);
-                }
-            }
-        }
         if ($v = $request->query('entityType')) {
             $q->where('entity_type', $v);
         }
@@ -59,6 +51,18 @@ class AuditController
         }
         if ($v = $request->query('action')) {
             $q->where('action', $v);
+        }
+
+        $request->validate(['order' => ['nullable', 'in:asc,desc'], 'from' => ['nullable', 'date'], 'to' => ['nullable', 'date']]);
+        // Both spellings are accepted: ?from= and the contract's filter[from]= convention.
+        $filter = (array) $request->query('filter', []);
+        if ($v = $request->query('from', $filter['from'] ?? null)) {
+            $q->where('occurred_at', '>=', CarbonImmutable::parse($v, 'UTC')->utc()->format('Y-m-d H:i:s.u'));
+        }
+        if ($v = $request->query('to', $filter['to'] ?? null)) {
+            $to = CarbonImmutable::parse($v, 'UTC')->utc();
+            $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? $to->addDay() : $to->addMicrosecond();
+            $q->where('occurred_at', '<', $to->format('Y-m-d H:i:s.u'));
         }
 
         $page = CursorPage::paginate($q, $request, 'seq', $request->query('order') === 'desc' ? 'desc' : 'asc');
