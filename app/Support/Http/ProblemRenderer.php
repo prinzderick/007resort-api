@@ -76,6 +76,16 @@ final class ProblemRenderer
             [$status, $code, $title, $detail] = [400, 'validation_failed', 'Bad request', 'Malformed request.'];
         }
 
+        // RFC 7807 members are reserved: a domain extension must never overwrite them (an `order_state_invalid`
+        // problem used to ship `"status": "DRAFT"` in place of the HTTP status integer). A domain `status` extension
+        // is still exposed, under `entityStatus`.
+        if (array_key_exists('status', $extensions)) {
+            $extensions['entityStatus'] ??= $extensions['status'];
+        }
+        foreach (['type', 'title', 'status', 'code', 'detail', 'instance', 'correlationId'] as $reserved) {
+            unset($extensions[$reserved]);
+        }
+
         $body = array_merge([
             'type' => 'urn:r007:problem:'.$code,
             'title' => $title,

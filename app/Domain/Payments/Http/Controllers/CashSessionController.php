@@ -39,9 +39,9 @@ class CashSessionController
             if (! empty($f['staffId']) && Ids::isUuid($f['staffId'])) {
                 $q->where('staff_id', Ids::toBinary($f['staffId']));
             }
-        } else {
-            $q->where('staff_id', Ids::toBinary($staff)); // no facility scope: only your own sessions
-        }
+        } elseif (! $this->holdsSiteWide($staff, 'cash_session.view')) {
+            $q->where('staff_id', Ids::toBinary($staff)); // no facility scope: only your own sessions...
+        } // ...unless you hold cash_session.view site-wide (owner/accountant): then the whole property
         if (! empty($f['status'])) {
             $q->where('status', strtoupper((string) $f['status']));
         }
@@ -88,6 +88,14 @@ class CashSessionController
                 $fail("The {$attr} must be a ".($positive ? 'positive' : 'non-negative').' decimal string with at most 4 decimal places.');
             }
         };
+    }
+
+    private function holdsSiteWide(string $staffId, string $permission): bool
+    {
+        $row = DB::table('staff')->where('id', Ids::toBinary($staffId))->first(['site_id']); // the caller's own site
+        $site = $row ? Ids::fromBinary($row->site_id) : null;
+
+        return $site !== null && $this->permissions->can($staffId, $permission, Scope::site($site));
     }
 
     private function requireAt(string $staffId, string $permission, string $facilityId): void

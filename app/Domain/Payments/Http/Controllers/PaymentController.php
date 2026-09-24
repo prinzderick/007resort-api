@@ -14,6 +14,7 @@ use App\Support\Http\CursorPage;
 use App\Support\Ids;
 use App\Support\Money\Money;
 use App\Support\RequestContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -84,10 +85,14 @@ class PaymentController
                     ->join('order as of', 'of.id', '=', 'pf.order_id')->whereColumn('cf.payment_id', 'payment.id')->where('of.payment_facility_unit_id', Ids::toBinary($facility))
             ));
         } else {
-            if ($collectedBy !== null && $collectedBy !== $staff) {
+            // without a facility scope you only see your own takings... unless you hold payment.view / payment.confirm site-wide (owner/accountant/supervisor)
+            $siteWide = $this->holdsSiteWide($staff, 'payment.view') || $this->holdsSiteWide($staff, 'payment.confirm');
+            if ($collectedBy !== null && $collectedBy !== $staff && ! $siteWide) {
                 throw ApiProblem::permissionDenied('payment.view'); // someone else's collections need a facility scope
             }
-            $q->where('taken_by_staff_id', Ids::toBinary($staff)); // without a facility scope you only see your own takings
+            if (! $siteWide) {
+                $q->where('taken_by_staff_id', Ids::toBinary($staff));
+            }
         }
         if ($collectedBy !== null) {
             $q->whereExists(fn ($s) => $s->selectRaw('1')->from('payment_collection as pc')->whereColumn('pc.payment_id', 'payment.id')->where('pc.collected_by_staff_id', Ids::toBinary($collectedBy)));
@@ -104,6 +109,15 @@ class PaymentController
         if (! empty($f['tenderType']) && is_string($f['tenderType'])) {
             $t = strtoupper($f['tenderType']);
             $q->where(fn ($w) => $w->where('tender_type', $t)->orWhereExists(fn ($s) => $s->selectRaw('1')->from('payment_collection as pt')->whereColumn('pt.payment_id', 'payment.id')->where('pt.tender', $t)));
+        }
+        // filter[from] (inclusive) / filter[to] (exclusive; a bare YYYY-MM-DD `to` includes that whole UTC day) on created_at
+        $range = validator($f, ['from' => ['nullable', 'date'], 'to' => ['nullable', 'date']])->validate();
+        if (! empty($range['from'])) {
+            $q->where('created_at', '>=', CarbonImmutable::parse($range['from'], 'UTC')->utc()->format('Y-m-d H:i:s.u'));
+        }
+        if (! empty($range['to'])) {
+            $to = CarbonImmutable::parse($range['to'], 'UTC')->utc();
+            $q->where('created_at', '<', ($this->bareDate($range['to']) ? $to->addDay() : $to)->format('Y-m-d H:i:s.u'));
         }
         if (! empty($f['groupId']) && is_string($f['groupId']) && Ids::isUuid($f['groupId'])) {
             $q->where('group_id', Ids::toBinary($f['groupId']));
@@ -227,6 +241,20 @@ class PaymentController
             }
         }
         throw ApiProblem::permissionDenied($permissions[0]);
+    }
+
+    private function bareDate(string $v): bool
+    {
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
+    }
+
+    /** True when the permission is held at SITE/ORGANIZATION scope (property-wide finance roles). */
+    private function holdsSiteWide(string $staffId, string $permission): bool
+    {
+        $row = DB::table('staff')->where('id', Ids::toBinary($staffId))->first(['site_id']); // the caller's own site
+        $site = $row ? Ids::fromBinary($row->site_id) : null;
+
+        return $site !== null && $this->permissions->can($staffId, $permission, Scope::site($site));
     }
 
     private function requireAt(string $staffId, string $permission, string $facilityId): void

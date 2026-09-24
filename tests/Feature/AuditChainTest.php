@@ -135,4 +135,24 @@ class AuditChainTest extends TestCase
         $this->assertNotNull($list->json('nextCursor'));
         $this->withToken($good)->getJson('/api/v1/audit/verify')->assertOk()->assertJsonPath('valid', true);
     }
+
+    public function test_audit_list_can_be_read_newest_first_and_filtered_by_date(): void
+    {
+        $this->write('first');
+        $this->write('second');
+        $this->write('third');
+        DB::table('audit_log')->where('action', 'first')->update(['occurred_at' => '2020-01-02 10:00:00.000000']); // (raw update only for the test: the chain is not verified here)
+        $itAdmin = TestData::staff($this->t, 'auditor2');
+        TestData::assign($itAdmin, 'IT_ADMIN', 'SITE');
+        $tok = $this->postJson('/api/v1/auth/staff/login', ['credentialType' => 'PASSWORD', 'identifier' => 'auditor2', 'secret' => TestData::PASSWORD])->json('accessToken');
+
+        $asc = $this->withToken($tok)->getJson('/api/v1/audit?action=second')->assertOk();
+        $this->assertSame('second', $asc->json('items.0.action'));
+        $all = $this->withToken($tok)->getJson('/api/v1/audit?entityType=Thing')->json('items.*.action');
+        $this->assertSame(['first', 'second', 'third'], $all);
+        $this->assertSame(['third', 'second', 'first'], $this->withToken($tok)->getJson('/api/v1/audit?entityType=Thing&order=desc')->json('items.*.action'));
+        $this->assertSame(['first'], $this->withToken($tok)->getJson('/api/v1/audit?entityType=Thing&filter[to]=2020-01-02')->json('items.*.action'));
+        $this->assertSame(['third', 'second'], $this->withToken($tok)->getJson('/api/v1/audit?entityType=Thing&from=2021-01-01&order=desc')->json('items.*.action'));
+        $this->withToken($tok)->getJson('/api/v1/audit?order=sideways')->assertStatus(422);
+    }
 }
