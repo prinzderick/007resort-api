@@ -134,6 +134,8 @@ class CashSessionService
         $open = $s->status === 'OPEN';
         $totals = $open ? Ledger::cashTotals($id) : json_decode((string) $s->closing_totals, true);
         $expected = $open ? Ledger::expectedCash(Money::normalize((string) $s->opening_float), $totals) : Money::normalize((string) $s->expected_cash);
+        // `nonCash` is a tender => amount MAP: an empty PHP array would serialise as `[]` (and a filled one as `{...}`), which strict clients cannot parse.
+        $totals['nonCash'] = (object) ($totals['nonCash'] ?? []);
 
         return [
             'id' => $id,
