@@ -6,6 +6,8 @@ errors with a stable `code`. Implementation: `app/Domain/Customer` (`SocialLogin
 
 ## 1. Model
 
+Paths note: the customer-facing routes use the existing `/customer/...` prefix (singular), e.g. `/customer/me/identities`; the server-to-server ones live under `/public/customers/social/...`.
+
 * The **website performs the OAuth authorization-code flow** (it is the confidential client) and then calls the API **server-to-server**
   with its service token. Browsers never call the social endpoints (they cannot: they hold no `r7s_` token).
 * A customer (`customer` + `customer_account`) can have **0..n identities** (`customer_identity`) and **optionally a password**
@@ -16,7 +18,7 @@ errors with a stable `code`. Implementation: `app/Domain/Customer` (`SocialLogin
 
 `service_token.scope` is now a comma-set of: `public.read` (existing, GET-only public reads) and `customer.social` (new: may call the
 social endpoints below). A token without `customer.social` gets `403 scope_denied` there; a `customer.social`-only token cannot read
-the public GET endpoints. Existing tokens keep working unchanged (`public.read`).
+the public GET endpoints (401). `PATCH` etc. remain unavailable to any service token. Existing tokens keep working unchanged (`public.read`).
 
 Issue the website token with both: `php artisan r007:service-token create --name=booking-web --scope=public.read,customer.social`
 (rotation keeps the scope). The dev token `r7s_dev_booking_web` (demo seeder) has both scopes.
@@ -69,13 +71,13 @@ Success: `200` (existing customer signed in / identity linked) or `201` (new cus
 Errors: `401 unauthenticated`, `403 scope_denied`, `422 validation_failed`, `422 provider_disabled`, `422 terms_not_accepted`,
 `422 email_verified_without_email`, `422 profile_insufficient` (neither name nor email available), `422 id_token_required|id_token_unsupported|id_token_invalid`
 (`meta.reason`: `malformed|bad_signature|expired|wrong_audience|wrong_issuer|nonce_mismatch|unknown_key|jwks_unavailable`),
-`409 account_link_requires_confirmation`, `409 identity_conflict`, `423 account_locked` (inactive/locked account), `429 too_many_requests`.
+`409 account_link_requires_confirmation`, `409 identity_conflict`, `403 account_locked` (inactive account), `429 rate_limited` (also when a concurrent sign-in for the same identity holds the lock for >10 s; `Retry-After` is set).
 
 ### 3.3 Matching rules (evaluated in this order, in one DB transaction, idempotent)
 
 1. **Known identity** (`provider`+`providerUserId`) -> sign in that customer (refresh `avatar`, `last_login_at`). Email changes at the provider are ignored (identity, not email, is the key).
 2. Else if the email is **verified** (see 4) **and** a customer account with that (lower-cased) email exists:
-   * account email verified, OR account has no password (`password_hash` NULL) and no successful login yet -> **link** the identity, mark the account email verified, sign in. (`linkedExisting:true`.)
+   * account email verified, OR the account has no password (`password_hash` NULL) -> **link** the identity, mark the account email verified, sign in. (`linkedExisting:true`.)
    * account email **unverified AND it has a password** -> **do not link**: `409 account_link_requires_confirmation`. The API emails a one-time code + link to that address (owner proven by mailbox);
      body `meta`: `{ "confirmation": { "method": "email_code", "maskedEmail": "a***@example.com", "expiresInSeconds": 1800 } }`.
      The website shows "enter the code we emailed you" and calls 3.4. Nothing was linked and no session was issued.
@@ -141,10 +143,26 @@ RS256 only; signature via Google JWKS (`SOCIAL_GOOGLE_JWKS_URL`, default `https:
 * Audit rows (same transaction, hash chained, no PII beyond the platform norm, never tokens): `customer.social.register`, `customer.social.login`, `customer.social.link`, `customer.social.link.pending`, `customer.social.link.confirmed`, `customer.social.unlink`, `customer.password.set`, `customer.email.change`; failures as security events `CUSTOMER_SOCIAL_REJECTED` (reason) . Outbox: `CustomerRegistered` (new customers), `CustomerEmailVerified`.
 * Erasure: identities are `ON DELETE CASCADE` on the customer and removed by `SocialLoginService::eraseIdentities()` (there is no customer-erasure endpoint yet).
 
+## 6b. Hook for guest checkout / order claiming: `CustomerEmailVerified`
+
+Whenever a customer's login email **becomes verified** the API announces it, exactly once per transition:
+* in-process Laravel event `App\Domain\Customer\Events\CustomerEmailVerified(customerId, email, source)`, dispatched **after commit** (`DB::afterCommit`) - register a listener from another module (make it idempotent);
+* outbox event `CustomerEmailVerified` `{ customerId, email, source }` written in the same transaction.
+
+`source`: `password` (signup verification code/link), `social` (social sign-up or linking to a not-yet-verified/walk-in customer with a provider-verified email),
+`social_link_confirm` (3.4), `email_change` (3.5 add/change email by code). It is NOT fired for a login that merely links a provider to an already verified account
+(the email was announced earlier). Guest orders must be claimed only from this event, never from raw provider claims. The password-reset flow that also marks an
+email verified does not fire it yet (known gap).
+
 ## 7. Env
 
 `SOCIAL_PROVIDERS_ENABLED=google,facebook` · `SOCIAL_TRUSTED_EMAIL_PROVIDERS=google` · `SOCIAL_REQUIRE_ID_TOKEN=` · `SOCIAL_GOOGLE_CLIENT_ID=` (comma list) · `SOCIAL_GOOGLE_JWKS_URL` ·
 `SOCIAL_ID_TOKEN_PUBLIC_ENABLED=false` · `SOCIAL_LINK_CONFIRM_TTL_MINUTES=30`.
+
+## 7b. Tests
+
+`tests/Feature/Customer/SocialLoginTest.php` (real MySQL: every rule, id token with a locally-signed fake JWKS, scopes, rate limit, audit) and
+`SocialLoginConcurrencyTest.php` (separate PHP processes racing first logins).
 
 ## 8. Website checklist
 

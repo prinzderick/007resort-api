@@ -8989,6 +8989,36 @@ paths:
                 $ref: '#/components/schemas/Customer'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    patch:
+      operationId: customerUpdateMe
+      tags:
+      - Customer
+      summary: Update name / phone (profile completion)
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Returns the Customer plus `needsProfileCompletion`, `missing`, `recommended`. `422 phone_in_use`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                phone: {type: string, nullable: true}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
   /customer/bookings:
     get:
       operationId: customerBookings
@@ -19993,10 +20023,13 @@ components:
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         name: {type: string}
-        email: {type: string}
+        email: {type: [string, 'null'], description: null for a social customer whose provider gave no verified email (add one via POST /customer/me/email)}
         phone: {type: [string, 'null']}
         emailVerified: {type: boolean}
         createdAt: {type: string, format: date-time}
+        needsProfileCompletion: {type: boolean, description: only on GET/PATCH /customer/me}
+        missing: {type: array, items: {type: string, enum: [email, name]}}
+        recommended: {type: array, items: {type: string, enum: [phone]}}
       required: [id, name, email, emailVerified]
     SocialLoginRequest:
       type: object

@@ -14,6 +14,7 @@ use App\Support\Sync\Outbox;
 use App\Support\Tenancy\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\DeadlockException;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -118,7 +119,11 @@ class SocialLoginService
      */
     public function login(array $c, ?string $ip, ?string $ua): array
     {
-        $out = $this->retrying(fn () => DB::transaction(fn () => $this->loginTx($c, $ip, $ua)));
+        $keys = ['id|'.$c['provider'].'|'.$c['sub']];
+        if ($c['verified']) {
+            $keys[] = 'em|'.$c['email'];
+        }
+        $out = $this->serialised($keys, fn () => $this->retrying(fn () => DB::transaction(fn () => $this->loginTx($c, $ip, $ua))));
         if (isset($out['pending'])) { // 409: mail goes out only after the (no-op) transaction committed
             $this->mailLinkCode($out['pending']);
             throw new ApiProblem(409, 'account_link_requires_confirmation', 'This email already has an unverified password account. Confirm with the code we emailed.', 'Link requires confirmation', [
@@ -449,11 +454,40 @@ class SocialLoginService
         for ($try = 1; ; $try++) {
             try {
                 return $fn();
-            } catch (UniqueConstraintViolationException|DeadlockException $e) {
-                if ($try >= 5) {
+            } catch (UniqueConstraintViolationException|DeadlockException|QueryException $e) {
+                $retryable = $e instanceof UniqueConstraintViolationException || $e instanceof DeadlockException
+                    || in_array((string) ($e->errorInfo[0] ?? ''), ['40001'], true) || in_array((int) ($e->errorInfo[1] ?? 0), [1213, 1205], true);
+                if (! $retryable || $try >= 5) {
                     throw $e;
                 }
                 usleep(random_int(5, 40) * 1000);
+            }
+        }
+    }
+
+    /**
+     * Serialise concurrent first logins of the same identity / the same email with MySQL named locks (taken in sorted order, so no lock-order
+     * deadlocks). Unique constraints + retry remain the correctness backstop; the locks only keep the gap-lock deadlock storm away.
+     *
+     * @param  list<string>  $keys
+     */
+    private function serialised(array $keys, callable $fn): mixed
+    {
+        $names = array_map(fn (string $k) => 'r007soc:'.sha1($k), array_values(array_unique($keys)));
+        sort($names);
+        $held = [];
+        try {
+            foreach ($names as $n) {
+                if ((int) (DB::selectOne('SELECT GET_LOCK(?, 10) AS l', [$n])->l ?? 0) !== 1) {
+                    throw ApiProblem::tooManyRequests('Another sign-in for this account is in progress. Retry in a moment.', 1);
+                }
+                $held[] = $n;
+            }
+
+            return $fn();
+        } finally {
+            foreach ($held as $n) {
+                DB::select('SELECT RELEASE_LOCK(?)', [$n]);
             }
         }
     }
