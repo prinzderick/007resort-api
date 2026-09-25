@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class CmsSeedCommand extends Command
 {
-    protected $signature = 'r007:cms-seed';
+    protected $signature = 'r007:cms-seed {--refresh-media : Only bring an already seeded database in line with the current stock photos (import new photos, repoint references, remove replaced photos); text is never touched}';
 
     protected $description = 'Seed website CMS defaults and believable demo content (idempotent). Refuses to run in production.';
 
@@ -18,7 +18,8 @@ class CmsSeedCommand extends Command
 
             return self::FAILURE;
         }
-        $seeder->run(fn (string $line) => $this->info($line));
+        $say = fn (string $line) => $this->info($line);
+        $this->option('refresh-media') ? $seeder->refreshMedia($say) : $seeder->run($say);
 
         return self::SUCCESS;
     }
