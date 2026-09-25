@@ -10,7 +10,7 @@ The surface the booking website (`007resort-booking-web`) needs. Same engine as 
 | --- | --- | --- | --- | --- |
 | Staff | `r7a_` | `staff` | `session` | staff endpoints |
 | Customer | `r7c_` (refresh `r7x_`) | `customer` | `customer_session` | `/customer/*`, `/public/ticket-orders`, plus the contract paths below (ownership enforced) |
-| Website service token | `r7s_` | `service` | `service_token` | GET-only public reads (`public.read`) |
+| Website service token | `r7s_` | `service` | `service_token` | scope `public.read`: GET-only public reads; scope `public.checkout`: guest checkout writes (`docs/GUEST_CHECKOUT.md`) |
 
 A customer token can never satisfy `auth:staff` (401), a staff token never `auth:customer` (401); a customer/service token on a route
 that admits it but needs a staff permission gets 403 `permission_denied`. Tests: `tests/Feature/Customer/CustomerAuthTest.php`.
@@ -46,4 +46,4 @@ that admits it but needs a staff permission gets 403 `permission_denied`. Tests:
 ## Known gaps
 
 Paystack live keys (owner); refunds of cancelled paid bookings are recorded (`refundDue` in audit/outbox) but the Paystack refund API call is not made (Payments known gap);
-guest (anonymous) ticket checkout is not offered - a customer account is required; email/SMS delivery of tickets; Wallet passes.
+guest (anonymous) checkout is now offered: see `docs/GUEST_CHECKOUT.md` (service token scope `public.checkout`); real SMS provider / SMTP delivery of tickets; Wallet passes.

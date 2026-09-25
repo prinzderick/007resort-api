@@ -160,7 +160,7 @@ provider yet). Failed sends retry with backoff (max 5 attempts, then `FAILED`). 
 `200`: the guest order view of section 4.3 **plus** `guestAccess` (a **fresh** token; older tokens keep working until they expire, at most 5 active).
 Reference AND the matching contact (normalised email or phone, compared in constant time) are required. Every failure is the same
 `404 order_not_found` ("We couldn't find an order with those details.") whether the reference does not exist, the contact does not match, or the
-order is erased. Strict limits per client IP, per reference and per email/phone (`429 too_many_requests` + `Retry-After`).
+order is erased. Strict limits per client IP, per reference and per email/phone (`429 rate_limited` + `Retry-After`).
 While email is not configured the fresh token is returned to the calling website only (as above); later the same endpoint can additionally
 email the link without changing the contract.
 
@@ -177,7 +177,7 @@ email the link without changing the contract.
 | 422 | `guest_required` | service token create call without a `guest` object |
 | 422 | `captcha_required` / `captcha_failed` | Turnstile enabled and token missing / rejected |
 | 409 | `too_many_active_holds` | the contact already has `GUEST_MAX_ACTIVE_HOLDS` live holds |
-| 429 | `too_many_requests` | guest creation, lookup or resend limits (`Retry-After`) |
+| 429 | `rate_limited` | guest creation, lookup or resend limits (`Retry-After`) |
 | 409 | `nothing_to_send` | resend before payment |
 | 403 | `guest_checkout_disabled` | `GUEST_CHECKOUT_ENABLED=false` |
 | 409 | `slot_unavailable`, `hold_expired`, `site_offline`, `amount_mismatch`, `balance_changed`, ... | unchanged from accounts |
@@ -192,18 +192,24 @@ the booking / ticket order (`customer_order`) / membership / entitlements, `gues
 After claiming, the orders appear in `/customer/bookings|entitlements|memberships`; the guest token keeps working until it expires.
 Whether an email belongs to an account is never disclosed by any guest endpoint.
 
+Integration point for the social-login branch: wherever a customer's email becomes verified (`emailVerified=true` from a trusted provider, link confirmation, email-change
+verification) call `app(App\Domain\Guest\Services\GuestOrderClaimer::class)->claim($customerId, $verifiedEmail)`. The claimer re-checks in the DB that the customer's
+`customer_account.login_email` equals that email and `email_verified_at` is set, so a call for an unverified email is a no-op.
+
 ## 9. Security, abuse and privacy
 
 * **Tokens**: 256-bit, hashed at rest, per guest order, scoped to that order's ids only, expiring (`GUEST_ACCESS_TTL_DAYS`, default 90), revocable by erasure.
 * **Rate limits** (Redis, per visitor `X-Client-IP`, contact, reference): creation per IP / email / phone per hour, lookup per IP / reference / contact,
-  resend per order. `429 too_many_requests` with `Retry-After`.
-* **Holds**: at most `GUEST_MAX_ACTIVE_HOLDS` live holds per contact (email or phone); expired holds are cleaned by the existing `booking:expire-holds`.
+  resend per order. `429 rate_limited` with `Retry-After`.
+* **Holds**: at most `GUEST_MAX_ACTIVE_HOLDS` live holds per contact (email or phone; counted under a per-contact row lock so a race cannot exceed it); expired holds are cleaned by the existing `booking:expire-holds`.
   Slot double-booking guarantees are the existing MySQL ones, unchanged (guest and account holds contend on the same `slot_allocation` unique key).
 * **CAPTCHA**: optional Cloudflare Turnstile. Off unless `GUEST_TURNSTILE_SECRET` is set; then `guest.captchaToken` is verified server-side and
   failures return `422 captcha_failed` (`captcha_required` when missing).
 * **Privacy**: application logs and audit rows carry ids / hashed contact only, never full name/email/phone. No endpoint reveals whether an email or
   phone is known. Erasure (`r007:guest-erase` / `POST /guest-contacts/erasure`) anonymises contact snapshots (`Erased guest`, email/phone NULL),
   deletes the `guest_contact` row, revokes tokens and keeps the financial records (payments, receipts, ledger) untouched; the audit row stores an HMAC of the erased key.
+  Retained on purpose (immutable ledger, legal retention): `payment.customer_email` of the Paystack payment and the receipt snapshot. Anonymised: `booking.customer_name|email|phone`,
+  `customer_order.contact_*`, `order.customer_name`, `membership.contact_*`, `entitlement.holder_name`, `guest_order.contact_*`. Claimed orders (attached to a real account) keep the account's data.
 * **Payments**: amounts are always server-computed; guest initialize enforces `amount == amountDue`; capture only after provider verification (unchanged).
 
 ## 10. Environment
@@ -213,7 +219,14 @@ Whether an email belongs to an account is never disclosed by any guest endpoint.
 `GUEST_RATE_LOOKUP_PER_IP_15MIN` (10), `GUEST_RATE_LOOKUP_PER_REFERENCE_15MIN` (5), `GUEST_RATE_LOOKUP_PER_CONTACT_15MIN` (5),
 `GUEST_RATE_RESEND_PER_ORDER_HOUR` (3), `GUEST_TURNSTILE_SECRET` (empty = off), `GUEST_WEB_URL` (falls back to `CUSTOMER_WEB_URL`).
 
-## 11. Sequences
+## 11. Two-node note and gaps
+
+Guest tables live on the node that serves the website (Cloud). Bookings / orders / memberships reach the Local node through the existing outbox events with the contact
+snapshot (`customerId: null`); the `guest_*` tables themselves are not synced (Local staff never need the access tokens). Not built: online food/retail orders (do not exist in the API),
+a real SMS provider (stub `LogSmsSender`), SMTP (mail driver `log` on the demo server), Paystack refund API call for cancelled paid bookings (existing Payments gap: recorded as `refundDue`),
+guest-facing "pre-fill my details" (deliberately absent: it would disclose that a contact is known).
+
+## 12. Sequences
 
 Booking (hold -> pay -> confirm):
 

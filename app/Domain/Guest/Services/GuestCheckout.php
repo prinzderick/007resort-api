@@ -109,9 +109,10 @@ class GuestCheckout
             'client_ip_hash' => $c->clientIp === null ? null : ContactNormalizer::fingerprint($c->clientIp),
         ]);
         if ($kind === 'BOOKING') {
+            // A LOCKING read: InnoDB's REPEATABLE READ snapshot predates a concurrent winner's commit, a current read does not.
             $live = (int) DB::table('booking as b')->join('guest_order as g', 'g.booking_id', '=', 'b.id')
                 ->whereIn('b.status', ['HELD', 'PENDING_PAYMENT'])->where('b.hold_expires_at', '>', $now->format(self::FMT))->whereNull('g.erased_at')
-                ->where(fn ($w) => $w->where('g.contact_email', $c->email)->orWhere('g.contact_phone', $c->phone))->count();
+                ->where(fn ($w) => $w->where('g.contact_email', $c->email)->orWhere('g.contact_phone', $c->phone))->sharedLock()->count();
             if ($live > (int) config('guest.max_active_holds')) {
                 throw ApiProblem::conflict('too_many_active_holds', 'You already have the maximum number of unpaid holds. Pay for one, or wait for it to expire, then try again.');
             }

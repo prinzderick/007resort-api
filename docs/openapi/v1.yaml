@@ -8387,7 +8387,7 @@ paths:
       security:
       - customerAuth: []
       description: |-
-        Customer token required. The SERVER prices the lines; the owner is always the signed-in customer. Pay with `POST /payments/paystack/initialize {orderIds:[id], amount}`; one QR entitlement per person (valid on `visitDate`) is issued on `PaymentCaptured`. `409 site_offline` for same-day visits when the Local node heartbeat is stale (Cloud node).
+        Customer token, or a service token (scope `public.checkout`) with a `guest` object (no account; response carries `guestAccess`). The SERVER prices the lines; the owner is always the signed-in customer or the guest contact. Pay with `POST /payments/paystack/initialize {orderIds:[id], amount}`; one QR entitlement per person (valid on `visitDate`) is issued on `PaymentCaptured`. `409 site_offline` for same-day visits when the Local node heartbeat is stale (Cloud node).
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -17729,6 +17729,9 @@ components:
     HoldRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         resourceId:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -17773,6 +17776,9 @@ components:
     Booking:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         customerId:
           type: [string, 'null']
           x-additive: true
@@ -18145,6 +18151,9 @@ components:
     PurchaseMembershipRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         planId:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -18168,6 +18177,9 @@ components:
     Membership:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         id:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -20003,6 +20015,9 @@ components:
     TicketOrderRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         facilityId: {$ref: '#/components/schemas/Uuid'}
         visitDate: {type: string, format: date}
         lines:
@@ -20016,6 +20031,9 @@ components:
     TicketOrder:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         id: {$ref: '#/components/schemas/Uuid'}
         number: {type: string}
         facilityId: {$ref: '#/components/schemas/Uuid'}
