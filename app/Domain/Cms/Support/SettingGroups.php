@@ -99,13 +99,13 @@ final class SettingGroups
 
         return [
             'brand' => ['name' => '007 Resort & Spa', 'tagline' => 'Play. Splash. Reset. Feast.', 'logoMediaId' => null],
-            'contact' => ['phone' => '+234 800 007 0007', 'whatsapp' => '+234 800 007 0007', 'email' => 'hello@007resort.demo.test', 'address' => 'Otueke, Bayelsa State, Nigeria', 'mapEmbedUrl' => null, 'lat' => 4.9375, 'lng' => 6.2634],
+            'contact' => ['phone' => '+234 800 007 0007', 'whatsapp' => '+234 800 007 0007', 'email' => 'hello@007resort.demo.test', 'address' => 'Near the Federal University Otueke, Ogbia, Bayelsa State, Nigeria', 'mapEmbedUrl' => null, 'lat' => 4.79, 'lng' => 6.32],
             'hours' => ['weekly' => $weekly, 'notes' => 'Kitchen closes one hour before closing time.', 'holidays' => [['date' => '2026-12-25', 'label' => 'Christmas Day', 'open' => '10:00', 'close' => '18:00', 'closed' => false], ['date' => '2027-01-01', 'label' => "New Year's Day", 'open' => '12:00', 'close' => '23:00', 'closed' => false]]],
             'social' => ['instagram' => 'https://instagram.com/007resort', 'facebook' => 'https://facebook.com/007resort', 'x' => null, 'tiktok' => null, 'youtube' => null],
-            'seo' => ['titleTemplate' => '%s | 007 Resort & Spa', 'defaultTitle' => '007 Resort & Spa - Play, splash, reset and feast', 'defaultDescription' => 'Sports arena, pool, spa, restaurant and bars in one destination in Bayelsa.', 'ogImageMediaId' => null],
+            'seo' => ['titleTemplate' => '%s | 007 Resort & Spa', 'defaultTitle' => '007 Resort & Spa - Play, splash, reset and feast in Otueke, Bayelsa', 'defaultDescription' => 'Sports arena, pool, spa, restaurant and bars in one destination near the Federal University Otueke, Bayelsa State.', 'ogImageMediaId' => null],
             'announcement' => ['enabled' => false, 'text' => null, 'link' => null, 'tone' => 'INFO'],
             'booking' => ['ticketsCtaLabel' => 'Buy tickets', 'bookingCtaLabel' => 'Book a court', 'membershipCtaLabel' => 'Join the club', 'eventsCtaLabel' => 'Get tickets'],
-            'footer' => ['text' => 'Your weekend escape in the heart of Bayelsa.', 'copyright' => '007 Resort & Spa. All rights reserved.'],
+            'footer' => ['text' => 'Your weekend escape near the Federal University Otueke, Bayelsa State.', 'copyright' => '007 Resort & Spa. All rights reserved.'],
         ];
     }
 }

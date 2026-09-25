@@ -1,229 +1,111 @@
 [
  {
-  "file": "hero-01-pool-golden-hour.jpg",
-  "category": "hero",
-  "alt": "Turquoise swimming pool beside a curved terrace as the sun sets over the ocean under a moody orange sky",
-  "credit": "Giuseppe Famiani",
-  "sourceUrl": "https://unsplash.com/photos/p_GlcvWVUso",
-  "license": "Unsplash License",
+  "file": "avatar-01-young-man-cap.jpg",
+  "category": "avatar",
+  "alt": "Portrait of a smiling young man in a patterned cap",
+  "credit": "Ansey Photography",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/21222664/",
+  "license": "Pexels License",
   "tags": [
-   "pool",
-   "sunset",
-   "golden hour",
-   "terrace"
+   "portrait",
+   "avatar"
   ],
-  "width": 1600,
-  "height": 1200
+  "width": 600,
+  "height": 900
  },
  {
-  "file": "hero-02-sunset-infinity-pool-crowd.jpg",
-  "category": "hero",
-  "alt": "Guests relaxing on a wooden deck beside an infinity pool under string lights as a pink and purple sunset fades over the sea",
-  "credit": "Cassie Gallegos",
-  "sourceUrl": "https://unsplash.com/photos/6wCWCPwmRJY",
-  "license": "Unsplash License",
+  "file": "avatar-02-woman-red-gele.jpg",
+  "category": "avatar",
+  "alt": "Portrait of a smiling woman in a red gele head tie and glasses",
+  "credit": "Anchau",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/34122185/",
+  "license": "Pexels License",
   "tags": [
-   "pool",
-   "sunset",
-   "string lights",
-   "guests",
-   "evening"
+   "portrait",
+   "avatar"
+  ],
+  "width": 643,
+  "height": 900
+ },
+ {
+  "file": "avatar-03-man-white-attire.jpg",
+  "category": "avatar",
+  "alt": "Portrait of a smiling man in a light traditional outfit",
+  "credit": "RAHEEM OLUWADAMILARE",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/31563149/",
+  "license": "Pexels License",
+  "tags": [
+   "portrait",
+   "avatar"
+  ],
+  "width": 600,
+  "height": 900
+ },
+ {
+  "file": "avatar-04-woman-yellow-gele.jpg",
+  "category": "avatar",
+  "alt": "Portrait of a joyful woman in a yellow gele head tie",
+  "credit": "Victor Chijioke",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/31817572/",
+  "license": "Pexels License",
+  "tags": [
+   "portrait",
+   "avatar"
+  ],
+  "width": 600,
+  "height": 900
+ },
+ {
+  "file": "avatar-05-man-smiling-outdoors.jpg",
+  "category": "avatar",
+  "alt": "Portrait of a smiling man in a light outfit outdoors",
+  "credit": "Tifeclicks",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/16001703/",
+  "license": "Pexels License",
+  "tags": [
+   "portrait",
+   "avatar"
+  ],
+  "width": 600,
+  "height": 900
+ },
+ {
+  "file": "basketball-01-street-court-game.jpg",
+  "category": "basketball",
+  "alt": "Group of young players enjoying a pick-up basketball game on an outdoor court",
+  "credit": "Darkside Photography",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/36660408/",
+  "license": "Pexels License",
+  "tags": [
+   "basketball",
+   "court",
+   "friends"
   ],
   "width": 1600,
   "height": 1067
  },
  {
-  "file": "hero-03-floodlit-tennis-night.jpg",
-  "category": "hero",
-  "alt": "Two players on a floodlit clay tennis court at night with bright stadium lights and lush surroundings",
-  "credit": "AJ Alao",
-  "sourceUrl": "https://unsplash.com/photos/FChU6hernp8",
+  "file": "basketball-02-floodlit-court-night.jpg",
+  "category": "basketball",
+  "alt": "Two people playing basketball on an outdoor court lit by a floodlight at night with city lights behind",
+  "credit": "MChe Lee",
+  "sourceUrl": "https://unsplash.com/photos/zmfYgYwRzjA",
   "license": "Unsplash License",
   "tags": [
-   "tennis",
+   "basketball",
    "night",
-   "floodlights",
+   "floodlit",
    "court"
   ],
   "width": 1600,
-  "height": 1067
- },
- {
-  "file": "hero-04-resort-exterior-dusk.jpg",
-  "category": "hero",
-  "alt": "Resort hotel wing glowing with warm balcony lights above a landscaped pool at blue-hour dusk",
-  "credit": "Zion C",
-  "sourceUrl": "https://unsplash.com/photos/4Y7DTHX1ins",
-  "license": "Unsplash License",
-  "tags": [
-   "resort",
-   "exterior",
-   "dusk",
-   "pool",
-   "architecture"
-  ],
-  "width": 1600,
-  "height": 1200
- },
- {
-  "file": "hero-05-terrace-loungers-umbrella.jpg",
-  "category": "hero",
-  "alt": "Stone-built resort terrace with wooden sun loungers, an umbrella and a pool at golden hour",
-  "credit": "Ahmad Ajmi",
-  "sourceUrl": "https://unsplash.com/photos/t6Le7895iuk",
-  "license": "Unsplash License",
-  "tags": [
-   "terrace",
-   "loungers",
-   "exterior",
-   "resort"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "hero-06-pool-party-energy.jpg",
-  "category": "hero",
-  "alt": "Crowd of people jumping and cheering at a lively pool party among palm trees at dusk",
-  "credit": "Jed Villejo",
-  "sourceUrl": "https://unsplash.com/photos/tEnL33Z0-Ho",
-  "license": "Unsplash License",
-  "tags": [
-   "pool party",
-   "crowd",
-   "energy",
-   "palms"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "pool-01-sunset-loungers-palms.jpg",
-  "category": "pool",
-  "alt": "Resort pool with lounge chairs and umbrellas silhouetted by palms against an orange sunset",
-  "credit": "Tim Mossholder",
-  "sourceUrl": "https://unsplash.com/photos/5yWwAqTjP20",
-  "license": "Unsplash License",
-  "tags": [
-   "pool",
-   "sunset",
-   "loungers",
-   "palms"
-  ],
-  "width": 1333,
-  "height": 2000
- },
- {
-  "file": "pool-02-kids-playing-in-pool.jpg",
-  "category": "pool",
-  "alt": "Two young children playing together in sparkling shallow pool water",
-  "credit": "Cor Dulce",
-  "sourceUrl": "https://unsplash.com/photos/lMMas1V5Z3w",
-  "license": "Unsplash License",
-  "tags": [
-   "pool",
-   "kids",
-   "family",
-   "splash"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "pool-04-swimmer-aerial.jpg",
-  "category": "pool",
-  "alt": "Aerial view of a woman swimming in a turquoise pool beside a striped float",
-  "credit": "Briana Tozour",
-  "sourceUrl": "https://unsplash.com/photos/YsFgsZJ4az0",
-  "license": "Unsplash License",
-  "tags": [
-   "pool",
-   "swimming",
-   "aerial",
-   "turquoise"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "pool-06-pool-party-dive.jpg",
-  "category": "pool",
-  "alt": "Man diving into a turquoise pool over a pink flamingo float at a lively pool party",
-  "credit": "Jakob Owens",
-  "sourceUrl": "https://unsplash.com/photos/cL1m55GcwXE",
-  "license": "Unsplash License",
-  "tags": [
-   "pool party",
-   "dive",
-   "summer",
-   "energy"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "spa-01-hot-stone-massage.jpg",
-  "category": "spa",
-  "alt": "Person receiving a hot stone massage with smooth black stones along the spine and white orchids",
-  "credit": "engin akyurt",
-  "sourceUrl": "https://unsplash.com/photos/SMwCQZWayj0",
-  "license": "Unsplash License",
-  "tags": [
-   "spa",
-   "hot stones",
-   "massage",
-   "flowers"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "spa-03-facial-mask-treatment.jpg",
-  "category": "spa",
-  "alt": "Woman with a headband smiling while a beautician applies a clay facial mask",
-  "credit": "Rosa Rafael",
-  "sourceUrl": "https://unsplash.com/photos/Pe9IXUuC6QU",
-  "license": "Unsplash License",
-  "tags": [
-   "spa",
-   "facial",
-   "skincare",
-   "treatment"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "spa-04-spa-candles.jpg",
-  "category": "spa",
-  "alt": "Warm glowing pillar candles on a wooden table with dried leaves",
-  "credit": "Sixteen Miles Out",
-  "sourceUrl": "https://unsplash.com/photos/bdVmIkx_gIs",
-  "license": "Unsplash License",
-  "tags": [
-   "spa",
-   "candles",
-   "ambience",
-   "warm"
-  ],
-  "width": 1600,
-  "height": 1143
- },
- {
-  "file": "spa-05-robe-and-towel-tea.jpg",
-  "category": "spa",
-  "alt": "Smiling woman in a white robe and hair towel holding a cup of tea",
-  "credit": "Vladimir Yelizarov",
-  "sourceUrl": "https://unsplash.com/photos/crnAlC9fcqE",
-  "license": "Unsplash License",
-  "tags": [
-   "spa",
-   "robe",
-   "towel",
-   "relaxation"
-  ],
-  "width": 1333,
-  "height": 2000
+  "height": 1067,
+  "provider": "Unsplash"
  },
  {
   "file": "dining-03-jollof-rice-skewers.jpg",
@@ -237,6 +119,24 @@
    "skewers",
    "african food",
    "rice"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "dining-04-jollof-grilled-fish-spread.jpg",
+  "category": "dining",
+  "alt": "Jollof rice, grilled fish, skewers and fresh vegetables laid out together",
+  "credit": "Keesha's Kitchen",
+  "provider": "Unsplash",
+  "sourceUrl": "https://unsplash.com/photos/PqG32DYCTM8",
+  "license": "Unsplash License",
+  "tags": [
+   "jollof",
+   "fish",
+   "skewers",
+   "african food"
   ],
   "width": 1600,
   "height": 1067
@@ -254,7 +154,8 @@
    "evening"
   ],
   "width": 1333,
-  "height": 2000
+  "height": 2000,
+  "provider": "Unsplash"
  },
  {
   "file": "dining-06-terrace-string-lights-night.jpg",
@@ -270,7 +171,8 @@
    "bar"
   ],
   "width": 1600,
-  "height": 1280
+  "height": 1280,
+  "provider": "Unsplash"
  },
  {
   "file": "dining-08-brunch-spread.jpg",
@@ -286,135 +188,140 @@
    "flat lay"
   ],
   "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "dining-09-chef-at-work.jpg",
+  "category": "dining",
+  "alt": "Chef in a tall white hat and red apron preparing food at a griddle",
+  "credit": "Travis Grossen",
+  "provider": "Unsplash",
+  "sourceUrl": "https://unsplash.com/photos/AXDTTuh-0UI",
+  "license": "Unsplash License",
+  "tags": [
+   "chef",
+   "kitchen",
+   "cooking"
+  ],
+  "width": 1066,
+  "height": 1600
+ },
+ {
+  "file": "events-01-dancing-at-the-bar.jpg",
+  "category": "events",
+  "alt": "Guest in an ankara-print outfit dancing with raised arms at a lively bar night",
+  "credit": "RDNE Stock project",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/6173819/",
+  "license": "Pexels License",
+  "tags": [
+   "music",
+   "night",
+   "dance",
+   "bar"
+  ],
+  "width": 1600,
   "height": 1067
  },
  {
-  "file": "events-01-dj-light-show.jpg",
+  "file": "events-02-night-celebration-flame.jpg",
   "category": "events",
-  "alt": "DJ silhouetted behind beams of pink and white stage lights above a cheering crowd",
-  "credit": "A J.",
-  "sourceUrl": "https://unsplash.com/photos/r3XvSBEQQLo",
-  "license": "Unsplash License",
+  "alt": "Cheering crowd in football shirts at a night celebration as a flame burst lights up the room",
+  "credit": "Felipe Esono Nguema",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/36598101/",
+  "license": "Pexels License",
   "tags": [
-   "dj",
    "party",
-   "lights",
+   "celebration",
+   "night",
    "crowd"
   ],
   "width": 1600,
   "height": 1067
  },
  {
-  "file": "events-02-confetti-crowd.jpg",
+  "file": "events-03-fans-cheering-match.jpg",
   "category": "events",
-  "alt": "Huge crowd with confetti falling in front of a bright stage",
-  "credit": "Danny Howe",
-  "sourceUrl": "https://unsplash.com/photos/Hq9BwndSFAY",
-  "license": "Unsplash License",
+  "alt": "Fans cheering and laughing while watching a live match at a sports bar",
+  "credit": "Karl Rayson",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/14856235/",
+  "license": "Pexels License",
   "tags": [
-   "crowd",
-   "confetti",
-   "concert",
-   "energy"
+   "match night",
+   "football",
+   "fans",
+   "bar"
+  ],
+  "width": 1600,
+  "height": 1067
+ },
+ {
+  "file": "events-05-women-meditating-park.jpg",
+  "category": "events",
+  "alt": "Two women meditating on the lawn in a park at a wellness session",
+  "credit": "Gustavo Fring",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/5163858/",
+  "license": "Pexels License",
+  "tags": [
+   "yoga",
+   "wellness",
+   "outdoor"
+  ],
+  "width": 1600,
+  "height": 1067
+ },
+ {
+  "file": "events-06-boy-playing-hide-and-seek.jpg",
+  "category": "events",
+  "alt": "Child laughing and playing hide and seek around a tree on the lawn",
+  "credit": "Barbara Olsen",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/7880390/",
+  "license": "Pexels License",
+  "tags": [
+   "kids",
+   "family",
+   "play"
+  ],
+  "width": 1600,
+  "height": 1067
+ },
+ {
+  "file": "events-07-aso-oke-celebration.jpg",
+  "category": "events",
+  "alt": "Guests in colourful aso-oke and gele head ties celebrating together at a party",
+  "credit": "Momento visuals",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/37118591/",
+  "license": "Pexels License",
+  "tags": [
+   "celebration",
+   "fashion",
+   "aso-oke",
+   "party"
   ],
   "width": 1600,
   "height": 1068
  },
  {
-  "file": "events-03-match-night-big-screens.jpg",
-  "category": "events",
-  "alt": "Guests at a bar counter watching sport on a wall of large screens",
-  "credit": "Amit Lahav",
-  "sourceUrl": "https://unsplash.com/photos/6I-HWjwn-hk",
-  "license": "Unsplash License",
+  "file": "football-01-players-on-pitch.jpg",
+  "category": "football",
+  "alt": "Footballers in dark kit chasing the ball during a match on an artificial pitch",
+  "credit": "Hardy Pictures",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/15153163/",
+  "license": "Pexels License",
   "tags": [
-   "match night",
-   "big screen",
-   "bar",
-   "sport"
+   "football",
+   "pitch",
+   "match"
   ],
   "width": 1600,
-  "height": 1164
- },
- {
-  "file": "events-05-outdoor-yoga-sunset.jpg",
-  "category": "events",
-  "alt": "Group doing yoga on mats on a lawn as the low sun filters through trees",
-  "credit": "Amauri Mejia",
-  "sourceUrl": "https://unsplash.com/photos/GvF7RkA-E9Q",
-  "license": "Unsplash License",
-  "tags": [
-   "yoga",
-   "wellness",
-   "outdoor",
-   "class"
-  ],
-  "width": 1333,
-  "height": 2000
- },
- {
-  "file": "events-06-kids-circle-lawn.jpg",
-  "category": "events",
-  "alt": "Children holding hands in a circle playing on a sunny park lawn",
-  "credit": "Jay Chen",
-  "sourceUrl": "https://unsplash.com/photos/mKbZ3zAdiB4",
-  "license": "Unsplash License",
-  "tags": [
-   "kids",
-   "play",
-   "lawn",
-   "family"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "tennis-02-clay-court-serve.jpg",
-  "category": "tennis",
-  "alt": "Overhead view of a tennis player serving on a warm orange clay court with long shadows",
-  "credit": "Moises Alex",
-  "sourceUrl": "https://unsplash.com/photos/WqI-PbYugn4",
-  "license": "Unsplash License",
-  "tags": [
-   "tennis",
-   "clay",
-   "aerial",
-   "player"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "tennis-03-forehand-blue-court.jpg",
-  "category": "tennis",
-  "alt": "Player mid-swing on a blue and green hard tennis court seen from behind",
-  "credit": "Andrew Heald",
-  "sourceUrl": "https://unsplash.com/photos/C1bGTi-rSus",
-  "license": "Unsplash License",
-  "tags": [
-   "tennis",
-   "player",
-   "action",
-   "hard court"
-  ],
-  "width": 1600,
-  "height": 1044
- },
- {
-  "file": "basketball-02-floodlit-court-night.jpg",
-  "category": "basketball",
-  "alt": "Two people playing basketball on an outdoor court lit by a floodlight at night with city lights behind",
-  "credit": "MChe Lee",
-  "sourceUrl": "https://unsplash.com/photos/zmfYgYwRzjA",
-  "license": "Unsplash License",
-  "tags": [
-   "basketball",
-   "night",
-   "floodlit",
-   "court"
-  ],
-  "width": 1600,
-  "height": 1067
+  "height": 1279
  },
  {
   "file": "football-02-floodlit-pitch-players.jpg",
@@ -430,39 +337,8 @@
    "floodlight"
   ],
   "width": 1600,
-  "height": 1067
- },
- {
-  "file": "lifestyle-02-family-portrait-sofa.jpg",
-  "category": "lifestyle",
-  "alt": "Smiling family with two young children sitting together on a sofa",
-  "credit": "Eyo Archibong",
-  "sourceUrl": "https://unsplash.com/photos/RJo9OowwG4g",
-  "license": "Unsplash License",
-  "tags": [
-   "family",
-   "children",
-   "portrait",
-   "home"
-  ],
-  "width": 1600,
-  "height": 1067
- },
- {
-  "file": "lifestyle-05-personal-trainer-session.jpg",
-  "category": "lifestyle",
-  "alt": "Personal trainer coaching a woman on a gym machine",
-  "credit": "Sergio Kian",
-  "sourceUrl": "https://unsplash.com/photos/G6svDyPVRrc",
-  "license": "Unsplash License",
-  "tags": [
-   "coaching",
-   "gym",
-   "fitness",
-   "trainer"
-  ],
-  "width": 1600,
-  "height": 1067
+  "height": 1067,
+  "provider": "Unsplash"
  },
  {
   "file": "gallery-01-palm-silhouettes-sunset.jpg",
@@ -478,7 +354,8 @@
    "tropical"
   ],
   "width": 1600,
-  "height": 1067
+  "height": 1067,
+  "provider": "Unsplash"
  },
  {
   "file": "gallery-03-festoon-bulb-bokeh.jpg",
@@ -494,7 +371,8 @@
    "warm"
   ],
   "width": 1600,
-  "height": 1067
+  "height": 1067,
+  "provider": "Unsplash"
  },
  {
   "file": "gallery-04-garden-lights-night.jpg",
@@ -508,6 +386,194 @@
    "garden",
    "night",
    "ambience"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "hero-01-pool-golden-hour.jpg",
+  "category": "hero",
+  "alt": "Turquoise swimming pool beside a curved terrace as the sun sets over the ocean under a moody orange sky",
+  "credit": "Giuseppe Famiani",
+  "sourceUrl": "https://unsplash.com/photos/p_GlcvWVUso",
+  "license": "Unsplash License",
+  "tags": [
+   "pool",
+   "sunset",
+   "golden hour",
+   "terrace"
+  ],
+  "width": 1600,
+  "height": 1200,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "hero-02-friends-laughing-in-pool.jpg",
+  "category": "hero",
+  "alt": "Two friends laughing together in the sparkling water at the edge of a sunny swimming pool",
+  "credit": "Kindel Media",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/7294223/",
+  "license": "Pexels License",
+  "tags": [
+   "pool",
+   "friends",
+   "couple",
+   "summer"
+  ],
+  "width": 1600,
+  "height": 901
+ },
+ {
+  "file": "hero-03-floodlit-tennis-night.jpg",
+  "category": "hero",
+  "alt": "Two players on a floodlit clay tennis court at night with bright stadium lights and lush surroundings",
+  "credit": "AJ Alao",
+  "sourceUrl": "https://unsplash.com/photos/FChU6hernp8",
+  "license": "Unsplash License",
+  "tags": [
+   "tennis",
+   "night",
+   "floodlights",
+   "court"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "hero-04-resort-exterior-dusk.jpg",
+  "category": "hero",
+  "alt": "Resort hotel wing glowing with warm balcony lights above a landscaped pool at blue-hour dusk",
+  "credit": "Zion C",
+  "sourceUrl": "https://unsplash.com/photos/4Y7DTHX1ins",
+  "license": "Unsplash License",
+  "tags": [
+   "resort",
+   "exterior",
+   "dusk",
+   "pool",
+   "architecture"
+  ],
+  "width": 1600,
+  "height": 1200,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "hero-05-terrace-loungers-umbrella.jpg",
+  "category": "hero",
+  "alt": "Stone-built resort terrace with wooden sun loungers, an umbrella and a pool at golden hour",
+  "credit": "Ahmad Ajmi",
+  "sourceUrl": "https://unsplash.com/photos/t6Le7895iuk",
+  "license": "Unsplash License",
+  "tags": [
+   "terrace",
+   "loungers",
+   "exterior",
+   "resort"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "hero-06-night-dance-crowd.jpg",
+  "category": "hero",
+  "alt": "A packed crowd dancing under a disco ball at a lively night party",
+  "credit": "basunga visual",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/37474062/",
+  "license": "Pexels License",
+  "tags": [
+   "party",
+   "dance",
+   "night",
+   "crowd"
+  ],
+  "width": 1600,
+  "height": 1067
+ },
+ {
+  "file": "lifestyle-01-women-laughing-park.jpg",
+  "category": "lifestyle",
+  "alt": "Women in colourful outfits laughing together on a lawn",
+  "credit": "Andra C Taylor Jr",
+  "provider": "Unsplash",
+  "sourceUrl": "https://unsplash.com/photos/KfoNVMCFb5M",
+  "license": "Unsplash License",
+  "tags": [
+   "friends",
+   "laughing",
+   "women",
+   "joy"
+  ],
+  "width": 1600,
+  "height": 1239
+ },
+ {
+  "file": "lifestyle-02-family-portrait-sofa.jpg",
+  "category": "lifestyle",
+  "alt": "Smiling family with two young children sitting together on a sofa",
+  "credit": "Eyo Archibong",
+  "sourceUrl": "https://unsplash.com/photos/RJo9OowwG4g",
+  "license": "Unsplash License",
+  "tags": [
+   "family",
+   "children",
+   "portrait",
+   "home"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "lifestyle-03-family-beach-play.jpg",
+  "category": "lifestyle",
+  "alt": "Father carrying a baby on his shoulders while mother laughs on a beach",
+  "credit": "Lawrence Crayton",
+  "provider": "Unsplash",
+  "sourceUrl": "https://unsplash.com/photos/cf1cN3ofKUM",
+  "license": "Unsplash License",
+  "tags": [
+   "family",
+   "beach",
+   "baby",
+   "outdoor"
+  ],
+  "width": 1600,
+  "height": 1373
+ },
+ {
+  "file": "lifestyle-04-couple-walking-holding-hands.jpg",
+  "category": "lifestyle",
+  "alt": "Couple in gingham and denim walking hand in hand on a red dirt path",
+  "credit": "Roman Derrick Okello",
+  "provider": "Unsplash",
+  "sourceUrl": "https://unsplash.com/photos/Cfq5AOCxjms",
+  "license": "Unsplash License",
+  "tags": [
+   "couple",
+   "walking",
+   "outdoor",
+   "warm"
+  ],
+  "width": 1066,
+  "height": 1600
+ },
+ {
+  "file": "lifestyle-05-trainer-portrait.jpg",
+  "category": "lifestyle",
+  "alt": "Smiling fitness trainer standing with arms crossed in a spacious gym",
+  "credit": "RDNE Stock project",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/8612491/",
+  "license": "Pexels License",
+  "tags": [
+   "fitness",
+   "trainer",
+   "gym"
   ],
   "width": 1600,
   "height": 1067
@@ -526,21 +592,190 @@
    "luxury"
   ],
   "width": 1600,
-  "height": 2000
+  "height": 2000,
+  "provider": "Unsplash"
  },
  {
-  "file": "padel-01-badminton-smash.jpg",
+  "file": "padel-01-woman-racket-palm-trees.jpg",
   "category": "padel",
-  "alt": "Badminton player leaping to smash a shuttlecock on an indoor green court",
-  "credit": "Muktasim Azlan",
-  "sourceUrl": "https://unsplash.com/photos/rjWfNR_AC5g",
+  "alt": "Woman with braids holding a racket over her shoulder in front of palm trees",
+  "credit": "Ismael Abdal Naby studio",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/14679136/",
+  "license": "Pexels License",
+  "tags": [
+   "racket",
+   "tennis",
+   "padel"
+  ],
+  "width": 1067,
+  "height": 1600
+ },
+ {
+  "file": "pool-01-sunset-loungers-palms.jpg",
+  "category": "pool",
+  "alt": "Resort pool with lounge chairs and umbrellas silhouetted by palms against an orange sunset",
+  "credit": "Tim Mossholder",
+  "sourceUrl": "https://unsplash.com/photos/5yWwAqTjP20",
   "license": "Unsplash License",
   "tags": [
-   "badminton",
-   "indoor",
-   "action"
+   "pool",
+   "sunset",
+   "loungers",
+   "palms"
+  ],
+  "width": 1333,
+  "height": 2000,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "pool-02-boy-in-swim-ring.jpg",
+  "category": "pool",
+  "alt": "Smiling boy in a red swim ring splashing in the pool",
+  "credit": "musonda",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/19452230/",
+  "license": "Pexels License",
+  "tags": [
+   "pool",
+   "kids",
+   "family",
+   "swim"
   ],
   "width": 1600,
   "height": 1067
+ },
+ {
+  "file": "pool-04-child-swimming.jpg",
+  "category": "pool",
+  "alt": "Child swimming towards the camera in a bright outdoor pool",
+  "credit": "Steward Masweneng",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/9828146/",
+  "license": "Pexels License",
+  "tags": [
+   "pool",
+   "kids",
+   "swim"
+  ],
+  "width": 1600,
+  "height": 1060
+ },
+ {
+  "file": "pool-06-couple-on-pool-floats.jpg",
+  "category": "pool",
+  "alt": "Two friends relaxing on colourful swim rings in a sunny pool",
+  "credit": "Kindel Media",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/7294212/",
+  "license": "Pexels License",
+  "tags": [
+   "pool",
+   "friends",
+   "floats",
+   "summer"
+  ],
+  "width": 1600,
+  "height": 901
+ },
+ {
+  "file": "spa-01-hot-stone-relaxation.jpg",
+  "category": "spa",
+  "alt": "Smiling woman resting on a treatment bed among warm massage stones",
+  "credit": "William Adams",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/19185962/",
+  "license": "Pexels License",
+  "tags": [
+   "spa",
+   "hot stone",
+   "massage",
+   "relax"
+  ],
+  "width": 1600,
+  "height": 1064
+ },
+ {
+  "file": "spa-03-facial-massage.jpg",
+  "category": "spa",
+  "alt": "Woman receiving a relaxing facial massage at the spa",
+  "credit": "KERO 97",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/31914689/",
+  "license": "Pexels License",
+  "tags": [
+   "spa",
+   "facial",
+   "massage"
+  ],
+  "width": 1600,
+  "height": 1200
+ },
+ {
+  "file": "spa-04-spa-candles.jpg",
+  "category": "spa",
+  "alt": "Warm glowing pillar candles on a wooden table with dried leaves",
+  "credit": "Sixteen Miles Out",
+  "sourceUrl": "https://unsplash.com/photos/bdVmIkx_gIs",
+  "license": "Unsplash License",
+  "tags": [
+   "spa",
+   "candles",
+   "ambience",
+   "warm"
+  ],
+  "width": 1600,
+  "height": 1143,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "spa-05-robe-and-towel-tea.jpg",
+  "category": "spa",
+  "alt": "Smiling woman in a white robe and hair towel holding a cup of tea",
+  "credit": "Vladimir Yelizarov",
+  "sourceUrl": "https://unsplash.com/photos/crnAlC9fcqE",
+  "license": "Unsplash License",
+  "tags": [
+   "spa",
+   "robe",
+   "towel",
+   "relaxation"
+  ],
+  "width": 1333,
+  "height": 2000,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "tennis-02-clay-court-serve.jpg",
+  "category": "tennis",
+  "alt": "Overhead view of a tennis player serving on a warm orange clay court with long shadows",
+  "credit": "Moises Alex",
+  "sourceUrl": "https://unsplash.com/photos/WqI-PbYugn4",
+  "license": "Unsplash License",
+  "tags": [
+   "tennis",
+   "clay",
+   "aerial",
+   "player"
+  ],
+  "width": 1600,
+  "height": 1067,
+  "provider": "Unsplash"
+ },
+ {
+  "file": "tennis-03-woman-on-blue-court.jpg",
+  "category": "tennis",
+  "alt": "Woman in a white top and pleated skirt posing with her racket on a blue hard court",
+  "credit": "Jermaine Lewis",
+  "provider": "Pexels",
+  "sourceUrl": "https://www.pexels.com/photo/35327541/",
+  "license": "Pexels License",
+  "tags": [
+   "tennis",
+   "court",
+   "player"
+  ],
+  "width": 1600,
+  "height": 1068
  }
 ]
