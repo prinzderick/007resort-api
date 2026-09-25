@@ -8527,6 +8527,342 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/TooMany'
+  /public/customers/social/providers:
+    get:
+      operationId: socialProviders
+      tags:
+      - Customer
+      summary: Enabled social providers
+      x-additive: true
+      security:
+      - serviceToken: []
+      description: |-
+        Service token (any scope). See docs/CUSTOMER_SOCIAL_LOGIN.md 3.1.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialProviders'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /public/customers/social/login:
+    post:
+      operationId: socialLogin
+      tags:
+      - Customer
+      summary: Social sign-up / sign-in (server-to-server)
+      x-additive: true
+      security:
+      - serviceToken: []
+      description: |-
+        Service token with scope `customer.social` only. Matching rules and errors (`account_link_requires_confirmation`, `identity_conflict`, `terms_not_accepted`, `id_token_invalid`...) in docs/CUSTOMER_SOCIAL_LOGIN.md. 201 when a customer was created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSocialAuthResult'
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSocialAuthResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /public/customers/social/link/confirm:
+    post:
+      operationId: socialLinkConfirm
+      tags:
+      - Customer
+      summary: Confirm a pending social link by emailed code
+      x-additive: true
+      security:
+      - serviceToken: []
+      description: |-
+        Completes the link created by a 409 `account_link_requires_confirmation`; wipes the unverified pre-registered password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLinkConfirmRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSocialAuthResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/auth/social/token:
+    post:
+      operationId: socialTokenLogin
+      tags:
+      - Customer
+      summary: Google idToken sign-in without service token (mobile; disabled by default)
+      x-additive: true
+      security:
+      - {}
+      description: |-
+        Only when `SOCIAL_ID_TOKEN_PUBLIC_ENABLED=true` (else 404). Claims are refused; `idToken` verified against Google JWKS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSocialAuthResult'
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSocialAuthResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/identities:
+    get:
+      operationId: customerIdentities
+      tags:
+      - Customer
+      summary: Linked social identities
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerIdentities'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/social/link:
+    post:
+      operationId: customerSocialLink
+      tags:
+      - Customer
+      summary: Link another provider
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Authenticate with the customer bearer (Google idToken mode) or with the service token (scope `customer.social`) + `X-Customer-Token: r7c_...` and claims.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLoginRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerIdentityResult'
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerIdentityResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/identities/{id}:
+    delete:
+      operationId: customerIdentityUnlink
+      tags:
+      - Customer
+      summary: Unlink a provider
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        `409 last_login_method` when it would leave no login method.
+      parameters:
+      - {name: id, in: path, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/password:
+    post:
+      operationId: customerSetPassword
+      tags:
+      - Customer
+      summary: Set or change password
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        Social-only accounts (verified email) can set one without `currentPassword`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerSetPasswordRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/email:
+    post:
+      operationId: customerEmailStart
+      tags:
+      - Customer
+      summary: Start adding/changing the login email (code emailed)
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        `409 email_in_use`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerEmailRequest'
+      responses:
+        '202':
+          description: Accepted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /customer/me/email/verify:
+    post:
+      operationId: customerEmailVerify
+      tags:
+      - Customer
+      summary: Verify the new login email
+      x-additive: true
+      security:
+      - customerAuth: []
+      description: |-
+        
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerEmailVerifyRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooMany'
   /customer/auth/refresh:
     post:
       operationId: customerRefresh
@@ -14630,7 +14966,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: opaque (r7s_...)
-      description: Website read-only credential (scope `public.read`); GET on public read endpoints only.
+      description: Website credential. Scope `public.read` = GET on public read endpoints only; scope `customer.social` (additive) = the social sign-in endpoints of docs/CUSTOMER_SOCIAL_LOGIN.md.
     deviceToken:
       type: apiKey
       in: header
@@ -19662,6 +19998,91 @@ components:
         emailVerified: {type: boolean}
         createdAt: {type: string, format: date-time}
       required: [id, name, email, emailVerified]
+    SocialLoginRequest:
+      type: object
+      required: [provider, termsAccepted]
+      properties:
+        provider: {type: string, enum: [google, facebook, apple]}
+        providerUserId: {type: string, maxLength: 191}
+        idToken: {type: string, description: Google id token (server-verified); replaces the claims}
+        nonce: {type: string}
+        email: {type: string}
+        emailVerified: {type: boolean}
+        givenName: {type: string}
+        familyName: {type: string}
+        name: {type: string}
+        avatarUrl: {type: string}
+        phone: {type: string}
+        marketingConsent: {type: boolean}
+        termsAccepted: {type: boolean}
+        clientIp: {type: string}
+        userAgent: {type: string}
+    SocialIdentity:
+      type: object
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        provider: {type: string}
+        email: {type: string, nullable: true}
+        emailVerified: {type: boolean}
+        avatarUrl: {type: string, nullable: true}
+        linkedAt: {type: string, format: date-time}
+        lastLoginAt: {type: string, format: date-time, nullable: true}
+    CustomerSocialAuthResult:
+      allOf:
+      - $ref: '#/components/schemas/CustomerAuthResult'
+      - type: object
+        properties:
+          isNewCustomer: {type: boolean}
+          linkedExisting: {type: boolean}
+          needsProfileCompletion: {type: boolean}
+          missing: {type: array, items: {type: string, enum: [email, name]}}
+          recommended: {type: array, items: {type: string, enum: [phone]}}
+          emailSuggestion: {type: string, nullable: true}
+          identity: {$ref: '#/components/schemas/SocialIdentity'}
+    SocialProviders:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              enabled: {type: boolean}
+              idTokenVerification: {type: boolean}
+              emailTrusted: {type: boolean}
+    SocialLinkConfirmRequest:
+      type: object
+      properties:
+        email: {type: string}
+        code: {type: string}
+        token: {type: string}
+    CustomerIdentities:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/SocialIdentity'}}
+        hasPassword: {type: boolean}
+        canUnlink: {type: boolean}
+    CustomerIdentityResult:
+      type: object
+      properties:
+        identity: {$ref: '#/components/schemas/SocialIdentity'}
+    CustomerSetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string, minLength: 10}
+        currentPassword: {type: string}
+    CustomerEmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string}
+    CustomerEmailVerifyRequest:
+      type: object
+      properties:
+        code: {type: string}
+        token: {type: string}
     CustomerAuthResult:
       type: object
       properties:
