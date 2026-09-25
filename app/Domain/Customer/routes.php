@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 // Loaded under /api/v1. Customer identity is a separate guard (`customer`, bearer r7c_...): it can never satisfy `auth:staff`.
 
 Route::get('public/site', [PublicController::class, 'site'])->middleware('throttle:public-site');
-Route::post('public/ticket-orders', [PublicController::class, 'ticketOrder'])->middleware(['auth:customer', 'throttle:customer-api', 'idempotent']);
+Route::post('public/ticket-orders', [PublicController::class, 'ticketOrder'])->middleware(['auth:customer,service', 'throttle:customer-api', 'permission.public:ticket.order', 'idempotent']);
 
 Route::prefix('customer/auth')->group(function () {
     Route::post('register', [CustomerAuthController::class, 'register'])->middleware('throttle:customer-register');

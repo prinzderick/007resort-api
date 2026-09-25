@@ -7,15 +7,15 @@ use Illuminate\Console\Command;
 
 class ServiceTokenCommand extends Command
 {
-    protected $signature = 'r007:service-token {action : create|rotate|revoke|list} {--name=booking-web} {--id=} {--now : rotate: expire the old token immediately}';
+    protected $signature = 'r007:service-token {action : create|rotate|revoke|list} {--name=booking-web} {--scope=public.read : comma-set: public.read,public.checkout,customer.social} {--id=} {--now : rotate: expire the old token immediately}';
 
-    protected $description = 'Manage the website read-only service token (scope public.read). The plaintext is printed once.';
+    protected $description = 'Manage the website service token (scopes public.read, public.checkout for guest checkout). The plaintext is printed once.';
 
     public function handle(ServiceTokenService $svc): int
     {
         switch ($this->argument('action')) {
             case 'create':
-                $r = $svc->create((string) $this->option('name'));
+                $r = $svc->create((string) $this->option('name'), scope: (string) $this->option('scope'));
                 $this->line("id: {$r['id']}");
                 $this->line("token (shown once; set R007_API_SERVICE_TOKEN on the website): {$r['token']}");
                 break;

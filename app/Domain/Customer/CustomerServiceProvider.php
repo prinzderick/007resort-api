@@ -70,6 +70,7 @@ class CustomerServiceProvider extends ServiceProvider
                 return null;
             }
             RequestContext::set(RequestContext::SERVICE_TOKEN_ID, $row->id);
+            RequestContext::set(RequestContext::SERVICE_SCOPES, (string) $row->scope);
             RequestContext::set(RequestContext::ORGANIZATION_ID, $row->organization_id);
 
             return $row;

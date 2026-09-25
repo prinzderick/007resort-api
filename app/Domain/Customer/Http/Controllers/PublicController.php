@@ -5,6 +5,8 @@ namespace App\Domain\Customer\Http\Controllers;
 use App\Domain\Customer\Services\PublicSiteService;
 use App\Domain\Customer\Services\TicketOrderService;
 use App\Domain\Customer\Support\Actor;
+use App\Domain\Guest\Services\GuestCheckout;
+use App\Support\Http\ApiProblem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -27,7 +29,19 @@ class PublicController
             'lines.*.productId' => ['required', 'uuid'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:'.config('customer.tickets.max_per_order')],
             'customer' => ['nullable', 'array'], // accepted for contract compatibility; the owner is ALWAYS the signed-in customer
+            'guest' => ['nullable', 'array'],
         ]);
+        $guests = app(GuestCheckout::class);
+        if ($guests->isGuestRequest()) { // website service token: checkout without an account (docs/GUEST_CHECKOUT.md)
+            $contact = $guests->contact($d['guest'] ?? null, $request);
+            $order = $orders->create($d, null, $contact);
+            $order['guestAccess'] = $guests->open($contact, 'TICKETS', $order['id']);
+
+            return response()->json($order, 201);
+        }
+        if (isset($d['guest'])) {
+            throw ApiProblem::unprocessable('validation_failed', 'guest is only for checkout without an account.', ['guest' => ['not allowed here']]);
+        }
 
         return response()->json($orders->create($d, Actor::requireCustomer()), 201);
     }

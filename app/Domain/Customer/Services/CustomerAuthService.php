@@ -4,6 +4,7 @@ namespace App\Domain\Customer\Services;
 
 use App\Domain\Customer\Models\CustomerAccount;
 use App\Domain\Customer\Models\CustomerSession;
+use App\Domain\Guest\Services\GuestOrderClaimer;
 use App\Domain\Identity\Models\Customer;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
@@ -125,6 +126,8 @@ class CustomerAuthService
             if ($first) {
                 Audit::record('customer.verify', 'Customer', $account->customer_id, null, ['ip' => $ip], organizationId: $account->customer->organization_id, siteId: Tenant::siteId());
                 Outbox::record('CustomerEmailVerified', 'Customer', $account->customer_id, ['customerId' => $account->customer_id], organizationId: $account->customer->organization_id);
+                // Guest checkout (docs/GUEST_CHECKOUT.md s8): attach earlier guest purchases made with this now-VERIFIED email.
+                app(GuestOrderClaimer::class)->claim($account->customer_id, (string) $account->login_email);
             }
 
             return $this->result($account->refresh()->load('customer'), $ip, $ua);

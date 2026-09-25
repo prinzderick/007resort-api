@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Http\Controllers;
 
+use App\Domain\Customer\Support\Actor;
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Payments\Services\PaymentPresenter;
@@ -172,7 +173,7 @@ class PaymentController
             'bookingId' => ['nullable', 'uuid'],
             'membershipId' => ['nullable', 'uuid'],
             'amount' => ['required', self::positiveMoney()],
-            'email' => ['required', 'email', 'max:190'],
+            'email' => [Rule::requiredIf(fn () => Actor::isStaff()), 'nullable', 'email', 'max:190'], // online: taken from the account / guest contact
             'callbackUrl' => ['nullable', 'url', 'max:500'],
         ]);
 

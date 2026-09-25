@@ -2,6 +2,7 @@
 
 namespace App\Domain\Membership\Services;
 
+use App\Domain\Guest\Support\GuestContact;
 use App\Domain\Identity\Models\Customer;
 use App\Domain\Membership\Models\MemberCard;
 use App\Domain\Membership\Models\Membership;
@@ -30,25 +31,26 @@ class MembershipService
      * @param  array{name: string, phone?: ?string, email?: ?string}  $customer
      * @param  list<array{tenderType: string, amount: string, reference?: ?string}>  $tenders
      */
-    public function purchase(string $planId, array $customer, ?string $facilityId, array $tenders, ?string $paystackReference, ?string $staffId, string $channel = 'RECEPTION', ?string $customerId = null): Membership
+    public function purchase(string $planId, array $customer, ?string $facilityId, array $tenders, ?string $paystackReference, ?string $staffId, string $channel = 'RECEPTION', ?string $customerId = null, ?GuestContact $guest = null): Membership
     {
         $org = Tenant::organizationId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No organization in context.');
         $site = Tenant::siteId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No site in context.');
 
-        $membershipId = DB::transaction(function () use ($planId, $customer, $tenders, $paystackReference, $staffId, $channel, $org, $site, $customerId): string {
+        $membershipId = DB::transaction(function () use ($planId, $customer, $tenders, $paystackReference, $staffId, $channel, $org, $site, $customerId, $guest): string {
             $plan = MembershipPlan::query()->where('organization_id', $org)->find($planId) ?? throw ApiProblem::notFound('plan_not_found', 'Membership plan not found.');
             if (! $plan->is_active) {
                 throw ApiProblem::conflict('plan_inactive', 'This membership plan is no longer on sale.');
             }
             $settlement = $this->settlement($plan->price, $tenders);
-            $holder = $customerId !== null ? Customer::query()->where('organization_id', $org)->findOrFail($customerId) : $this->customers->resolve($org, $customer);
+            // Guest checkout: NO customer row (and never a match against existing customers/accounts): the holder is the contact snapshot.
+            $holder = $guest !== null ? null : ($customerId !== null ? Customer::query()->where('organization_id', $org)->findOrFail($customerId) : $this->customers->resolve($org, $customer));
 
             $id = Ids::uuid7();
-            $m = $this->insertMembership($id, $org, $site, $plan, $holder->id, $staffId, $channel, $paystackReference ?? $settlement);
+            $m = $this->insertMembership($id, $org, $site, $plan, $holder?->id, $staffId, $channel, $paystackReference ?? $settlement, $guest);
             Audit::record('membership.purchase', 'Membership', $id, null,
-                ['number' => $m->number, 'planId' => $plan->id, 'customerId' => $holder->id, 'price' => $plan->price, 'currency' => $plan->currency, 'channel' => $channel, 'paid' => $settlement !== null]);
+                ['number' => $m->number, 'planId' => $plan->id, 'customerId' => $holder?->id, 'guest' => $guest !== null, 'price' => $plan->price, 'currency' => $plan->currency, 'channel' => $channel, 'paid' => $settlement !== null]);
             Outbox::record('MembershipPurchased', 'Membership', $id, [
-                'membershipId' => $id, 'number' => $m->number, 'planId' => $plan->id, 'customerId' => $holder->id, 'customerName' => $holder->full_name,
+                'membershipId' => $id, 'number' => $m->number, 'planId' => $plan->id, 'customerId' => $holder?->id, 'customerName' => $holder?->full_name ?? $guest?->name,
                 'price' => $plan->price, 'currency' => $plan->currency, 'channel' => $channel, 'soldByStaffId' => $staffId, 'paymentReference' => $paystackReference ?? $settlement,
             ], organizationId: $org, siteId: $site);
             $this->history($id, null, Membership::PENDING_PAYMENT, 'purchase', 'API', $staffId);
@@ -249,12 +251,13 @@ class MembershipService
         return 'RECEPTION:'.implode('+', $parts);
     }
 
-    private function insertMembership(string $id, string $org, string $site, MembershipPlan $plan, string $customerId, ?string $staffId, string $channel, ?string $reference): Membership
+    private function insertMembership(string $id, string $org, string $site, MembershipPlan $plan, ?string $customerId, ?string $staffId, string $channel, ?string $reference, ?GuestContact $guest = null): Membership
     {
         for ($attempt = 0; ; $attempt++) {
             try {
                 $m = Membership::create([
                     'id' => $id, 'organization_id' => $org, 'site_id' => $site, 'number' => CardCodec::newNumber(), 'plan_id' => $plan->id, 'customer_id' => $customerId,
+                    'contact_name' => $guest?->name, 'contact_email' => $guest?->email, 'contact_phone' => $guest?->phone,
                     'status' => Membership::PENDING_PAYMENT, 'visit_limit' => $plan->visit_limit, 'guest_allowance' => $plan->guest_allowance,
                     'member_discount_percent' => $plan->member_discount_percent, 'grace_period_days' => $plan->grace_period_days, 'duration_days' => $plan->duration_days,
                     'price_paid' => $plan->price, 'currency' => $plan->currency, 'purchase_channel' => $channel, 'sold_by_staff_id' => $staffId,

@@ -4,6 +4,7 @@ namespace App\Domain\Customer\Services;
 
 use App\Domain\Catalog\Services\Pricing;
 use App\Domain\Customer\Support\TicketCatalog;
+use App\Domain\Guest\Support\GuestContact;
 use App\Domain\Orders\Services\OrderService;
 use App\Domain\Sync\Services\SiteAvailability;
 use App\Support\Audit\Audit;
@@ -26,7 +27,7 @@ class TicketOrderService
     public function __construct(private readonly OrderService $orders, private readonly Pricing $pricing, private readonly SiteAvailability $site, private readonly PublicCatalog $catalog) {}
 
     /** @param array{facilityId: string, visitDate: string, lines: list<array{productId: string, quantity: int}>} $in @return array<string, mixed> */
-    public function create(array $in, string $customerId): array
+    public function create(array $in, ?string $customerId, ?GuestContact $guest = null): array
     {
         $tz = config('booking.timezone', 'Africa/Lagos');
         $today = CarbonImmutable::now($tz)->startOfDay();
@@ -46,7 +47,7 @@ class TicketOrderService
         if ($visit->equalTo($today) && ! $this->site->isLocalFresh(Ids::fromBinary($fac->site_id))) {
             throw ApiProblem::conflict('site_offline', 'Same-day tickets are temporarily unavailable online. Please choose a later date or buy at the gate.');
         }
-        $customer = DB::table('customer')->where('id', Ids::toBinary($customerId))->first();
+        $customer = $guest !== null ? (object) ['full_name' => $guest->name] : DB::table('customer')->where('id', Ids::toBinary((string) $customerId))->first();
         $accessFacility = $fac;
         $allowed = $this->catalog->ticketProductIds(Ids::fromBinary($fac->organization_id), Ids::fromBinary($fac->id));
         $sell = [];
@@ -94,13 +95,13 @@ class TicketOrderService
             }
             $this->orders->recalc($idBin);
             DB::table('customer_order')->insert([
-                'order_id' => $idBin, 'customer_id' => Ids::toBinary($customerId), 'facility_unit_id' => $accessFacility->id, 'visit_date' => $visit->format('Y-m-d'),
+                'order_id' => $idBin, 'customer_id' => $customerId === null ? null : Ids::toBinary($customerId), 'facility_unit_id' => $accessFacility->id, 'visit_date' => $visit->format('Y-m-d'),
                 'adult_count' => $adults, 'child_count' => $children,
             ]);
             $fresh = DB::table('order')->where('id', $idBin)->first();
-            Audit::record('customer.ticket_order.create', 'Order', $id, null, ['customerId' => $customerId, 'visitDate' => $visit->format('Y-m-d'), 'total' => Money::of($fresh->total)->amount, 'adults' => $adults, 'children' => $children],
+            Audit::record('customer.ticket_order.create', 'Order', $id, null, ['customerId' => $customerId, 'guest' => $customerId === null, 'visitDate' => $visit->format('Y-m-d'), 'total' => Money::of($fresh->total)->amount, 'adults' => $adults, 'children' => $children],
                 organizationId: Ids::fromBinary($fac->organization_id), siteId: Ids::fromBinary($fac->site_id), facilityUnitId: Ids::fromBinary($fac->id));
-            Outbox::record('OrderCreated', 'Order', $id, $this->orders->outboxPayload($fresh) + ['customerId' => $customerId, 'visitDate' => $visit->format('Y-m-d')],
+            Outbox::record('OrderCreated', 'Order', $id, $this->orders->outboxPayload($fresh) + ['customerId' => $customerId, 'guest' => $customerId === null, 'visitDate' => $visit->format('Y-m-d')],
                 organizationId: Ids::fromBinary($fac->organization_id), siteId: Ids::fromBinary($fac->site_id), facilityId: Ids::fromBinary($fac->id));
 
             return $this->present($id);

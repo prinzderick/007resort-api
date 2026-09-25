@@ -33,6 +33,9 @@ final class RequestContext
 
     public const SERVICE_TOKEN_ID = 'r007.service_token_id';
 
+    /** Comma-set of the service token's scopes (public.read, public.checkout, ...). */
+    public const SERVICE_SCOPES = 'r007.service_scopes';
+
     public static function set(string $key, ?string $value): void
     {
         request()->attributes->set($key, $value);

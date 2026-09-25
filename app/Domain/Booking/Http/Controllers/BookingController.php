@@ -9,6 +9,7 @@ use App\Domain\Booking\Services\BookingService;
 use App\Domain\Booking\Support\HoldCommand;
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Customer\Support\Owns;
+use App\Domain\Guest\Services\GuestCheckout;
 use App\Domain\Identity\Models\Customer;
 use App\Support\Api\Paged;
 use App\Support\Http\ApiProblem;
@@ -36,10 +37,19 @@ class BookingController
             'customer.phone' => ['nullable', 'string', 'max:32'],
             'customer.email' => ['nullable', 'email', 'max:255'],
             'customer.membershipId' => ['nullable', 'uuid'],
+            'guest' => ['nullable', 'array'],
         ]);
         $channel = 'STAFF';
         $customerId = null;
-        if (Actor::isCustomer()) { // an online customer books as THEMSELVES: identity comes from the account, never from the body
+        $guests = app(GuestCheckout::class);
+        $guest = null;
+        if ($guests->isGuestRequest()) { // website service token: checkout without an account (docs/GUEST_CHECKOUT.md)
+            $guest = $guests->contact($data['guest'] ?? null, $request);
+            $data['customer'] = ['name' => $guest->name, 'email' => $guest->email, 'phone' => $guest->phone]; // membershipId is never accepted from guests
+            $channel = 'ONLINE';
+        } elseif (isset($data['guest'])) {
+            throw ApiProblem::unprocessable('validation_failed', 'guest is only for checkout without an account.', ['guest' => ['not allowed here']]);
+        } elseif (Actor::isCustomer()) { // an online customer books as THEMSELVES: identity comes from the account, never from the body
             $c = Customer::query()->findOrFail(Actor::customerId());
             $data['customer'] = ['name' => $c->full_name, 'email' => $c->email, 'phone' => $data['customer']['phone'] ?? $c->phone];
             $channel = 'ONLINE';
@@ -55,8 +65,9 @@ class BookingController
             channel: $channel,
             customerId: $customerId,
         ));
+        $access = $guest === null ? null : $guests->open($guest, 'BOOKING', $booking->id);
 
-        return $this->respond($booking, 201);
+        return $this->respond($booking, 201, $access);
     }
 
     public function index(Request $request): array
@@ -99,7 +110,7 @@ class BookingController
             throw ApiProblem::notFound('not_found', 'Booking not found.');
         }
 
-        Owns::booking($booking->customer_id);
+        Owns::booking($booking->customer_id, $booking->id);
 
         return $this->respond($booking);
     }
@@ -116,7 +127,7 @@ class BookingController
             'paystackReference' => ['nullable', 'string', 'max:128'],
         ]);
         $this->assertOwned($bookingId);
-        if (Actor::isCustomer() && (! empty($data['tenders']) || ! empty($data['cashSessionId']))) {
+        if (! Actor::isStaff() && (! empty($data['tenders']) || ! empty($data['cashSessionId']))) {
             throw ApiProblem::forbidden('permission_denied', 'Online customers pay through Paystack; tenders are for staff.');
         }
         $booking = $this->bookings->confirm($this->id($bookingId), Preconditions::rowVersion($request), $data['tenders'] ?? [], $data['cashSessionId'] ?? null, $data['paystackReference'] ?? null);
@@ -154,7 +165,7 @@ class BookingController
     {
         if (! Actor::isStaff()) {
             $owner = Ids::isUuid($bookingId) ? Booking::query()->whereKey(strtolower($bookingId))->value('customer_id') : null;
-            Owns::booking($owner);
+            Owns::booking($owner, Ids::isUuid($bookingId) ? $bookingId : null);
         }
     }
 
@@ -167,8 +178,9 @@ class BookingController
         return strtolower($id);
     }
 
-    private function respond(Booking $b, int $status = 200): JsonResponse
+    /** @param array<string, mixed>|null $guestAccess guest checkout: the one-time order access token block */
+    private function respond(Booking $b, int $status = 200, ?array $guestAccess = null): JsonResponse
     {
-        return response()->json(BookingPresenter::booking($b), $status)->header('ETag', Preconditions::etag($b->row_version));
+        return response()->json(BookingPresenter::booking($b) + ($guestAccess === null ? [] : ['guestAccess' => $guestAccess]), $status)->header('ETag', Preconditions::etag($b->row_version));
     }
 }

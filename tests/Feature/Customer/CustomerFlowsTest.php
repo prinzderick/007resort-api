@@ -159,7 +159,7 @@ class CustomerFlowsTest extends TestCase
         $this->postJson('/api/v1/public/ticket-orders', $tampered, $this->bearer($a['accessToken'], $key))->assertStatus(422)->assertJsonPath('code', 'idempotency_key_reused');
         $this->postJson('/api/v1/public/ticket-orders', ['lines' => [['productId' => $adult['id'], 'quantity' => 99]]] + $body, $this->bearer($a['accessToken']))->assertStatus(422);
         $this->postJson('/api/v1/public/ticket-orders', $body, ['Accept' => 'application/json', 'Idempotency-Key' => 'z'])->assertStatus(401);
-        $this->postJson('/api/v1/public/ticket-orders', $body, $this->bearer($this->serviceToken()))->assertStatus(401);
+        $this->postJson('/api/v1/public/ticket-orders', $body, $this->bearer($this->readOnlyServiceToken()))->assertStatus(403)->assertJsonPath('code', 'scope_denied');
 
         // Bob cannot see or pay Alice's order
         $this->getJson('/api/v1/customer/orders/'.$o['id'], $this->bearer($bob['accessToken'], null))->assertStatus(404);
@@ -212,7 +212,7 @@ class CustomerFlowsTest extends TestCase
         $m = $this->postJson('/api/v1/memberships', ['planId' => $plan['id'], 'customer' => ['name' => 'Someone Else', 'phone' => '+2348000000001'], 'tenders' => [['tenderType' => 'CASH', 'amount' => '1.0000']]], $this->bearer($a['accessToken']))->assertStatus(201)->json();
         $this->assertSame('PENDING_PAYMENT', $m['status']);
         $this->assertSame($a['customer']['id'], $m['customerId']);
-        $this->postJson('/api/v1/memberships', ['planId' => $plan['id'], 'customer' => ['name' => 'x']], $this->bearer($this->serviceToken()))->assertStatus(403);
+        $this->postJson('/api/v1/memberships', ['planId' => $plan['id'], 'customer' => ['name' => 'x']], $this->bearer($this->readOnlyServiceToken()))->assertStatus(403);
 
         $this->getJson('/api/v1/memberships/'.$m['id'], $this->bearer($bob['accessToken'], null))->assertStatus(404);
         $this->postJson('/api/v1/payments/paystack/initialize', ['membershipId' => $m['id'], 'amount' => $plan['price'], 'email' => 'x@example.test'], $this->bearer($bob['accessToken']))->assertStatus(404);

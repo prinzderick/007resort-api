@@ -4,6 +4,7 @@ namespace App\Domain\Membership\Http\Controllers;
 
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Customer\Support\Owns;
+use App\Domain\Guest\Services\GuestCheckout;
 use App\Domain\Identity\Auth\Scope;
 use App\Domain\Identity\Services\PermissionChecker;
 use App\Domain\Membership\Models\Membership;
@@ -35,14 +36,26 @@ class MembershipController
     {
         $d = $request->validate([
             'planId' => ['required', 'uuid'],
-            'customer' => ['required', 'array'],
-            'customer.name' => ['required', 'string', 'max:200'],
+            'customer' => ['required_without:guest', 'array'],
+            'guest' => ['nullable', 'array'],
+            'customer.name' => ['required_with:customer', 'string', 'max:200'],
             'customer.phone' => ['nullable', 'string', 'max:32'],
             'customer.email' => ['nullable', 'email', 'max:255'],
             'facilityId' => ['sometimes', 'nullable', 'uuid'],
             'paystackReference' => ['sometimes', 'nullable', 'string', 'max:128'],
             ...$this->tenderRules(),
         ]);
+        $guests = app(GuestCheckout::class);
+        if ($guests->isGuestRequest()) { // website service token: buy a membership without an account (docs/GUEST_CHECKOUT.md)
+            $contact = $guests->contact($d['guest'] ?? null, $request);
+            $m = $this->memberships->purchase($d['planId'], $contact->snapshot(), null, [], null, null, 'ONLINE', null, $contact);
+            $access = $guests->open($contact, 'MEMBERSHIP', $m->id);
+
+            return response()->json($m->toApi(withCards: true) + ['guestAccess' => $access], 201);
+        }
+        if (isset($d['guest'])) {
+            throw ApiProblem::unprocessable('validation_failed', 'guest is only for checkout without an account.', ['guest' => ['not allowed here']]);
+        }
         if (! empty($d['facilityId'])) {
             $this->requireAt('membership.sell', $d['facilityId']);
         }
@@ -66,7 +79,7 @@ class MembershipController
         if ($term = trim((string) $request->query('q', ''))) {
             $q->where(function ($w) use ($term): void {
                 $like = '%'.addcslashes($term, '%_\\').'%';
-                $w->where('number', 'like', $like)->orWhereHas('customer', fn ($c) => $c->where('full_name', 'like', $like)->orWhere('phone', 'like', $like)->orWhere('email', 'like', $like));
+                $w->where('number', 'like', $like)->orWhere('contact_name', 'like', $like)->orWhere('contact_email', 'like', $like)->orWhere('contact_phone', 'like', $like)->orWhereHas('customer', fn ($c) => $c->where('full_name', 'like', $like)->orWhere('phone', 'like', $like)->orWhere('email', 'like', $like));
             });
         }
         $page = CursorPage::paginate($q, $request, 'id', 'desc');
@@ -78,7 +91,7 @@ class MembershipController
     public function show(string $membership): JsonResponse
     {
         $m = $this->find($membership);
-        Owns::membership($m->customer_id);
+        Owns::membership($m->customer_id, $m->id);
 
         return response()->json($m->toApi(withCards: true));
     }

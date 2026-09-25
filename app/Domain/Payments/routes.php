@@ -17,7 +17,7 @@ Route::post('payments/webhooks/{provider}', [WebhookController::class, 'receive'
 Route::post('payments/terminal-callbacks/{provider}', [CollectionController::class, 'terminalCallback']);
 
 // Online customers pay through Paystack too (ownership of the booking / membership / order is enforced in PaystackService).
-Route::middleware(['auth:staff,customer', 'device:optional', 'throttle:customer-api'])->group(function () {
+Route::middleware(['auth:staff,customer,service', 'device:optional', 'throttle:customer-api'])->group(function () {
     Route::post('payments/paystack/initialize', [PaymentController::class, 'paystackInitialize'])->middleware(['permission.public:payment.take', 'idempotent']);
     Route::get('payments/paystack/verify/{reference}', [PaymentController::class, 'paystackVerify']);
 });

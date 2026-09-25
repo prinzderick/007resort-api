@@ -95,7 +95,7 @@ class Membership extends Model
             'planId' => $this->plan_id,
             'planName' => $this->relationLoaded('plan') ? $this->plan?->name : null,
             'customerId' => $this->customer_id,
-            'holderName' => $this->relationLoaded('customer') ? $this->customer?->full_name : null,
+            'holderName' => ($this->relationLoaded('customer') ? $this->customer?->full_name : null) ?? $this->contact_name, // guest memberships have no customer row
             'status' => $this->status,
             'validFrom' => $this->fmt($this->valid_from),
             'validUntil' => $this->fmt($this->valid_until),
