@@ -4,8 +4,7 @@ namespace App\Domain\Customer\Http\Controllers;
 
 use App\Domain\Booking\Http\Presenters\BookingPresenter;
 use App\Domain\Booking\Models\Booking;
-use App\Domain\Customer\Models\CustomerAccount;
-use App\Domain\Customer\Services\CustomerAuthService;
+use App\Domain\Customer\Services\CustomerProfileService;
 use App\Domain\Customer\Services\TicketOrderService;
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Customer\Support\Owns;
@@ -26,10 +25,7 @@ class CustomerMeController
 {
     public function me(): JsonResponse
     {
-        $c = Customer::query()->findOrFail(Actor::requireCustomer());
-        $a = CustomerAccount::query()->where('customer_id', $c->id)->firstOrFail();
-
-        return response()->json(CustomerAuthService::present($c, $a));
+        return response()->json(app(CustomerProfileService::class)->present(Actor::requireCustomer()));
     }
 
     public function bookings(Request $request): array

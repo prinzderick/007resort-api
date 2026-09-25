@@ -33,6 +33,9 @@ final class RequestContext
 
     public const SERVICE_TOKEN_ID = 'r007.service_token_id';
 
+    /** Comma set of scopes of the authenticated service token (public.read, customer.social). */
+    public const SERVICE_SCOPE = 'r007.service_scope';
+
     public static function set(string $key, ?string $value): void
     {
         request()->attributes->set($key, $value);

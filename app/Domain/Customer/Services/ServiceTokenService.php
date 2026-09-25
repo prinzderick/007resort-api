@@ -20,21 +20,25 @@ class ServiceTokenService
     public const PREFIX = 'r7s_';
 
     /** @return array{id: string, token: string, name: string, scope: string} */
-    public function create(string $name, ?string $organizationId = null, ?string $rotatedFrom = null, ?string $plain = null): array
+    public function create(string $name, ?string $organizationId = null, ?string $rotatedFrom = null, ?string $plain = null, string $scope = ServiceToken::SCOPE_PUBLIC_READ): array
     {
+        $scope = implode(',', array_values(array_intersect(['public.read', 'customer.social'], array_map('trim', explode(',', $scope)))));
+        if (! in_array($scope, ServiceToken::VALID_SCOPES, true)) {
+            throw ApiProblem::unprocessable('validation_failed', 'scope must be public.read, customer.social or both.');
+        }
         $org = $organizationId ?? Tenant::organizationId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No organization in context.');
         $token = $plain ?? self::PREFIX.rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $id = Ids::uuid7();
 
-        return DB::transaction(function () use ($id, $org, $name, $token, $rotatedFrom) {
+        return DB::transaction(function () use ($id, $org, $name, $token, $rotatedFrom, $scope) {
             DB::table('service_token')->insert([
                 'id' => Ids::toBinary($id), 'organization_id' => Ids::toBinary($org), 'name' => mb_substr($name, 0, 80),
-                'token_prefix' => substr($token, 0, 8), 'token_hash' => hash('sha256', $token), 'scope' => ServiceToken::SCOPE_PUBLIC_READ,
+                'token_prefix' => substr($token, 0, 8), 'token_hash' => hash('sha256', $token), 'scope' => $scope,
                 'rotated_from_id' => $rotatedFrom ? Ids::toBinary($rotatedFrom) : null,
             ]);
-            Audit::record('service_token.create', 'ServiceToken', $id, null, ['name' => $name, 'scope' => 'public.read', 'rotatedFrom' => $rotatedFrom], organizationId: $org, siteId: Tenant::siteId());
+            Audit::record('service_token.create', 'ServiceToken', $id, null, ['name' => $name, 'scope' => $scope, 'rotatedFrom' => $rotatedFrom], organizationId: $org, siteId: Tenant::siteId());
 
-            return ['id' => $id, 'token' => $token, 'name' => $name, 'scope' => ServiceToken::SCOPE_PUBLIC_READ];
+            return ['id' => $id, 'token' => $token, 'name' => $name, 'scope' => $scope];
         });
     }
 
@@ -45,7 +49,7 @@ class ServiceTokenService
         if ($old === null || $old->revoked_at !== null) {
             throw ApiProblem::notFound('not_found', 'Service token not found.');
         }
-        $new = $this->create($old->name, $old->organization_id, $old->id);
+        $new = $this->create($old->name, $old->organization_id, $old->id, null, $old->scope);
         $expires = $immediate ? CarbonImmutable::now('UTC') : CarbonImmutable::now('UTC')->addHours((int) config('customer.service_token_grace_hours'));
         DB::table('service_token')->where('id', Ids::toBinary($id))->update(['expires_at' => $expires->format('Y-m-d H:i:s.u'), 'is_active' => $immediate ? 0 : 1]);
         Audit::record('service_token.rotate', 'ServiceToken', $id, null, ['newId' => $new['id'], 'oldExpiresAt' => $expires->format('Y-m-d\TH:i:s\Z')], organizationId: $old->organization_id, siteId: Tenant::siteId());
@@ -67,7 +71,7 @@ class ServiceTokenService
     {
         $row = ServiceToken::query()->where('token_hash', hash('sha256', $token))->first();
         $now = now('UTC');
-        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || $row->scope !== ServiceToken::SCOPE_PUBLIC_READ) {
+        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || ! in_array($row->scope, ServiceToken::VALID_SCOPES, true)) {
             return null;
         }
         if ($row->last_used_at === null || $row->last_used_at->lt($now->copy()->subMinute())) {
