@@ -10,7 +10,7 @@ The surface the booking website (`007resort-booking-web`) needs. Same engine as 
 | --- | --- | --- | --- | --- |
 | Staff | `r7a_` | `staff` | `session` | staff endpoints |
 | Customer | `r7c_` (refresh `r7x_`) | `customer` | `customer_session` | `/customer/*`, `/public/ticket-orders`, plus the contract paths below (ownership enforced) |
-| Website service token | `r7s_` | `service` | `service_token` | scope `public.read`: GET-only public reads; scope `public.checkout`: guest checkout writes (`docs/GUEST_CHECKOUT.md`) |
+| Website service token | `r7s_` | `service` | `service_token` | scope `public.read`: GET-only public reads; `public.checkout`: guest checkout writes (`docs/GUEST_CHECKOUT.md`); `customer.social`: social sign-in endpoints (docs/CUSTOMER_SOCIAL_LOGIN.md) |
 
 A customer token can never satisfy `auth:staff` (401), a staff token never `auth:customer` (401); a customer/service token on a route
 that admits it but needs a staff permission gets 403 `permission_denied`. Tests: `tests/Feature/Customer/CustomerAuthTest.php`.
@@ -25,6 +25,11 @@ that admits it but needs a staff permission gets 403 `permission_denied`. Tests:
 * Customer OR service token, GET only: `GET /bookings/resources[/{id}/availability]` (online-bookable resources only, no authority config), `GET /catalog/products` (tickets only, `ticketCategory` ADULT|CHILD), `GET /memberships/plans` (active only).
 * Every booking now carries `customerId` and `policy {canCancel, canReschedule, cancelBy, rescheduleBy, refundAmount, cancellationFee, reschedulesLeft, note}` computed by `Booking\Services\BookingPolicyView` from the same rules cancel/reschedule enforce.
 * Staff (`config.manage`): `GET/POST /service-tokens`, `POST /service-tokens/{id}/rotate|revoke`; CLI `php artisan r007:service-token create|rotate|revoke|list`.
+
+## Social sign-in
+
+Google/Facebook sign-up and sign-in (website-run OAuth, server-to-server calls with a `customer.social` service token, optional Google idToken
+verification, identities, profile completion, email add-by-code): see **docs/CUSTOMER_SOCIAL_LOGIN.md**.
 
 ## Security decisions
 

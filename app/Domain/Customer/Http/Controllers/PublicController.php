@@ -7,9 +7,11 @@ use App\Domain\Customer\Services\TicketOrderService;
 use App\Domain\Customer\Support\Actor;
 use App\Domain\Guest\Services\GuestCheckout;
 use App\Support\Http\ApiProblem;
+use App\Support\Ids;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class PublicController
 {
@@ -22,6 +24,14 @@ class PublicController
 
     public function ticketOrder(Request $request, TicketOrderService $orders): JsonResponse
     {
+        $guests = app(GuestCheckout::class);
+        if (! $guests->isGuestRequest()) {
+            $customerId = Actor::requireCustomer();
+            if (! DB::table('customer_account')->where('customer_id', Ids::toBinary($customerId))->whereNotNull('login_email')->whereNotNull('email_verified_at')->exists()) {
+                throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before ordering tickets.', ['meta' => ['missing' => ['email']]]);
+            }
+        }
+
         $d = $request->validate([
             'facilityId' => ['required', 'uuid'],
             'visitDate' => ['required', 'date_format:Y-m-d'],
@@ -31,7 +41,6 @@ class PublicController
             'customer' => ['nullable', 'array'], // accepted for contract compatibility; the owner is ALWAYS the signed-in customer
             'guest' => ['nullable', 'array'],
         ]);
-        $guests = app(GuestCheckout::class);
         if ($guests->isGuestRequest()) { // website service token: checkout without an account (docs/GUEST_CHECKOUT.md)
             $contact = $guests->contact($d['guest'] ?? null, $request);
             $order = $orders->create($d, null, $contact);

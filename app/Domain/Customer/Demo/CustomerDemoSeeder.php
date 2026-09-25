@@ -9,14 +9,14 @@ use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
 /**
- * DEV-ONLY: a deterministic website service token `r7s_dev_booking_web` (scopes public.read,public.checkout) so the booking website can be pointed at a
+ * DEV-ONLY: a deterministic website service token `r7s_dev_booking_web` (scopes public.read + public.checkout + customer.social) so the booking website can be pointed at a
  * demo node with `R007_API_SERVICE_TOKEN=r7s_dev_booking_web`. Real environments create theirs with `php artisan r007:service-token create`.
  */
 class CustomerDemoSeeder implements DemoSeeder
 {
     public const DEV_TOKEN = 'r7s_dev_booking_web';
 
-    public const DEV_SCOPE = 'public.read,public.checkout';
+    public const DEV_SCOPE = 'public.read,public.checkout,customer.social';
 
     public function priority(): int
     {

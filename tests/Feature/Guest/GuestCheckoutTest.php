@@ -615,9 +615,9 @@ class GuestCheckoutTest extends TestCase
 
     public function test_guest_checkout_scope_of_the_dev_token_and_command(): void
     {
-        $this->assertSame('public.read,public.checkout', DB::table('service_token')->where('token_hash', hash('sha256', $this->serviceToken()))->value('scope'));
+        $this->assertSame('public.read,public.checkout,customer.social', DB::table('service_token')->where('token_hash', hash('sha256', $this->serviceToken()))->value('scope'));
         Artisan::call('r007:service-token', ['action' => 'create', '--name' => 'x', '--scope' => 'public.read,public.checkout']);
-        $this->assertSame(2, DB::table('service_token')->where('scope', 'public.read,public.checkout')->count());
+        $this->assertSame(1, DB::table('service_token')->where('scope', 'public.read,public.checkout')->count());
         $this->expectException(\Throwable::class);
         Artisan::call('r007:service-token', ['action' => 'create', '--name' => 'x', '--scope' => 'admin.everything']);
     }

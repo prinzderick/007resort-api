@@ -38,7 +38,7 @@ final class Actor
     /** Does the website service token carry this scope (comma-set in `service_token.scope`)? */
     public static function serviceCan(string $scope): bool
     {
-        return self::isService() && in_array($scope, array_map('trim', explode(',', (string) RequestContext::get(RequestContext::SERVICE_SCOPES))), true);
+        return self::isService() && in_array($scope, array_map('trim', explode(',', (string) RequestContext::get(RequestContext::SERVICE_SCOPE))), true);
     }
 
     /**

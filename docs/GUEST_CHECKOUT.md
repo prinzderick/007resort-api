@@ -22,14 +22,14 @@ JSON, RFC 7807 `application/problem+json` errors with a stable `code`, money as 
 ## 2. Credentials and scope
 
 The website calls the API server-to-server with its service token `Authorization: Bearer r7s_...`. `service_token.scope` is a comma-set;
-guest checkout needs the new scope **`public.checkout`** (existing: `public.read`; social login adds `customer.social`). A service token
+guest checkout needs the new scope **`public.checkout`** (existing: `public.read`; social login: `customer.social`; comma-set). A service token
 without it gets `403 scope_denied` on every guest write. Issue the website token with:
 
 ```
 php artisan r007:service-token create --name=booking-web --scope=public.read,public.checkout
 ```
 
-The dev token `r7s_dev_booking_web` (demo seeder) gets `public.read,public.checkout`.
+The dev token `r7s_dev_booking_web` (demo seeder) gets `public.read,public.checkout,customer.social`.
 Browsers never talk to these endpoints (they hold no `r7s_` token); the website forwards the visitor's IP in `X-Client-IP` (trusted for
 service tokens only) so per-IP abuse limits are about the visitor, not about the website.
 
@@ -192,32 +192,11 @@ the booking / ticket order (`customer_order`) / membership / entitlements, `gues
 After claiming, the orders appear in `/customer/bookings|entitlements|memberships`; the guest token keeps working until it expires.
 Whether an email belongs to an account is never disclosed by any guest endpoint.
 
-Integration point for the social-login branch: wherever a customer's email becomes verified (`emailVerified=true` from a trusted provider, link confirmation, email-change
-verification) call `app(App\Domain\Guest\Services\GuestOrderClaimer::class)->claim($customerId, $verifiedEmail)`. The claimer re-checks in the DB that the customer's
-`customer_account.login_email` equals that email and `email_verified_at` is set, so a call for an unverified email is a no-op.
-
-## 9. Security, abuse and privacy
-
-* **Tokens**: 256-bit, hashed at rest, per guest order, scoped to that order's ids only, expiring (`GUEST_ACCESS_TTL_DAYS`, default 90), revocable by erasure.
-* **Rate limits** (Redis, per visitor `X-Client-IP`, contact, reference): creation per IP / email / phone per hour, lookup per IP / reference / contact,
-  resend per order. `429 rate_limited` with `Retry-After`.
-* **Holds**: at most `GUEST_MAX_ACTIVE_HOLDS` live holds per contact (email or phone; counted under a per-contact row lock so a race cannot exceed it); expired holds are cleaned by the existing `booking:expire-holds`.
-  Slot double-booking guarantees are the existing MySQL ones, unchanged (guest and account holds contend on the same `slot_allocation` unique key).
-* **CAPTCHA**: optional Cloudflare Turnstile. Off unless `GUEST_TURNSTILE_SECRET` is set; then `guest.captchaToken` is verified server-side and
-  failures return `422 captcha_failed` (`captcha_required` when missing).
-* **Privacy**: application logs and audit rows carry ids / hashed contact only, never full name/email/phone. No endpoint reveals whether an email or
-  phone is known. Erasure (`r007:guest-erase` / `POST /guest-contacts/erasure`) anonymises contact snapshots (`Erased guest`, email/phone NULL),
-  deletes the `guest_contact` row, revokes tokens and keeps the financial records (payments, receipts, ledger) untouched; the audit row stores an HMAC of the erased key.
-  Retained on purpose (immutable ledger, legal retention): `payment.customer_email` of the Paystack payment and the receipt snapshot. Anonymised: `booking.customer_name|email|phone`,
-  `customer_order.contact_*`, `order.customer_name`, `membership.contact_*`, `entitlement.holder_name`, `guest_order.contact_*`. Claimed orders (attached to a real account) keep the account's data.
-* **Payments**: amounts are always server-computed; guest initialize enforces `amount == amountDue`; capture only after provider verification (unchanged).
-
-## 10. Environment
-
-`GUEST_CHECKOUT_ENABLED` (true), `GUEST_ACCESS_TTL_DAYS` (90), `GUEST_MAX_ACTIVE_HOLDS` (3), `GUEST_ALLOW_INTERNATIONAL_PHONES` (true),
-`GUEST_RATE_CREATE_PER_IP_HOUR` (20), `GUEST_RATE_CREATE_PER_EMAIL_HOUR` (10), `GUEST_RATE_CREATE_PER_PHONE_HOUR` (10),
-`GUEST_RATE_LOOKUP_PER_IP_15MIN` (10), `GUEST_RATE_LOOKUP_PER_REFERENCE_15MIN` (5), `GUEST_RATE_LOOKUP_PER_CONTACT_15MIN` (5),
-`GUEST_RATE_RESEND_PER_ORDER_HOUR` (3), `GUEST_TURNSTILE_SECRET` (empty = off), `GUEST_WEB_URL` (falls back to `CUSTOMER_WEB_URL`).
+Wiring (done): every path that verifies an email goes through `CustomerAuthService::announceEmailVerified`, which fires the after-commit event
+`App\Domain\Customer\Events\CustomerEmailVerified`; the Guest module's `ClaimGuestOrders` listener calls
+`GuestOrderClaimer::claim($customerId, $email)`. That covers password verification, social login / link with a provider-verified email, social link confirmation and
+`POST /customer/me/email/verify`. The claimer re-checks in the DB that the account's `login_email` equals that email and `email_verified_at` is set, so an unverified
+email (including `emailVerified:false` social logins) claims nothing. Password reset does not verify an email and does not claim.
 
 ## 11. Two-node note and gaps
 

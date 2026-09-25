@@ -5,10 +5,14 @@ namespace App\Domain\Customer;
 use App\Domain\Booking\Services\BookingPayableSubjectResolver;
 use App\Domain\Customer\Console\ServiceTokenCommand;
 use App\Domain\Customer\Http\Middleware\PermissionOrPublic;
-use App\Domain\Customer\Models\CustomerSession;
+use App\Domain\Customer\Http\Middleware\ServiceScope;
+use App\Domain\Customer\Http\Middleware\SocialLinkAuth;
+use App\Domain\Customer\Models\ServiceToken;
 use App\Domain\Customer\Services\CompositePayableSubjectResolver;
 use App\Domain\Customer\Services\CustomerAuthService;
 use App\Domain\Customer\Services\ServiceTokenService;
+use App\Domain\Customer\Services\SocialLoginService;
+use App\Domain\Customer\Social\GoogleIdTokenVerifier;
 use App\Domain\Payments\Contracts\PayableSubjectResolver;
 use App\Support\RequestContext;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -24,6 +28,8 @@ class CustomerServiceProvider extends ServiceProvider
     {
         $this->app->singleton(CustomerAuthService::class);
         $this->app->singleton(ServiceTokenService::class);
+        $this->app->singleton(GoogleIdTokenVerifier::class);
+        $this->app->singleton(SocialLoginService::class);
         // Guards are declared here (not in config/auth.php) so the module stays self-contained.
         $this->app['config']->set('auth.guards.customer', ['driver' => 'customer-token', 'provider' => null]);
         $this->app['config']->set('auth.guards.service', ['driver' => 'service-token', 'provider' => null]);
@@ -32,33 +38,10 @@ class CustomerServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Route::aliasMiddleware('permission.public', PermissionOrPublic::class);
+        Route::aliasMiddleware('service.scope', ServiceScope::class);
+        Route::aliasMiddleware('social.link.auth', SocialLinkAuth::class);
 
-        Auth::viaRequest('customer-token', function (Request $request) {
-            $token = $request->bearerToken();
-            if ($token === null || ! str_starts_with($token, CustomerAuthService::ACCESS_PREFIX)) {
-                return null;
-            }
-            $session = CustomerSession::query()->with('account.customer')->where('access_token_hash', hash('sha256', $token))->first();
-            $now = now('UTC');
-            if ($session === null || $session->revoked_at !== null || $session->expires_at->lte($now)) {
-                return null;
-            }
-            if ($session->access_expires_at->lte($now)) {
-                RequestContext::set(RequestContext::TOKEN_EXPIRED, '1');
-
-                return null;
-            }
-            $account = $session->account;
-            $customer = $account?->customer;
-            if ($account === null || ! $account->is_active || $account->email_verified_at === null || $customer === null || ! $customer->is_active || $customer->deleted_at !== null) {
-                return null;
-            }
-            RequestContext::set(RequestContext::CUSTOMER_ID, $customer->id);
-            RequestContext::set(RequestContext::CUSTOMER_ACCOUNT_ID, $account->id);
-            RequestContext::set(RequestContext::ORGANIZATION_ID, $customer->organization_id);
-
-            return $account;
-        });
+        Auth::viaRequest('customer-token', fn (Request $request) => app(CustomerAuthService::class)->authenticateAccessToken($request->bearerToken()));
 
         Auth::viaRequest('service-token', function (Request $request) {
             $token = $request->bearerToken();
@@ -69,8 +52,13 @@ class CustomerServiceProvider extends ServiceProvider
             if ($row === null) {
                 return null;
             }
+            // Routes that declare `service_scope` (the social endpoints) check the scope themselves (403); every other route is a public read.
+            $declared = $request->route()?->defaults['service_scope'] ?? null;
+            if ($declared === null && ! $row->hasScope(ServiceToken::SCOPE_PUBLIC_READ) && ! $row->hasScope(ServiceToken::SCOPE_PUBLIC_CHECKOUT)) {
+                return null;
+            }
+            RequestContext::set(RequestContext::SERVICE_SCOPE, (string) $row->scope);
             RequestContext::set(RequestContext::SERVICE_TOKEN_ID, $row->id);
-            RequestContext::set(RequestContext::SERVICE_SCOPES, (string) $row->scope);
             RequestContext::set(RequestContext::ORGANIZATION_ID, $row->organization_id);
 
             return $row;
@@ -83,6 +71,15 @@ class CustomerServiceProvider extends ServiceProvider
         RateLimiter::for('customer-forgot', fn (Request $r) => [Limit::perMinutes(15, 5)->by('cf:'.$ipEmail($r)), Limit::perHour(30)->by('cf-ip:'.$r->ip())]);
         RateLimiter::for('customer-refresh', fn (Request $r) => Limit::perMinute(30)->by('cr:'.$r->ip()));
         RateLimiter::for('customer-api', fn (Request $r) => Limit::perMinute(240)->by('capi:'.(RequestContext::customerId() ?? RequestContext::serviceTokenId() ?? $r->ip())));
+        // Social sign-in: the website calls from ONE server IP, so limits are per service token, per provider identity and per end-user IP (clientIp).
+        RateLimiter::for('social-login', fn (Request $r) => array_filter([
+            Limit::perMinute(120)->by('sl:'.(RequestContext::serviceTokenId() ?? $r->ip())),
+            Limit::perMinute(20)->by('slu:'.sha1(strtolower((string) $r->input('provider')).'|'.($r->input('providerUserId') ?? $r->input('idToken')))),
+            $r->input('clientIp') ? Limit::perMinute(30)->by('sli:'.$r->input('clientIp')) : null,
+        ]));
+        RateLimiter::for('social-public', fn (Request $r) => [Limit::perMinute(20)->by('sp-ip:'.$r->ip())]);
+        RateLimiter::for('social-confirm', fn (Request $r) => [Limit::perMinute(10)->by('sc:'.sha1(strtolower((string) $r->input('email')).'|'.$r->ip())), Limit::perMinute(60)->by('sc-tok:'.(RequestContext::serviceTokenId() ?? $r->ip()))]);
+        RateLimiter::for('customer-credential', fn (Request $r) => Limit::perMinute(5)->by('cc:'.(RequestContext::customerId() ?? $r->ip())));
         RateLimiter::for('public-site', fn (Request $r) => Limit::perMinute(120)->by('psite:'.$r->ip()));
 
         if ($this->app->runningInConsole()) {

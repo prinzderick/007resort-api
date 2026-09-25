@@ -20,12 +20,16 @@ class ServiceTokenService
     public const PREFIX = 'r7s_';
 
     /** @return array{id: string, token: string, name: string, scope: string} */
-    public function create(string $name, ?string $organizationId = null, ?string $rotatedFrom = null, ?string $plain = null, ?string $scope = null): array
+    public function create(string $name, ?string $organizationId = null, ?string $rotatedFrom = null, ?string $plain = null, string $scope = ServiceToken::SCOPE_PUBLIC_READ): array
     {
+        $asked = array_values(array_filter(array_map('trim', explode(',', $scope))));
+        $scope = implode(',', array_values(array_intersect(ServiceToken::KNOWN_SCOPES, $asked)));
+        if ($scope === '' || count(array_diff($asked, ServiceToken::KNOWN_SCOPES)) > 0) {
+            throw ApiProblem::unprocessable('validation_failed', 'scope must be a comma-set of public.read, public.checkout, customer.social.');
+        }
         $org = $organizationId ?? Tenant::organizationId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No organization in context.');
         $token = $plain ?? self::PREFIX.rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $id = Ids::uuid7();
-        $scope = self::normalizeScope($scope);
 
         return DB::transaction(function () use ($id, $org, $name, $token, $rotatedFrom, $scope) {
             DB::table('service_token')->insert([
@@ -46,25 +50,12 @@ class ServiceTokenService
         if ($old === null || $old->revoked_at !== null) {
             throw ApiProblem::notFound('not_found', 'Service token not found.');
         }
-        $new = $this->create($old->name, $old->organization_id, $old->id, null, $old->scope); // rotation keeps the scope
+        $new = $this->create($old->name, $old->organization_id, $old->id, null, $old->scope);
         $expires = $immediate ? CarbonImmutable::now('UTC') : CarbonImmutable::now('UTC')->addHours((int) config('customer.service_token_grace_hours'));
         DB::table('service_token')->where('id', Ids::toBinary($id))->update(['expires_at' => $expires->format('Y-m-d H:i:s.u'), 'is_active' => $immediate ? 0 : 1]);
         Audit::record('service_token.rotate', 'ServiceToken', $id, null, ['newId' => $new['id'], 'oldExpiresAt' => $expires->format('Y-m-d\TH:i:s\Z')], organizationId: $old->organization_id, siteId: Tenant::siteId());
 
         return $new + ['oldTokenExpiresAt' => $expires->format('Y-m-d\TH:i:s\Z')];
-    }
-
-    /** Comma-set of known scopes, default `public.read`. */
-    public static function normalizeScope(?string $scope): string
-    {
-        $list = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) ($scope ?: ServiceToken::SCOPE_PUBLIC_READ))))));
-        foreach ($list as $s) {
-            if (! in_array($s, ServiceToken::KNOWN_SCOPES, true)) {
-                throw ApiProblem::unprocessable('validation_failed', "Unknown scope '{$s}'.", ['scope' => ['unknown scope']]);
-            }
-        }
-
-        return implode(',', $list);
     }
 
     public function revoke(string $id): void
@@ -81,7 +72,7 @@ class ServiceTokenService
     {
         $row = ServiceToken::query()->where('token_hash', hash('sha256', $token))->first();
         $now = now('UTC');
-        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || array_intersect($row->scopes(), ServiceToken::KNOWN_SCOPES) === []) {
+        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || array_diff(array_filter(explode(',', (string) $row->scope)), ServiceToken::KNOWN_SCOPES) !== [] || $row->scope === '') {
             return null;
         }
         if ($row->last_used_at === null || $row->last_used_at->lt($now->copy()->subMinute())) {

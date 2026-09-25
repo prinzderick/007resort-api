@@ -61,6 +61,9 @@ class PaystackService
             } else {
                 $cid = Actor::requireCustomer();
                 $in['email'] = (string) DB::table('customer_account')->where('customer_id', Ids::toBinary($cid))->value('login_email');
+                if ($in['email'] === '') { // social sign-in without a verified email: Paystack needs one
+                    throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before paying.', ['meta' => ['missing' => ['email']]]);
+                }
             }
             self::assertCallbackAllowed($in['callbackUrl'] ?? null);
         }
