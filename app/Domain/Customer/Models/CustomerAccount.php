@@ -25,6 +25,12 @@ class CustomerAccount extends Model implements AuthenticatableContract
         return ['is_active' => 'boolean', 'email_verified_at' => 'datetime', 'locked_until' => 'datetime', 'last_login_at' => 'datetime'];
     }
 
+    /** Signed in by a verified email, or by a linked social identity (the provider proved who they are). */
+    public function canSignIn(): bool
+    {
+        return $this->email_verified_at !== null || CustomerIdentity::query()->where('customer_id', $this->customer_id)->exists();
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'customer_id');

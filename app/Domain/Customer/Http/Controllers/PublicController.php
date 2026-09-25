@@ -5,9 +5,12 @@ namespace App\Domain\Customer\Http\Controllers;
 use App\Domain\Customer\Services\PublicSiteService;
 use App\Domain\Customer\Services\TicketOrderService;
 use App\Domain\Customer\Support\Actor;
+use App\Support\Http\ApiProblem;
+use App\Support\Ids;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class PublicController
 {
@@ -20,6 +23,11 @@ class PublicController
 
     public function ticketOrder(Request $request, TicketOrderService $orders): JsonResponse
     {
+        $customerId = Actor::requireCustomer();
+        if (! DB::table('customer_account')->where('customer_id', Ids::toBinary($customerId))->whereNotNull('login_email')->whereNotNull('email_verified_at')->exists()) {
+            throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before ordering tickets.', ['meta' => ['missing' => ['email']]]);
+        }
+
         $d = $request->validate([
             'facilityId' => ['required', 'uuid'],
             'visitDate' => ['required', 'date_format:Y-m-d'],
@@ -29,6 +37,6 @@ class PublicController
             'customer' => ['nullable', 'array'], // accepted for contract compatibility; the owner is ALWAYS the signed-in customer
         ]);
 
-        return response()->json($orders->create($d, Actor::requireCustomer()), 201);
+        return response()->json($orders->create($d, $customerId), 201);
     }
 }

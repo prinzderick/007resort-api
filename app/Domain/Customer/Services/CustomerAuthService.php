@@ -2,12 +2,14 @@
 
 namespace App\Domain\Customer\Services;
 
+use App\Domain\Customer\Events\CustomerEmailVerified as CustomerEmailVerifiedEvent;
 use App\Domain\Customer\Models\CustomerAccount;
 use App\Domain\Customer\Models\CustomerSession;
 use App\Domain\Identity\Models\Customer;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
+use App\Support\RequestContext;
 use App\Support\Sync\Outbox;
 use App\Support\Tenancy\Tenant;
 use Carbon\CarbonImmutable;
@@ -124,7 +126,7 @@ class CustomerAuthService
             DB::table('customer_account')->where('id', $row->customer_account_id)->update(['email_verified_at' => $account->email_verified_at?->format(self::FMT) ?? $now->format(self::FMT), 'last_login_at' => $now->format(self::FMT)]);
             if ($first) {
                 Audit::record('customer.verify', 'Customer', $account->customer_id, null, ['ip' => $ip], organizationId: $account->customer->organization_id, siteId: Tenant::siteId());
-                Outbox::record('CustomerEmailVerified', 'Customer', $account->customer_id, ['customerId' => $account->customer_id], organizationId: $account->customer->organization_id);
+                self::announceEmailVerified($account->customer_id, $account->login_email, $account->customer->organization_id, 'password');
             }
 
             return $this->result($account->refresh()->load('customer'), $ip, $ua);
@@ -159,6 +161,9 @@ class CustomerAuthService
         if ($account->locked_until !== null && $account->locked_until->isFuture()) {
             Audit::securityEvent('CUSTOMER_LOGIN_BLOCKED_LOCKED', 'WARNING', null, $ip, ['accountId' => $account->id]);
             throw ApiProblem::locked('account_locked', 'This account is temporarily locked. Try again later.', ['meta' => ['lockedUntil' => $account->locked_until->utc()->format('Y-m-d\TH:i:s.v\Z')]]);
+        }
+        if ($account->password_hash === null) {
+            Hash::check($password, self::dummy()); // social-only account: same cost and same generic answer as a wrong password (no enumeration)
         }
         if ($account->password_hash === null || ! Hash::check($password, $account->password_hash)) {
             $this->registerFailure($account, $ip);
@@ -204,7 +209,7 @@ class CustomerAuthService
             if ($s->expires_at->lte($now)) {
                 return ApiProblem::unauthenticated('token_expired', 'The refresh token has expired. Sign in again.');
             }
-            if ($a === null || ! $a->is_active || $a->email_verified_at === null) {
+            if ($a === null || ! $a->is_active || ! $a->canSignIn()) {
                 return ApiProblem::unauthenticated('unauthenticated', 'This account is inactive.');
             }
             $result = $this->result($a, $ip, $ua, $newSession);
@@ -274,6 +279,41 @@ class CustomerAuthService
         }
     }
 
+    /** The one place that announces "this customer's email is now verified" (outbox in the current transaction + in-process event after commit). */
+    public static function announceEmailVerified(string $customerId, string $email, string $organizationId, string $source): void
+    {
+        Outbox::record('CustomerEmailVerified', 'Customer', $customerId, ['customerId' => $customerId, 'email' => $email, 'source' => $source], organizationId: $organizationId);
+        DB::afterCommit(fn () => event(new CustomerEmailVerifiedEvent($customerId, $email, $source)));
+    }
+
+    /** Resolve a customer access token (guard `customer` and the `X-Customer-Token` header of the social-link call). Sets the request context. */
+    public function authenticateAccessToken(?string $token): ?CustomerAccount
+    {
+        if ($token === null || ! str_starts_with($token, self::ACCESS_PREFIX)) {
+            return null;
+        }
+        $session = CustomerSession::query()->with('account.customer')->where('access_token_hash', hash('sha256', $token))->first();
+        $now = now('UTC');
+        if ($session === null || $session->revoked_at !== null || $session->expires_at->lte($now)) {
+            return null;
+        }
+        if ($session->access_expires_at->lte($now)) {
+            RequestContext::set(RequestContext::TOKEN_EXPIRED, '1');
+
+            return null;
+        }
+        $account = $session->account;
+        $customer = $account?->customer;
+        if ($account === null || ! $account->is_active || ! $account->canSignIn() || $customer === null || ! $customer->is_active || $customer->deleted_at !== null) {
+            return null;
+        }
+        RequestContext::set(RequestContext::CUSTOMER_ID, $customer->id);
+        RequestContext::set(RequestContext::CUSTOMER_ACCOUNT_ID, $account->id);
+        RequestContext::set(RequestContext::ORGANIZATION_ID, $customer->organization_id);
+
+        return $account;
+    }
+
     /** @return array<string, mixed> contract Customer */
     public static function present(Customer $c, CustomerAccount $a): array
     {
@@ -286,7 +326,7 @@ class CustomerAuthService
     // ------------------------------------------------------------------------------------------------------
 
     /** @return array<string, mixed> */
-    private function result(CustomerAccount $account, ?string $ip, ?string $ua, ?string &$sessionId = null): array
+    public function result(CustomerAccount $account, ?string $ip, ?string $ua, ?string &$sessionId = null): array
     {
         $now = CarbonImmutable::now('UTC');
         $access = self::ACCESS_PREFIX.rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');

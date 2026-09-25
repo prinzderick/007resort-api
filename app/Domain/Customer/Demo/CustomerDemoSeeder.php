@@ -9,7 +9,7 @@ use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
 /**
- * DEV-ONLY: a deterministic website service token `r7s_dev_booking_web` (scope public.read) so the booking website can be pointed at a
+ * DEV-ONLY: a deterministic website service token `r7s_dev_booking_web` (scopes public.read + customer.social) so the booking website can be pointed at a
  * demo node with `R007_API_SERVICE_TOKEN=r7s_dev_booking_web`. Real environments create theirs with `php artisan r007:service-token create`.
  */
 class CustomerDemoSeeder implements DemoSeeder
@@ -27,10 +27,12 @@ class CustomerDemoSeeder implements DemoSeeder
             return;
         }
         if (DB::table('service_token')->where('token_hash', hash('sha256', self::DEV_TOKEN))->exists()) {
+            DB::table('service_token')->where('token_hash', hash('sha256', self::DEV_TOKEN))->update(['scope' => 'public.read,customer.social']);
+
             return;
         }
         $org = Tenant::organizationId();
-        app(ServiceTokenService::class)->create('booking-web (dev)', $org, null, self::DEV_TOKEN);
+        app(ServiceTokenService::class)->create('booking-web (dev)', $org, null, self::DEV_TOKEN, 'public.read,customer.social');
         $context->command?->info('service token (dev only): '.self::DEV_TOKEN);
     }
 }
