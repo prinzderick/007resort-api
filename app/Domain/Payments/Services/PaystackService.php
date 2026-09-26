@@ -54,10 +54,16 @@ class PaystackService
     {
         $online = $staffId === null; // an online CUSTOMER (never staff): ownership replaces the payment.take permission
         if ($online) {
-            $cid = Actor::requireCustomer();
-            $in['email'] = (string) DB::table('customer_account')->where('customer_id', Ids::toBinary($cid))->value('login_email');
-            if ($in['email'] === '') { // social sign-in without a verified email: Paystack needs one
-                throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before paying.', ['meta' => ['missing' => ['email']]]);
+            if (($guest = Actor::guest()) !== null) { // guest checkout: X-Order-Token authorises exactly this guest order; Paystack gets the contact email
+                $in['email'] = (string) $guest->contactEmail;
+            } elseif (Actor::isService()) {
+                throw ApiProblem::unauthenticated('order_token_invalid', 'An X-Order-Token is required to pay for a guest order.');
+            } else {
+                $cid = Actor::requireCustomer();
+                $in['email'] = (string) DB::table('customer_account')->where('customer_id', Ids::toBinary($cid))->value('login_email');
+                if ($in['email'] === '') { // social sign-in without a verified email: Paystack needs one
+                    throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before paying.', ['meta' => ['missing' => ['email']]]);
+                }
             }
             self::assertCallbackAllowed($in['callbackUrl'] ?? null);
         }
@@ -116,7 +122,7 @@ class PaystackService
                     $ownerCol = $subjectType === 'BOOKING' ? 'booking' : 'membership';
                     $owner = DB::table($ownerCol)->where('id', Ids::toBinary($subjectId))->value('customer_id');
                     $ownerId = $owner === null ? null : Ids::fromBinary($owner);
-                    $subjectType === 'BOOKING' ? Owns::booking($ownerId) : Owns::membership($ownerId);
+                    $subjectType === 'BOOKING' ? Owns::booking($ownerId, $subjectId) : Owns::membership($ownerId, $subjectId);
                 }
                 $subject = $this->subjects->resolve($subjectType, $subjectId)
                     ?? throw ApiProblem::unprocessable('payable_subject_unsupported', 'This node cannot take online payment for that '.strtolower($subjectType).'.');

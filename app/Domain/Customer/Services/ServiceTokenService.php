@@ -22,9 +22,10 @@ class ServiceTokenService
     /** @return array{id: string, token: string, name: string, scope: string} */
     public function create(string $name, ?string $organizationId = null, ?string $rotatedFrom = null, ?string $plain = null, string $scope = ServiceToken::SCOPE_PUBLIC_READ): array
     {
-        $scope = implode(',', array_values(array_intersect(['public.read', 'customer.social'], array_map('trim', explode(',', $scope)))));
-        if (! in_array($scope, ServiceToken::VALID_SCOPES, true)) {
-            throw ApiProblem::unprocessable('validation_failed', 'scope must be public.read, customer.social or both.');
+        $asked = array_values(array_filter(array_map('trim', explode(',', $scope))));
+        $scope = implode(',', array_values(array_intersect(ServiceToken::KNOWN_SCOPES, $asked)));
+        if ($scope === '' || count(array_diff($asked, ServiceToken::KNOWN_SCOPES)) > 0) {
+            throw ApiProblem::unprocessable('validation_failed', 'scope must be a comma-set of public.read, public.checkout, customer.social.');
         }
         $org = $organizationId ?? Tenant::organizationId() ?? throw ApiProblem::badRequest('tenant_unresolved', 'No organization in context.');
         $token = $plain ?? self::PREFIX.rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
@@ -71,7 +72,7 @@ class ServiceTokenService
     {
         $row = ServiceToken::query()->where('token_hash', hash('sha256', $token))->first();
         $now = now('UTC');
-        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || ! in_array($row->scope, ServiceToken::VALID_SCOPES, true)) {
+        if ($row === null || ! $row->is_active || $row->revoked_at !== null || ($row->expires_at !== null && $row->expires_at->lte($now)) || array_diff(array_filter(explode(',', (string) $row->scope)), ServiceToken::KNOWN_SCOPES) !== [] || $row->scope === '') {
             return null;
         }
         if ($row->last_used_at === null || $row->last_used_at->lt($now->copy()->subMinute())) {

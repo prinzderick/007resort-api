@@ -11,16 +11,33 @@ use Illuminate\Support\Facades\DB;
  */
 final class Owns
 {
-    public static function booking(?string $bookingCustomerId): void
+    /** A guest (X-Order-Token) owns exactly the ONE booking / order / membership of its guest order. */
+    public static function booking(?string $bookingCustomerId, ?string $bookingId = null): void
     {
-        if (! Actor::isStaff() && ($bookingCustomerId === null || $bookingCustomerId !== Actor::customerId())) {
+        if (Actor::isStaff()) {
+            return;
+        }
+        if (($g = Actor::guest()) !== null) {
+            $bookingId !== null && $g->bookingId === strtolower($bookingId) ? null : throw Actor::notYours('Booking');
+
+            return;
+        }
+        if ($bookingCustomerId === null || $bookingCustomerId !== Actor::customerId()) {
             throw Actor::notYours('Booking');
         }
     }
 
-    public static function membership(?string $membershipCustomerId): void
+    public static function membership(?string $membershipCustomerId, ?string $membershipId = null): void
     {
-        if (! Actor::isStaff() && ($membershipCustomerId === null || $membershipCustomerId !== Actor::customerId())) {
+        if (Actor::isStaff()) {
+            return;
+        }
+        if (($g = Actor::guest()) !== null) {
+            $membershipId !== null && $g->membershipId === strtolower($membershipId) ? null : throw Actor::notYours('Membership');
+
+            return;
+        }
+        if ($membershipCustomerId === null || $membershipCustomerId !== Actor::customerId()) {
             throw Actor::notYours('Membership');
         }
     }
@@ -34,6 +51,9 @@ final class Owns
 
     public static function orderOwned(string $orderId, ?string $customerId = null): bool
     {
+        if ($customerId === null && ($g = Actor::guest()) !== null) {
+            return $g->orderId !== null && $g->orderId === strtolower($orderId);
+        }
         $cid = $customerId ?? Actor::customerId();
 
         return $cid !== null && Ids::isUuid($orderId) && DB::table('customer_order')->where('order_id', Ids::toBinary($orderId))->where('customer_id', Ids::toBinary($cid))->exists();
@@ -43,6 +63,12 @@ final class Owns
     public static function entitlement(object $e): void
     {
         if (Actor::isStaff()) {
+            return;
+        }
+        if (($g = Actor::guest()) !== null) {
+            $ok = ($g->bookingId !== null && ($e->booking_id ?? null) === $g->bookingId) || ($g->orderId !== null && ($e->order_id ?? null) === $g->orderId);
+            $ok || throw Actor::notYours('Entitlement');
+
             return;
         }
         $me = Actor::customerId() ?? throw Actor::notYours('Entitlement');
@@ -58,6 +84,18 @@ final class Owns
     public static function payment(object $p): void
     {
         if (Actor::isStaff()) {
+            return;
+        }
+        if (($g = Actor::guest()) !== null) {
+            $intent = json_decode((string) $p->intent, true) ?: [];
+            $orders = array_map(fn ($a) => (string) ($a['orderId'] ?? ''), (array) ($intent['allocations'] ?? []));
+            $ok = match ($p->subject_type) {
+                'BOOKING' => $p->subject_id !== null && $g->bookingId === Ids::fromBinary($p->subject_id),
+                'MEMBERSHIP' => $p->subject_id !== null && $g->membershipId === Ids::fromBinary($p->subject_id),
+                default => $g->orderId !== null && $orders !== [] && collect($orders)->every(fn ($o) => $o === $g->orderId),
+            };
+            $ok || throw Actor::notYours('Payment');
+
             return;
         }
         $me = Actor::customerId() ?? throw Actor::notYours('Payment');

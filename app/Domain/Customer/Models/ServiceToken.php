@@ -16,6 +16,10 @@ class ServiceToken extends Model implements AuthenticatableContract
 
     public const SCOPE_CUSTOMER_SOCIAL = 'customer.social';
 
+    public const SCOPE_PUBLIC_CHECKOUT = 'public.checkout';
+
+    public const KNOWN_SCOPES = ['public.read', 'public.checkout', 'customer.social'];
+
     /** Accepted `scope` values (a comma set; kept in sync with CK ck_stok_scope). */
     public const VALID_SCOPES = ['public.read', 'customer.social', 'public.read,customer.social'];
 

@@ -2,6 +2,8 @@
 
 namespace Tests\Support;
 
+use App\Domain\Customer\Services\ServiceTokenService;
+use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
 /** Shared helpers for Customer/public API tests (in-process, real MySQL). */
@@ -46,6 +48,14 @@ trait CustomerHelpers
     protected function serviceToken(): string
     {
         return 'r7s_dev_booking_web';
+    }
+
+    /** A website token WITHOUT guest checkout (scope public.read only): must stay read-only. */
+    protected function readOnlyServiceToken(): string
+    {
+        $org = Tenant::organizationId();
+
+        return app(ServiceTokenService::class)->create('read-only (test)', $org, null, 'r7s_test_ro_'.bin2hex(random_bytes(6)), 'public.read')['token'];
     }
 
     protected function resourceByName(string $name): object

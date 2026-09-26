@@ -36,6 +36,8 @@ security:
 - bearerAuth: []
   deviceToken: []
 tags:
+- name: Guest checkout
+  description: Book / buy without an account (docs/GUEST_CHECKOUT.md)
 - name: Website CMS
   description: Public website content (service token) and its admin management (docs/CMS_API.md)
 - name: System
@@ -8385,7 +8387,7 @@ paths:
       security:
       - customerAuth: []
       description: |-
-        Customer token required. The SERVER prices the lines; the owner is always the signed-in customer. Pay with `POST /payments/paystack/initialize {orderIds:[id], amount}`; one QR entitlement per person (valid on `visitDate`) is issued on `PaymentCaptured`. `409 site_offline` for same-day visits when the Local node heartbeat is stale (Cloud node).
+        Customer token, or a service token (scope `public.checkout`) with a `guest` object (no account; response carries `guestAccess`). The SERVER prices the lines; the owner is always the signed-in customer or the guest contact. Pay with `POST /payments/paystack/initialize {orderIds:[id], amount}`; one QR entitlement per person (valid on `visitDate`) is issued on `PaymentCaptured`. `409 site_offline` for same-day visits when the Local node heartbeat is stale (Cloud node).
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -14980,6 +14982,173 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
   # <<< cms paths <<<
+  /public/orders/lookup:
+    post:
+      operationId: guestOrderLookup
+      tags:
+      - Guest checkout
+      summary: Find a guest order by reference + contact (mints a fresh access token)
+      x-additive: true
+      security:
+      - serviceToken: []
+      description: |-
+        Service token with scope `public.checkout`. `reference` AND (`email` OR `phone`) must match; every failure is the same `404 order_not_found`. Strict rate limits (`429`). See docs/GUEST_CHECKOUT.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestOrderLookupRequest'
+      responses:
+        '200':
+          description: The order plus a fresh access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestOrderWithAccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /public/orders/{reference}:
+    get:
+      operationId: getGuestOrder
+      tags:
+      - Guest checkout
+      summary: Guest order view (booking / ticket order / membership + QR tickets)
+      x-additive: true
+      security:
+      - serviceToken: []
+      description: Service token (`public.checkout`) plus header `X-Order-Token`. The token must belong to `reference`.
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/OrderToken'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/orders/{reference}/resend:
+    post:
+      operationId: guestOrderResend
+      tags:
+      - Guest checkout
+      summary: Queue the confirmation / tickets email or SMS again
+      x-additive: true
+      security:
+      - serviceToken: []
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/OrderToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - channel
+              properties:
+                channel:
+                  type: string
+                  enum:
+                  - EMAIL
+                  - SMS
+      responses:
+        '202':
+          description: Queued
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooMany'
+  /public/orders/{reference}/create-account:
+    post:
+      operationId: guestOrderCreateAccount
+      tags:
+      - Guest checkout
+      summary: Optional post-purchase account creation (email must still be verified before anything is claimed)
+      x-additive: true
+      security:
+      - serviceToken: []
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/OrderToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - password
+              - termsAccepted
+              properties:
+                password:
+                  type: string
+                  minLength: 10
+                termsAccepted:
+                  type: boolean
+      responses:
+        '202':
+          description: Verification email sent (generic answer)
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /guest-contacts/erasure:
+    post:
+      operationId: guestContactErasure
+      tags:
+      - Guest checkout
+      summary: Anonymise guest contact data on request (financial records kept)
+      x-additive: true
+      security:
+      - bearerAuth: []
+      description: Permission `config.manage`. Give one of `email`, `phone`, `reference`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                phone:
+                  type: string
+                reference:
+                  type: string
+      responses:
+        '200':
+          description: Counts of anonymised rows
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
 components:
   securitySchemes:
     bearerAuth:
@@ -14996,13 +15165,20 @@ components:
       type: http
       scheme: bearer
       bearerFormat: opaque (r7s_...)
-      description: Website credential. Scope `public.read` = GET on public read endpoints only; scope `customer.social` (additive) = the social sign-in endpoints of docs/CUSTOMER_SOCIAL_LOGIN.md.
+      description: Website credential. Scope `public.read` = GET on public read endpoints; `public.checkout` = guest checkout writes (docs/GUEST_CHECKOUT.md); `customer.social` = the social sign-in endpoints of docs/CUSTOMER_SOCIAL_LOGIN.md.
     deviceToken:
       type: apiKey
       in: header
       name: X-Device-Token
       description: Registered device secret from `/devices/register`.
   parameters:
+    OrderToken:
+      name: X-Order-Token
+      in: header
+      required: true
+      description: Guest order access token (`r7o_...`) returned by create/lookup; authorises that one guest order.
+      schema:
+        type: string
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -15145,6 +15321,121 @@ components:
             detail: Rate limited; honour Retry-After
             correlationId: c1f4e7a2-9b8d-4c33-a1de-6f0a2b7c9d10
   schemas:
+    GuestInput:
+      type: object
+      description: 'Guest contact for checkout without an account (docs/GUEST_CHECKOUT.md). Send instead of a customer token, with a service token (scope public.checkout). No account is created.'
+      required:
+      - name
+      - email
+      - phone
+      - consentVersion
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          description: Nigerian defaults (0803... -> +234803...); other countries as +E.164.
+        marketingConsent:
+          type: boolean
+          default: false
+        consentVersion:
+          type: string
+          maxLength: 32
+        captchaToken:
+          type: string
+          description: Only when Turnstile is enabled.
+    GuestAccess:
+      type: object
+      description: Returned once by create / lookup. The token authorises read/manage of THIS guest order only (header `X-Order-Token`).
+      required:
+      - reference
+      - accessToken
+      - accessTokenExpiresAt
+      properties:
+        reference:
+          type: string
+          example: GC-7K3M9X2Q
+        accessToken:
+          type: string
+          example: r7o_...
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+        contact:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+    GuestOrderLookupRequest:
+      type: object
+      required:
+      - reference
+      properties:
+        reference:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+    GuestOrder:
+      type: object
+      properties:
+        reference:
+          type: string
+        kind:
+          type: string
+          enum:
+          - BOOKING
+          - TICKETS
+          - MEMBERSHIP
+        status:
+          type: string
+        paid:
+          type: boolean
+        amountDue:
+          type: string
+        currency:
+          type: string
+        claimed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        contact:
+          type: object
+          additionalProperties: true
+        booking:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/Booking'
+        ticketOrder:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/TicketOrder'
+        membership:
+          nullable: true
+          type: object
+          additionalProperties: true
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+    GuestOrderWithAccess:
+      allOf:
+      - $ref: '#/components/schemas/GuestOrder'
+      - type: object
+        properties:
+          guestAccess:
+            $ref: '#/components/schemas/GuestAccess'
     Uuid:
       type: string
       format: uuid
@@ -17804,6 +18095,9 @@ components:
     HoldRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         resourceId:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -17848,6 +18142,9 @@ components:
     Booking:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         customerId:
           type: [string, 'null']
           x-additive: true
@@ -18220,6 +18517,9 @@ components:
     PurchaseMembershipRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         planId:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -18243,6 +18543,9 @@ components:
     Membership:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         id:
           $ref: '#/components/schemas/Uuid'
           description: Public role UUID (`role.public_id`). Role ids in every response are UUIDs.
@@ -20166,6 +20469,9 @@ components:
     TicketOrderRequest:
       type: object
       properties:
+        guest:
+          $ref: '#/components/schemas/GuestInput'
+          description: 'Checkout without an account (service token scope public.checkout). The response then carries `guestAccess`. See docs/GUEST_CHECKOUT.md.'
         facilityId: {$ref: '#/components/schemas/Uuid'}
         visitDate: {type: string, format: date}
         lines:
@@ -20179,6 +20485,9 @@ components:
     TicketOrder:
       type: object
       properties:
+        guestAccess:
+          $ref: '#/components/schemas/GuestAccess'
+          description: Only for guest checkout; the access token is shown once.
         id: {$ref: '#/components/schemas/Uuid'}
         number: {type: string}
         facilityId: {$ref: '#/components/schemas/Uuid'}

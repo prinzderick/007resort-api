@@ -121,7 +121,7 @@ class CustomerAuthTest extends TestCase
 
     public function test_service_token_is_read_only_and_revocable(): void
     {
-        $t = $this->serviceToken();
+        $t = $this->readOnlyServiceToken(); // scope public.read only (the dev token also carries public.checkout for guest checkout)
         $this->getJson('/api/v1/bookings/resources', $this->bearer($t, null))->assertOk();
         $this->getJson('/api/v1/memberships/plans', $this->bearer($t, null))->assertOk();
         $r = $this->resourceByName('Lawn Tennis Court 1');

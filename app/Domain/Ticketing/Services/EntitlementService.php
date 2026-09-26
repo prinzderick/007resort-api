@@ -82,7 +82,7 @@ final class EntitlementService
         $rentals = [];
         // Online (website) ticket order: valid on the chosen visit day, owned by the ordering customer.
         $online = Schema::hasTable('customer_order') ? DB::table('customer_order')->where('order_id', Ids::toBinary($orderId))->first() : null;
-        $custId = $online ? Ids::fromBinary($online->customer_id) : null;
+        $custId = $online && $online->customer_id !== null ? Ids::fromBinary($online->customer_id) : null; // NULL for guest checkout
         $anchor = $online ? CarbonImmutable::parse($online->visit_date.' 12:00:00', config('booking.timezone', 'Africa/Lagos'))->utc() : CarbonImmutable::now('UTC');
         foreach ($lines as $line) {
             if ($line['kind'] === 'RENTAL') {

@@ -4,7 +4,7 @@ use App\Domain\Ticketing\Http\Controllers\EntitlementController;
 use Illuminate\Support\Facades\Route;
 
 // Loaded under /api/v1 with the `api` middleware group.
-Route::middleware(['auth:staff,customer', 'device:optional', 'throttle:customer-api'])->group(function () {
+Route::middleware(['auth:staff,customer,service', 'device:optional', 'throttle:customer-api'])->group(function () {
     Route::get('entitlements/{entitlementId}', [EntitlementController::class, 'show'])->middleware('permission.public:ticket.view');
 });
 

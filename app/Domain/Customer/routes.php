@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 // Loaded under /api/v1. Customer identity is a separate guard (`customer`, bearer r7c_...): it can never satisfy `auth:staff`.
 
 Route::get('public/site', [PublicController::class, 'site'])->middleware('throttle:public-site');
-Route::post('public/ticket-orders', [PublicController::class, 'ticketOrder'])->middleware(['auth:customer', 'throttle:customer-api', 'idempotent']);
+Route::post('public/ticket-orders', [PublicController::class, 'ticketOrder'])->middleware(['auth:customer,service', 'throttle:customer-api', 'permission.public:ticket.order', 'idempotent']);
 
 // Social sign-in (docs/CUSTOMER_SOCIAL_LOGIN.md). `service_scope` default = the guard does not force public.read; service.scope enforces customer.social (403).
 Route::prefix('public/customers/social')->group(function () {

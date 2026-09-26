@@ -54,7 +54,7 @@ class CustomerServiceProvider extends ServiceProvider
             }
             // Routes that declare `service_scope` (the social endpoints) check the scope themselves (403); every other route is a public read.
             $declared = $request->route()?->defaults['service_scope'] ?? null;
-            if ($declared === null && ! $row->hasScope(ServiceToken::SCOPE_PUBLIC_READ)) {
+            if ($declared === null && ! $row->hasScope(ServiceToken::SCOPE_PUBLIC_READ) && ! $row->hasScope(ServiceToken::SCOPE_PUBLIC_CHECKOUT)) {
                 return null;
             }
             RequestContext::set(RequestContext::SERVICE_SCOPE, (string) $row->scope);

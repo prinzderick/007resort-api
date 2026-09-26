@@ -5,6 +5,7 @@ namespace App\Domain\Customer\Http\Controllers;
 use App\Domain\Customer\Services\PublicSiteService;
 use App\Domain\Customer\Services\TicketOrderService;
 use App\Domain\Customer\Support\Actor;
+use App\Domain\Guest\Services\GuestCheckout;
 use App\Support\Http\ApiProblem;
 use App\Support\Ids;
 use Illuminate\Http\JsonResponse;
@@ -23,9 +24,12 @@ class PublicController
 
     public function ticketOrder(Request $request, TicketOrderService $orders): JsonResponse
     {
-        $customerId = Actor::requireCustomer();
-        if (! DB::table('customer_account')->where('customer_id', Ids::toBinary($customerId))->whereNotNull('login_email')->whereNotNull('email_verified_at')->exists()) {
-            throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before ordering tickets.', ['meta' => ['missing' => ['email']]]);
+        $guests = app(GuestCheckout::class);
+        if (! $guests->isGuestRequest()) {
+            $customerId = Actor::requireCustomer();
+            if (! DB::table('customer_account')->where('customer_id', Ids::toBinary($customerId))->whereNotNull('login_email')->whereNotNull('email_verified_at')->exists()) {
+                throw ApiProblem::conflict('profile_incomplete', 'Add and verify your email address before ordering tickets.', ['meta' => ['missing' => ['email']]]);
+            }
         }
 
         $d = $request->validate([
@@ -35,8 +39,19 @@ class PublicController
             'lines.*.productId' => ['required', 'uuid'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:'.config('customer.tickets.max_per_order')],
             'customer' => ['nullable', 'array'], // accepted for contract compatibility; the owner is ALWAYS the signed-in customer
+            'guest' => ['nullable', 'array'],
         ]);
+        if ($guests->isGuestRequest()) { // website service token: checkout without an account (docs/GUEST_CHECKOUT.md)
+            $contact = $guests->contact($d['guest'] ?? null, $request);
+            $order = $orders->create($d, null, $contact);
+            $order['guestAccess'] = $guests->open($contact, 'TICKETS', $order['id']);
 
-        return response()->json($orders->create($d, $customerId), 201);
+            return response()->json($order, 201);
+        }
+        if (isset($d['guest'])) {
+            throw ApiProblem::unprocessable('validation_failed', 'guest is only for checkout without an account.', ['guest' => ['not allowed here']]);
+        }
+
+        return response()->json($orders->create($d, Actor::requireCustomer()), 201);
     }
 }
