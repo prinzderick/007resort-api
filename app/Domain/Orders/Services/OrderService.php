@@ -289,12 +289,13 @@ final class OrderService
                 $tabId = $this->tabs->ensureForOrder($order);
             }
             $now = Fmt::now();
+            $waiterOnly = $this->rules->waiterOnly($facilityId); // no kitchen/bar screens: nothing is routed, the waiter serves
 
             // route lines -> stations
             $byStation = [];
             foreach ($lines as $l) {
                 $override = DB::table('product_facility')->where('product_id', $l->product_id)->where('facility_unit_id', $order->facility_unit_id)->value('kds_station_id');
-                $station = $l->prep_route_kind === 'NONE' ? null : $this->router->stationFor($facilityId, $l->prep_route_id, $override);
+                $station = ($waiterOnly || $l->prep_route_kind === 'NONE') ? null : $this->router->stationFor($facilityId, $l->prep_route_id, $override);
                 if ($station) {
                     $byStation[$station->id][] = [$l, $station];
                     DB::table('order_line')->where('id', $l->id)->update(['status' => 'ROUTED', 'station_id' => $station->id, 'sent_at' => $now, 'row_version' => $l->row_version + 1]);
@@ -378,6 +379,7 @@ final class OrderService
             }
             DB::table('order')->where('id', $order->id)->update($upd);
             $fresh = $this->find($orderId);
+            Audit::record('order.serve', 'Order', $orderId, old: ['status' => $order->status], new: ['status' => $upd['status'], 'servedBy' => Authz::staffId(), 'owner' => Ids::fromBinary($order->responsible_staff_id ?? $order->created_by)], facilityUnitId: $facilityId);
             Outbox::record($paid ? 'OrderSettled' : 'OrderUpdated', 'Order', $orderId, $this->outboxPayload($fresh) + ['event' => 'served'], entityVersion: (int) $fresh->row_version, facilityId: $facilityId);
             if ($paid) {
                 event(new OrderSettled($orderId, $facilityId, Fmt::money($fresh->total), Fmt::money($fresh->amount_paid), Fmt::u($fresh->tab_id)));

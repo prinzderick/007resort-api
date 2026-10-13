@@ -53,6 +53,12 @@ final class OperatingRules
         ];
     }
 
+    /** Waiter-only service flow: no kitchen/bar tickets, waiters serve and take payment on the tablet. */
+    public function waiterOnly(string $facilityId): bool
+    {
+        return strtoupper((string) ($this->forFacility($facilityId)['raw']['service_flow'] ?? 'STANDARD')) === 'WAITER_ONLY';
+    }
+
     public function flush(): void
     {
         $this->cache = [];
