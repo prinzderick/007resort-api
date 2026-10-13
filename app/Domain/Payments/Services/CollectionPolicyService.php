@@ -3,6 +3,7 @@
 namespace App\Domain\Payments\Services;
 
 use App\Domain\Identity\Services\PermissionChecker;
+use App\Domain\Orders\Services\OperatingRules;
 use App\Domain\Payments\Support\CollectionRules;
 use App\Support\Api\Authz;
 use App\Support\Audit\Audit;
@@ -32,7 +33,7 @@ class CollectionPolicyService
         $fr = $facilityId !== null ? $this->rules->forFacility($facilityId) : null;
         $facilityHolding = $fr['cashHolding'] ?? false;
         // Waiter-only service flow: with no cashier the waiter necessarily holds the cash they take until they hand it over.
-        if ($facilityId !== null && app(\App\Domain\Orders\Services\OperatingRules::class)->waiterOnly($facilityId)) {
+        if ($facilityId !== null && app(OperatingRules::class)->waiterOnly($facilityId)) {
             $facilityHolding = true;
         }
         $facilityLimit = $fr['cashLimit'] ?? null;

@@ -234,6 +234,7 @@ final class WaiterFlowService
                 $open = $o && in_array($o->status, self::OPEN, true) && bccomp(Money::normalize((string) $o->total), Money::normalize((string) $o->amount_paid), 4) > 0;
                 if (! $open || $owner !== $from) {
                     $skipped[] = $oid; // paid, voided or reassigned meanwhile
+
                     continue;
                 }
                 DB::table('order')->where('id', $o->id)->update(['responsible_staff_id' => Ids::toBinary($me), 'row_version' => $o->row_version + 1]);

@@ -51,7 +51,7 @@ final class PrintJobService
     {
         $facilityId = Ids::normalize($facilityId);
         if (! Authz::can('receipt.print', $facilityId) && ! Authz::can('receipt.reprint', $facilityId)) {
-            throw \App\Support\Http\ApiProblem::permissionDenied('receipt.print');
+            throw ApiProblem::permissionDenied('receipt.print');
         }
         $q = DB::table('print_job')->where('facility_unit_id', Ids::toBinary($facilityId));
         $q->whereIn('status', array_map('strtoupper', explode(',', $status ?: 'QUEUED')));

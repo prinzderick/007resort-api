@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Orders;
 
+use App\Domain\Orders\Services\OperatingRules;
 use App\Support\Ids;
 use Illuminate\Support\Facades\DB;
 
@@ -107,7 +108,7 @@ class WaiterOnlyFlowTest extends OrdersTestCase
     {
         [$o] = $this->served();
         DB::table('operating_rule')->where('rule_key', 'service_flow')->update(['rule_value' => 'STANDARD']);
-        app(\App\Domain\Orders\Services\OperatingRules::class)->flush();
+        app(OperatingRules::class)->flush();
         $this->api('waiter', 'POST', '/waiter-flow/settle', ['facilityId' => $this->fid(), 'orderIds' => [$o], 'tenders' => [['tenderType' => 'CASH', 'amount' => '4500']]])
             ->assertStatus(409)->assertJsonPath('code', 'flow_not_enabled');
     }
