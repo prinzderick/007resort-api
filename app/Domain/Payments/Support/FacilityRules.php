@@ -28,6 +28,11 @@ final class FacilityRules
         return $this->orderRules->forFacility($facilityId)['paymentTiming'];
     }
 
+    public function waiterOnly(string $facilityId): bool
+    {
+        return $this->orderRules->waiterOnly($facilityId);
+    }
+
     public function requireCashSession(string $facilityId): bool
     {
         if (isset($this->cashSession[$facilityId])) {

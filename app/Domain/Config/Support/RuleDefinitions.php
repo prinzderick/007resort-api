@@ -185,6 +185,10 @@ final class RuleDefinitions
             ['bill_pay_link_enabled', 'Pay reference on the pre-bill', 'Print the pay reference / QR code on the pre-bill.', 'Payments & cash', 'bool', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], false, null, 'low', 'server', []],
             ['cash_handover_max_variance', 'Cash handover variance allowed', 'A handover whose counted cash differs from expected by more than this needs supervisor sign-off.', 'Payments & cash', 'money', ['TABLE_SERVICE', 'PAYMENT_ACCEPTANCE'], '500.0000', 'NGN', 'high', 'server', []],
 
+            ['service_flow', 'Service flow', 'STANDARD uses kitchen/bar screens and a cashier. WAITER_ONLY lets waiters send, serve and take payment themselves on the tablet (no kitchen tickets, no cashier confirmation); supervisors see every open tab and can take payment or reassign tabs.',
+                'Tabs & table service', 'enum', ['TABLE_SERVICE', 'OPEN_TAB', 'POS'], 'STANDARD', null, 'high', 'server',
+                ['allowed' => $opts(['STANDARD' => 'Standard (kitchen screens + cashier)', 'WAITER_ONLY' => 'Waiter only (tablet serves and takes payment)'])]],
+
             // ---- Approvals -------------------------------------------------------------------------------------------------
             ['approval_threshold_amount', 'Approval threshold (discounts and refunds)', 'Amounts above this need a supervisor. 0 means every discount by a non-approver needs approval.',
                 'Approvals', 'money', ['POS', 'PAYMENT_ACCEPTANCE'], '0.0000', 'NGN', 'high', 'server', []],

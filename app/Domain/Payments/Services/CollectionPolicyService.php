@@ -31,6 +31,10 @@ class CollectionPolicyService
         $personal = $o !== null && $o->cash_limit !== null ? Money::normalize((string) $o->cash_limit) : null;
         $fr = $facilityId !== null ? $this->rules->forFacility($facilityId) : null;
         $facilityHolding = $fr['cashHolding'] ?? false;
+        // Waiter-only service flow: with no cashier the waiter necessarily holds the cash they take until they hand it over.
+        if ($facilityId !== null && app(\App\Domain\Orders\Services\OperatingRules::class)->waiterOnly($facilityId)) {
+            $facilityHolding = true;
+        }
         $facilityLimit = $fr['cashLimit'] ?? null;
 
         [$allowed, $source] = match ($override) {

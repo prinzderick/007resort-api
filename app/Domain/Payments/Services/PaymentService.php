@@ -59,32 +59,97 @@ class PaymentService
         return $this->run(['tabId' => $tabId, 'allocations' => [], 'facilityId' => null, 'customerName' => null] + $in, $staffId, true);
     }
 
-    /** @return array{body: array<string, mixed>, replayed: bool} */
-    private function run(array $in, string $staffId, bool $tabMode): array
+    /**
+     * Waiter-only service flow: pay one or many of a waiter's served orders (any tabs) in one call, from the tablet, no cashier.
+     * The caller must hold `waiterflow.settle` and own the orders, or hold `waiterflow.manage` (a supervisor paying on a
+     * waiter's behalf). Cash lands in the taker's cash-in-hand ledger; card/transfer tenders need a slip/transfer reference.
+     *
+     * @param  array<string, mixed>  $in  facilityId, orderIds[], tenders[], customerName?
+     * @return array{body: array<string, mixed>, replayed: bool}
+     */
+    public function waiterSettle(array $in, string $staffId): array
     {
-        return DB::transaction(function () use ($in, $staffId, $tabMode) {
+        return $this->run(['tabId' => null, 'allocations' => []] + $in, $staffId, false, true);
+    }
+
+    /** @return array{body: array<string, mixed>, replayed: bool} */
+    private function run(array $in, string $staffId, bool $tabMode, bool $waiterMode = false): array
+    {
+        return DB::transaction(function () use ($in, $staffId, $tabMode, $waiterMode) {
             // ---- 1. LOCK FIRST (tab, then orders by id). No other read may precede these. -----------------------------
             $tab = null;
-            if ($in['tabId'] !== null) {
-                $tab = $this->orders->lockTab($in['tabId']) ?? throw ApiProblem::notFound('not_found', 'Tab not found.');
-            }
-            $requested = $tabMode ? $tab['orderIds'] : array_map(fn ($a) => $a['orderId'], $in['allocations']);
-            $orders = $this->orders->lockOrders($tab !== null ? array_merge($requested, $tab['orderIds']) : $requested);
-            foreach ($requested as $oid) {
-                if (! isset($orders[Ids::normalize($oid)])) {
-                    throw ApiProblem::notFound('not_found', 'Order not found.');
+            $waiterTabs = [];
+            if ($waiterMode) {
+                // Several tabs may be involved: lock them in ascending id order, then every order of theirs plus the requested ones.
+                $bins = array_values(array_unique(array_map(fn ($id) => Ids::toBinary(Ids::normalize($id)), $in['orderIds'])));
+                $tabBins = DB::table('order')->whereIn('id', $bins)->whereNotNull('tab_id')->pluck('tab_id')->unique()->sort()->values()->all();
+                foreach ($tabBins as $tb) {
+                    $t = $this->orders->lockTab(Ids::fromBinary($tb));
+                    if ($t !== null) {
+                        $waiterTabs[$t['id']] = $t;
+                    }
                 }
+                $requested = array_map(Ids::normalize(...), $in['orderIds']);
+                $extra = array_merge(...array_map(fn ($t) => $t['orderIds'], array_values($waiterTabs)) ?: [[]]);
+                $orders = $this->orders->lockOrders(array_merge($requested, $extra));
+                foreach ($requested as $oid) {
+                    if (! isset($orders[$oid])) {
+                        throw ApiProblem::notFound('not_found', 'Order not found.');
+                    }
+                }
+                $facilityId = Ids::normalize($in['facilityId']);
+            } else {
+                if ($in['tabId'] !== null) {
+                    $tab = $this->orders->lockTab($in['tabId']) ?? throw ApiProblem::notFound('not_found', 'Tab not found.');
+                }
+                $requested = $tabMode ? $tab['orderIds'] : array_map(fn ($a) => $a['orderId'], $in['allocations']);
+                $orders = $this->orders->lockOrders($tab !== null ? array_merge($requested, $tab['orderIds']) : $requested);
+                foreach ($requested as $oid) {
+                    if (! isset($orders[Ids::normalize($oid)])) {
+                        throw ApiProblem::notFound('not_found', 'Order not found.');
+                    }
+                }
+                $facilityId = $tabMode ? $tab['facilityId'] : Ids::normalize($in['facilityId']);
             }
-            $facilityId = $tabMode ? $tab['facilityId'] : Ids::normalize($in['facilityId']);
 
             // ---- 2. Authorisation that needs the facility (post-lock reads are fresh). ----------------------------------
             $scope = Scope::facility($facilityId);
-            $need = $tabMode ? 'order.settle' : 'payment.take';
-            if (! $this->permissions->can($staffId, $need, $scope)) {
-                throw ApiProblem::permissionDenied($need);
-            }
-            if (count($in['tenders']) > 1 && ! $this->permissions->can($staffId, 'payment.split', $scope)) {
-                throw ApiProblem::permissionDenied('payment.split');
+            $owners = [];
+            if ($waiterMode) {
+                if (! $this->rules->waiterOnly($facilityId)) {
+                    throw ApiProblem::conflict('flow_not_enabled', 'The waiter-only service flow is not switched on for this facility.');
+                }
+                $isManager = $this->permissions->can($staffId, 'waiterflow.manage', $scope);
+                if (! $isManager && ! $this->permissions->can($staffId, 'waiterflow.settle', $scope)) {
+                    throw ApiProblem::permissionDenied('waiterflow.settle');
+                }
+                foreach ($requested as $oid) {
+                    $o = $orders[$oid];
+                    if ($o['facilityId'] !== $facilityId) {
+                        throw ApiProblem::conflict('facility_mismatch', 'The order belongs to a different facility.', ['orderId' => $oid]);
+                    }
+                    if (in_array($o['status'], ['VOIDED', 'SETTLED'], true)) {
+                        throw ApiProblem::conflict('balance_changed', 'The order has no balance due (it may have just been paid).', ['orderId' => $oid, 'status' => $o['status']]);
+                    }
+                    $owner = $o['responsibleStaffId'] ?? $o['createdBy'];
+                    $owners[$oid] = $owner;
+                    if ($owner !== $staffId && ! $isManager) {
+                        throw ApiProblem::forbidden('not_your_order', 'This order belongs to another waiter. Ask a supervisor to take payment for it.');
+                    }
+                }
+                foreach ($in['tenders'] as $t) {
+                    if (($t['tenderType'] ?? '') !== 'CASH' && trim((string) ($t['reference'] ?? '')) === '') {
+                        throw ApiProblem::unprocessable('reference_required', 'Enter the card slip or transfer reference for card and transfer payments.', ['tenders' => ['reference is required for '.($t['tenderType'] ?? 'this tender')]]);
+                    }
+                }
+            } else {
+                $need = $tabMode ? 'order.settle' : 'payment.take';
+                if (! $this->permissions->can($staffId, $need, $scope)) {
+                    throw ApiProblem::permissionDenied($need);
+                }
+                if (count($in['tenders']) > 1 && ! $this->permissions->can($staffId, 'payment.split', $scope)) {
+                    throw ApiProblem::permissionDenied('payment.split');
+                }
             }
 
             // ---- 3. Client-supplied tender ids (offline): replay the original result, or reject a changed body. ----------
@@ -95,7 +160,10 @@ class PaymentService
             // ---- 4. Balances (fresh: we hold the order locks) and allocation validation. -------------------------------
             $paidBefore = Ledger::paidByOrder(array_keys($orders));
             $pending = Ledger::pendingByOrder(array_keys($orders)); // unconfirmed waiter collections reserve the balance (WAITER_COLLECTION.md)
-            if ($tabMode) {
+            if ($waiterMode) {
+                $subset = array_intersect_key($orders, array_flip($requested));
+                [$allocations, $tenders] = $this->tabAllocations($subset, $paidBefore, $in['tenders'], $pending);
+            } elseif ($tabMode) {
                 [$allocations, $tenders] = $this->tabAllocations($orders, $paidBefore, $in['tenders'], $pending);
             } else {
                 $allocations = $this->validatedAllocations($in['allocations'], $orders, $paidBefore, $facilityId, $tab, $pending);
@@ -116,8 +184,10 @@ class PaymentService
             app(SettingsService::class)->assertTendersAllowed($facilityId, array_map(fn ($t) => $t['tenderType'], $tenders));
 
             // ---- 5. Cash session (shared lock: a concurrent close waits for us; after close we get cash_session_required). --
-            $hasCash = (bool) array_filter($tenders, fn ($t) => $t['tenderType'] === 'CASH');
+            $hasCash = ! $waiterMode && (bool) array_filter($tenders, fn ($t) => $t['tenderType'] === 'CASH'); // waiter flow: no cash drawer
             $session = $this->cashSessionFor($in['cashSessionId'] ?? null, $facilityId, $staffId, $hasCash);
+            $distinctOwners = array_values(array_unique(array_values($owners)));
+            $singleOwner = count($distinctOwners) === 1 ? $distinctOwners[0] : null;
 
             // ---- 6. Write: receipt -> payments -> allocations -> orders -> audit/outbox/event. -------------------------
             $groupId = Ids::uuid7();
@@ -168,6 +238,7 @@ class PaymentService
                     'cash_session_id' => $session ? $session['id'] : null,
                     'device_id' => Fmt::bin($deviceId),
                     'taken_by_staff_id' => Ids::toBinary($staffId),
+                    'owner_staff_id' => $singleOwner !== null ? Ids::toBinary($singleOwner) : null,
                     'customer_name' => $in['customerName'] ?? null,
                     'receipt_id' => Ids::toBinary($receipt['id']),
                     'client_fingerprint' => $t['fingerprint'],
@@ -181,6 +252,13 @@ class PaymentService
                         DB::table('payment_allocation')->insert([
                             'id' => Ids::toBinary(Ids::uuid7()), 'payment_id' => $row['id'],
                             'order_id' => Ids::toBinary($slice['orderId']), 'amount' => $slice['amount'],
+                        ]);
+                    }
+                    if ($waiterMode && $t['tenderType'] === 'CASH') { // cash is the taker's responsibility until handed over
+                        DB::table('cash_in_hand_entry')->insert([
+                            'id' => Ids::toBinary(Ids::uuid7()), 'organization_id' => $row['organization_id'], 'site_id' => $row['site_id'],
+                            'facility_unit_id' => $row['facility_unit_id'], 'staff_id' => $row['taken_by_staff_id'], 'kind' => 'COLLECTED',
+                            'amount' => $t['amount'], 'payment_id' => $row['id'], 'created_at' => $now,
                         ]);
                     }
                 } catch (QueryException $e) {
@@ -198,12 +276,32 @@ class PaymentService
             if ($tab !== null && $this->tabFullySettled($tab, $orders, $paidBefore, $synced)) {
                 $this->orders->markTabSettled($tab['id']);
             }
+            $closedTabs = [];
+            foreach ($waiterTabs as $wt) {
+                if ($this->tabFullySettled($wt, $orders, $paidBefore, $synced)) {
+                    $this->orders->markTabSettled($wt['id']);
+                    $closedTabs[] = $wt['id'];
+                }
+            }
             $this->effects->captured($paymentRows, [
                 'organizationId' => $orgId, 'siteId' => $siteId, 'facilityId' => $facilityId, 'groupId' => $groupId,
                 'provider' => 'MANUAL', 'staffId' => $staffId, 'capturedAt' => Fmt::iso($now),
             ]);
 
-            return ['body' => $this->result($groupId, $orders, $paidBefore, $synced, $receipt['id']), 'replayed' => false];
+            if ($waiterMode) {
+                Audit::record('payment.waiter_settle', 'PaymentGroup', $groupId, new: [
+                    'orderIds' => array_keys($allocatedNow), 'amount' => $amountPaid, 'tenders' => array_map(fn ($t) => ['tenderType' => $t['tenderType'], 'amount' => $t['amount'], 'reference' => $t['reference']], $tenders),
+                    'onBehalfOf' => $singleOwner !== null && $singleOwner !== $staffId ? $singleOwner : null, 'ownersByOrder' => $owners,
+                    'closedTabs' => $closedTabs, 'receiptId' => $receipt['id'],
+                ], organizationId: $orgId, siteId: $siteId, actorStaffId: $staffId, facilityUnitId: $facilityId);
+            }
+
+            $body = $this->result($groupId, $orders, $paidBefore, $synced, $receipt['id']);
+            if ($waiterMode) {
+                $body['closedTabIds'] = $closedTabs;
+            }
+
+            return ['body' => $body, 'replayed' => false];
         });
     }
 

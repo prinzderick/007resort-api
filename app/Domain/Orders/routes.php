@@ -5,6 +5,7 @@ use App\Domain\Orders\Http\Controllers\BillController;
 use App\Domain\Orders\Http\Controllers\OrderController;
 use App\Domain\Orders\Http\Controllers\TabController;
 use App\Domain\Orders\Http\Controllers\TableController;
+use App\Domain\Orders\Http\Controllers\WaiterFlowController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:staff', 'device:optional'])->group(function () {
@@ -36,6 +37,19 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
     Route::get('tabs', [TabController::class, 'index'])->middleware('permission:tab.view_own_facility');
     Route::get('tabs/{tabId}', [TabController::class, 'show'])->middleware('permission:tab.view_own_facility');
     Route::post('tabs/{tabId}/orders', [TabController::class, 'addOrders'])->middleware(['permission:tab.open', 'idempotent']);
+
+    // Waiter-only service flow (facility rule service_flow=WAITER_ONLY): open tabs board, hand-overs, supervisor reassignment.
+    // Settlement is POST /waiter-flow/settle (Payments). Facility-level checks happen in the service.
+    Route::middleware('permission:waiterflow.settle|waiterflow.manage')->group(function () {
+        Route::get('waiter-flow/open-items', [WaiterFlowController::class, 'openItems']);
+        Route::get('waiter-flow/waiters', [WaiterFlowController::class, 'waiters']);
+        Route::get('waiter-flow/handovers', [WaiterFlowController::class, 'handovers']);
+        Route::post('waiter-flow/handovers', [WaiterFlowController::class, 'request'])->middleware('idempotent');
+        Route::post('waiter-flow/handovers/{handoverId}/accept', [WaiterFlowController::class, 'accept'])->middleware('idempotent');
+        Route::post('waiter-flow/handovers/{handoverId}/reject', [WaiterFlowController::class, 'reject'])->middleware('idempotent');
+        Route::post('waiter-flow/handovers/{handoverId}/cancel', [WaiterFlowController::class, 'cancel'])->middleware('idempotent');
+    });
+    Route::post('waiter-flow/reassign', [WaiterFlowController::class, 'reassign'])->middleware(['permission:waiterflow.manage', 'idempotent']);
 
     // Approvals
     Route::get('approvals', [ApprovalController::class, 'index']);
