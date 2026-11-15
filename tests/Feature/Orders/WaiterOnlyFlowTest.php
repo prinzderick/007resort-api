@@ -113,6 +113,23 @@ class WaiterOnlyFlowTest extends OrdersTestCase
             ->assertStatus(409)->assertJsonPath('code', 'flow_not_enabled');
     }
 
+    /** The facility is switched to waiter-only while orders sent under the standard flow are still open: they must be servable. */
+    public function test_orders_sent_before_the_switch_to_waiter_only_can_still_be_served(): void
+    {
+        DB::table('operating_rule')->where('rule_key', 'service_flow')->update(['rule_value' => 'STANDARD']);
+        app(OperatingRules::class)->flush();
+        $d = $this->draft(['jollof' => 1, 'chapman' => 1]);
+        $sent = $this->send($d->json('id'), $this->etag($d))->assertOk();
+        $this->assertGreaterThan(0, DB::table('prep_ticket')->count(), 'standard flow: the kitchen got a ticket nobody will ever move');
+
+        DB::table('operating_rule')->where('rule_key', 'service_flow')->update(['rule_value' => 'WAITER_ONLY']);
+        app(OperatingRules::class)->flush();
+
+        $served = $this->api('waiter', 'POST', '/orders/'.$d->json('id').'/serve', [], ['If-Match' => $this->etag($sent)])->assertOk();
+        $this->assertSame('SERVED', $served->json('status'));
+        $this->assertSame(0, DB::table('prep_ticket')->whereNotIn('status', ['DISPENSED', 'CANCELLED'])->count(), 'leftover kitchen tickets are closed so no screen keeps them');
+    }
+
     public function test_supervisor_sees_every_open_tab_with_its_waiter_and_a_waiter_sees_only_their_own(): void
     {
         $this->served(['jollof' => 1], 'waiter', 'T1');

@@ -359,17 +359,19 @@ final class OrderService
             $order = $this->lockMutable($orderId, $ifMatch, ['SENT', 'IN_PREPARATION', 'READY'], allowBilled: true);
             $facilityId = Ids::fromBinary($order->facility_unit_id);
             $tickets = DB::table('prep_ticket')->where('order_id', $order->id)->where('status', '!=', 'CANCELLED')->lockForUpdate()->get();
+            // Waiter-only facility: nobody works a kitchen screen, so tickets left over from before the switch must not block serving.
+            $waiterOnly = $this->rules->waiterOnly($facilityId);
             $notReady = $tickets->filter(fn ($t) => ! in_array($t->status, ['READY', 'DISPENSED'], true));
-            if ($notReady->isNotEmpty()) {
+            if (! $waiterOnly && $notReady->isNotEmpty()) {
                 throw ApiProblem::conflict('order_state_invalid', 'Some items are still being prepared.', ['pendingTickets' => $notReady->map(fn ($t) => $t->ticket_number)->values()->all()]);
             }
             $now = Fmt::now();
             $staff = Ids::toBinary(Authz::staffId());
-            foreach ($tickets->where('status', 'READY') as $t) {
+            foreach ($waiterOnly ? $tickets->where('status', '!=', 'DISPENSED') : $tickets->where('status', 'READY') as $t) {
                 DB::table('prep_ticket')->where('id', $t->id)->update(['status' => 'DISPENSED', 'dispensed_at' => $now, 'dispensed_by' => $staff, 'row_version' => $t->row_version + 1]);
                 DB::table('prep_ticket_item')->where('prep_ticket_id', $t->id)->where('status', '!=', 'CANCELLED')->update(['status' => 'DISPENSED']);
                 $fresh = DB::table('prep_ticket')->where('id', $t->id)->first();
-                event(new PrepTicketUpdated(['kds.station.'.Ids::fromBinary($t->station_id)], ['ticket' => $this->tickets->ticket($fresh), 'previousStatus' => 'READY']));
+                event(new PrepTicketUpdated(['kds.station.'.Ids::fromBinary($t->station_id)], ['ticket' => $this->tickets->ticket($fresh), 'previousStatus' => $t->status]));
             }
             DB::table('order_line')->where('order_id', $order->id)->whereIn('status', ['LOCKED', 'ROUTED', 'ACCEPTED', 'IN_PROGRESS', 'READY'])->update(['status' => 'DISPENSED']);
             $paid = bccomp($order->amount_paid, $order->total, 4) >= 0 && bccomp($order->total, '0', 4) > 0;
