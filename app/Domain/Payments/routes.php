@@ -4,6 +4,7 @@ use App\Domain\Payments\Http\Controllers\CashHandoverController;
 use App\Domain\Payments\Http\Controllers\CashSessionController;
 use App\Domain\Payments\Http\Controllers\CollectionController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
+use App\Domain\Payments\Http\Controllers\PrintJobController;
 use App\Domain\Payments\Http\Controllers\ReceiptController;
 use App\Domain\Payments\Http\Controllers\TerminalController;
 use App\Domain\Payments\Http\Controllers\WebhookController;
@@ -31,6 +32,19 @@ Route::middleware(['auth:staff', 'device:optional'])->group(function () {
         ->middleware(['permission:refund.execute', 'idempotent']);
     Route::post('payments/{paymentId}/reversal', [PaymentController::class, 'reverse'])
         ->middleware(['permission:payment.reversal.execute', 'idempotent']);
+
+    // Receipt print queue: tablets queue a job, a POS terminal / the admin portal prints it and marks it printed.
+    Route::post('receipts/{receiptId}/print-jobs', [PrintJobController::class, 'request'])->middleware(['permission:receipt.print', 'idempotent']);
+    Route::get('print-jobs', [PrintJobController::class, 'index'])->middleware('permission:receipt.print|receipt.reprint');
+    Route::get('print-jobs/{jobId}', [PrintJobController::class, 'show'])->middleware('permission:receipt.print|receipt.reprint');
+    Route::post('print-jobs/{jobId}/printed', [PrintJobController::class, 'printed'])->middleware(['permission:receipt.print|receipt.reprint', 'idempotent']);
+    Route::post('print-jobs/{jobId}/failed', [PrintJobController::class, 'failed'])->middleware(['permission:receipt.print|receipt.reprint', 'idempotent']);
+    Route::post('print-jobs/{jobId}/cancel', [PrintJobController::class, 'cancel'])->middleware(['permission:receipt.print|receipt.reprint', 'idempotent']);
+
+    // Waiter-only service flow: waiters (own orders) and supervisors (any, on behalf) settle from the tablet. Ownership and the
+    // facility's `service_flow` rule are checked inside the service, post-lock.
+    Route::post('waiter-flow/settle', [PaymentController::class, 'waiterSettle'])
+        ->middleware(['permission:waiterflow.settle|waiterflow.manage', 'idempotent']);
 
     // Facility scope of a tab is resolved inside the service (post-lock); the route only requires the permission somewhere.
     Route::post('tabs/{tabId}/settle', [PaymentController::class, 'settleTab'])

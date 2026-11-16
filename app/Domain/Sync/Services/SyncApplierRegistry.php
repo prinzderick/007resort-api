@@ -37,6 +37,14 @@ final class SyncApplierRegistry
         }
     }
 
+    /** Remove the applier of these event types (tests that stand in their own probe for a type). */
+    public function unregister(string|array $eventTypes): void
+    {
+        foreach ((array) $eventTypes as $type) {
+            unset($this->appliers[$type]);
+        }
+    }
+
     public function has(string $eventType): bool
     {
         return isset($this->appliers[$eventType]);

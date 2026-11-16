@@ -27,6 +27,7 @@ class CapabilityService
         'allow_offline_orders' => 'bool',
         'allow_offline_payments' => 'payments',
         'hold_ttl_seconds' => 'int',
+        'service_flow' => 'string',
         // Waiter collection (docs/WAITER_COLLECTION.md section 7; consumed by Payments' CollectionRules)
         'waiter_collection_enabled' => 'bool',
         'waiter_cash_holding' => 'bool',
@@ -102,6 +103,7 @@ class CapabilityService
             'allowOfflineOrders' => $has('POS') || $has('TABLE_SERVICE'),
             'allowOfflinePayments' => $has('PAYMENT_ACCEPTANCE') ? 'CASH_ONLY' : 'NONE',
             'holdTtlSeconds' => 900,
+            'serviceFlow' => 'STANDARD',
             'waiterCollectionEnabled' => $has('TABLE_SERVICE'),
             'waiterCashHolding' => false,
             'waiterCashInHandLimit' => null,

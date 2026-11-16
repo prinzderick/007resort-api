@@ -53,6 +53,26 @@ class PaymentController
         return $this->replayable($r);
     }
 
+    /** POST /waiter-flow/settle: waiter-only flow - pay many served orders/tabs at once, on the tablet (docs/WAITER_ONLY_FLOW.md) */
+    public function waiterSettle(Request $request): JsonResponse
+    {
+        $in = $request->validate([
+            'facilityId' => ['required', 'uuid'],
+            'orderIds' => ['required', 'array', 'min:1', 'max:100'],
+            'orderIds.*' => ['required', 'uuid', 'distinct'],
+            'customerName' => ['nullable', 'string', 'max:160'],
+            'clientCreatedAt' => ['nullable', 'date'],
+        ] + self::tenderRules());
+        $this->assertNoDuplicateTenderIds($in['tenders']);
+        $ctx = ['facilityId' => $in['facilityId'], 'allocations' => array_map(fn ($id) => ['orderId' => $id, 'amount' => '0.0000'], $in['orderIds'])];
+        foreach ($in['tenders'] as $i => $t) {
+            $in['tenders'][$i]['fingerprint'] = PaymentService::fingerprint($ctx, $t, false);
+        }
+        $r = $this->payments->waiterSettle($in, $this->staffId());
+
+        return $this->replayable($r);
+    }
+
     /** POST /tabs/{tabId}/settle */
     public function settleTab(Request $request, string $tabId): JsonResponse
     {

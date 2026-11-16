@@ -17,7 +17,7 @@ return [
     'operational_permissions' => [
         'order.create', 'order.line.add', 'order.line.remove_unsent', 'order.send', 'tab.view_own_facility',
         'prep_ticket.view', 'prep_ticket.transition', 'receipt.reprint', 'cash_session.open', 'cash_session.close',
-        'payment.take', 'payment.split', 'order.settle',
+        'payment.take', 'payment.split', 'order.settle', 'waiterflow.settle', 'receipt.print',
         'inventory.receive', 'inventory.transfer.create', 'inventory.count.create', 'inventory.adjustment.request',
         'inventory.purchase_receipt.create', 'supplier.manage',
     ],

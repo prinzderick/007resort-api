@@ -37,6 +37,7 @@ final class Presenter
             ...$this->billFields($o),
             'currency' => $o->currency,
             'createdByStaffId' => Ids::fromBinary($o->created_by),
+            'responsibleStaffId' => Ids::fromBinary($o->responsible_staff_id ?? $o->created_by),
             'deviceId' => Fmt::u($o->device_id),
             'pendingApprovalId' => Fmt::u($o->pending_approval_id),
             'rowVersion' => (int) $o->row_version,
@@ -88,6 +89,8 @@ final class Presenter
             'balanceDue' => $o->status === 'VOIDED' ? '0.0000' : Money::of($o->total)->sub(Money::of($o->amount_paid))->amount,
             'lineCount' => $lineCount,
             ...$this->billFields($o),
+            'createdByStaffId' => Ids::fromBinary($o->created_by),
+            'responsibleStaffId' => Ids::fromBinary($o->responsible_staff_id ?? $o->created_by),
             'createdAt' => Fmt::ts($o->created_at),
         ];
     }
@@ -171,6 +174,7 @@ final class Presenter
             'balanceDue' => $total->sub($paid)->amount,
             'currency' => $t->currency,
             'openedByStaffId' => Ids::fromBinary($t->opened_by),
+            'responsibleStaffId' => Ids::fromBinary($t->responsible_staff_id ?? $t->opened_by),
             'openedAt' => Fmt::ts($t->opened_at),
             'rowVersion' => (int) $t->row_version,
         ];
