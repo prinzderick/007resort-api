@@ -7,6 +7,7 @@ use App\Domain\Sync\Services\OutboxPublisher;
 use App\Domain\Sync\Services\PeerClient;
 use App\Domain\Sync\Services\SyncApplierRegistry;
 use App\Support\Ids;
+use App\Support\Sync\OpsSnapshotPlans;
 use App\Support\Sync\Outbox;
 use Closure;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -85,6 +86,8 @@ abstract class TwoNodeTestCase extends BaseTestCase
             DB::table('organization')->insert(['id' => Ids::toBinary($this->org), 'name' => 'Two-node Resort']);
             DB::table('site')->insert(['id' => Ids::toBinary($this->site), 'organization_id' => Ids::toBinary($this->org), 'name' => 'Otueke']);
         }
+        // Scenario tests stand in their own probe appliers for operational event types; the real mirror applier steps aside.
+        $this->applierRegistry()->unregister(OpsSnapshotPlans::TYPES);
         $this->peer = new InProcessPeer($this);
         $this->app->instance(PeerClient::class, $this->peer);
         $this->app->forgetInstance(OutboxPublisher::class);

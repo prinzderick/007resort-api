@@ -45,6 +45,11 @@ final class Outbox
             throw new LogicException('Outbox::record needs an organization id (none in context and none passed).');
         }
 
+        // Operational events carry the exact rows they changed, so the other node can mirror them (RowSnapshot).
+        if (! isset($payload['snapshot']) && ($plan = OpsSnapshotPlans::plan($eventType, $entityType, $entityId)) !== null) {
+            $payload['snapshot'] = RowSnapshot::capture($plan);
+        }
+
         $id = Ids::uuid7();
         DB::table('outbox_event')->insert([
             'id' => Ids::toBinary($id),

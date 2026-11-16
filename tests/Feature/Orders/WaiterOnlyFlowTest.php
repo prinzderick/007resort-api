@@ -3,7 +3,10 @@
 namespace Tests\Feature\Orders;
 
 use App\Domain\Orders\Services\OperatingRules;
+use App\Domain\Sync\Appliers\RowSnapshotApplier;
+use App\Domain\Sync\Support\InboundEvent;
 use App\Support\Ids;
+use App\Support\Sync\OpsSnapshotPlans;
 use Illuminate\Support\Facades\DB;
 
 /** Waiter-only service flow (facility rule service_flow=WAITER_ONLY): send, serve, pay many, supervisor board, hand-over, print jobs. */
@@ -128,6 +131,53 @@ class WaiterOnlyFlowTest extends OrdersTestCase
         $served = $this->api('waiter', 'POST', '/orders/'.$d->json('id').'/serve', [], ['If-Match' => $this->etag($sent)])->assertOk();
         $this->assertSame('SERVED', $served->json('status'));
         $this->assertSame(0, DB::table('prep_ticket')->whereNotIn('status', ['DISPENSED', 'CANCELLED'])->count(), 'leftover kitchen tickets are closed so no screen keeps them');
+    }
+
+    /** The other node can rebuild every sale from the events alone: wipe the sales tables, replay the outbox, compare. */
+    public function test_a_day_of_sales_can_be_rebuilt_on_the_other_node_from_its_events(): void
+    {
+        [$o1] = $this->served(['jollof' => 1], 'waiter', 'T1');
+        [$o2] = $this->served(['suya' => 2, 'water' => 1], 'waiter', 'T2');
+        $this->api('waiter', 'POST', '/waiter-flow/settle', [
+            'facilityId' => $this->fid(), 'orderIds' => [$o1, $o2],
+            'tenders' => [['tenderType' => 'CASH', 'amount' => '8000', 'tendered' => '10000'], ['tenderType' => 'TRANSFER', 'amount' => '3000', 'reference' => 'TRF-1234']],
+        ])->assertStatus(201);
+        $this->draft(['jollof' => 1], 'waiter', 'T3'); // an open draft too
+
+        $tables = ['tab', 'order', 'order_line', 'payment', 'payment_allocation', 'receipt', 'receipt_order', 'cash_in_hand_entry'];
+        $snap = fn () => collect($tables)->mapWithKeys(fn ($t) => [$t => DB::table($t)->get()->map(fn ($r) => collect((array) $r)->except(['live_ref_key'])->all())->sortBy('id')->values()->all()])->all();
+        $before = $snap();
+        $this->assertNotEmpty($before['payment']);
+
+        $events = DB::table('outbox_event')->orderBy('seq')->get();
+        $this->assertGreaterThan(5, $events->count());
+        // the "other node": an empty copy of the sales tables in its own database (own connection, outside the test transaction)
+        $src = DB::connection()->getDatabaseName();
+        $dst = $src.'_replay';
+        $cfg = config('database.connections.'.config('database.default'));
+        $pdo = new \PDO("mysql:host={$cfg['host']};port={$cfg['port']}", $cfg['username'], $cfg['password']);
+        $pdo->exec("DROP DATABASE IF EXISTS `$dst`");
+        $pdo->exec("CREATE DATABASE `$dst`");
+        foreach ($tables as $t) {
+            $pdo->exec("CREATE TABLE `$dst`.`$t` LIKE `$src`.`$t`");
+        }
+        config(['database.connections.replay' => array_merge($cfg, ['database' => $dst])]);
+        DB::purge('replay');
+        $applier = new RowSnapshotApplier('replay');
+        foreach ($events as $row) {
+            if (! in_array($row->event_type, OpsSnapshotPlans::TYPES, true)) {
+                continue;
+            }
+            $e = InboundEvent::fromEnvelope([
+                'eventId' => Ids::fromBinary($row->id), 'eventType' => $row->event_type, 'entityType' => $row->entity_type, 'entityId' => Ids::fromBinary($row->entity_id),
+                'entityVersion' => (int) $row->entity_version, 'organizationId' => Ids::fromBinary($row->organization_id), 'siteId' => $row->site_id ? Ids::fromBinary($row->site_id) : null,
+                'facilityId' => null, 'sourceNode' => 'local', 'occurredAt' => now('UTC')->format('Y-m-d\TH:i:s.u\Z'), 'payload' => json_decode($row->payload, true),
+            ]);
+            $this->assertSame('APPLIED', $applier->apply($e)->kind, $row->event_type);
+        }
+        $after = collect($tables)->mapWithKeys(fn ($t) => [$t => DB::connection('replay')->table($t)->get()->map(fn ($r) => collect((array) $r)->except(['live_ref_key'])->all())->sortBy('id')->values()->all()])->all();
+        $pdo->exec("DROP DATABASE `$dst`");
+        $this->assertEquals($before, $after, 'every order, line, payment, receipt and cash entry came back identical');
     }
 
     public function test_supervisor_sees_every_open_tab_with_its_waiter_and_a_waiter_sees_only_their_own(): void

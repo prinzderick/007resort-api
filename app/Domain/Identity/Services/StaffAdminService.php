@@ -33,9 +33,9 @@ class StaffAdminService
                     'first_name' => $d['firstName'], 'last_name' => $d['lastName'], 'email' => $d['email'] ?? null, 'phone' => $d['phone'] ?? null,
                 ]);
                 $staff->refresh(); // pick up DB defaults (row_version, timestamps)
-                UserAccount::create(['staff_id' => $staff->id, 'username' => $username]);
+                $account = UserAccount::create(['staff_id' => $staff->id, 'username' => $username]);
                 Audit::record('staff.create', 'Staff', $staff->id, new: $this->auditView($staff) + ['username' => $username]);
-                Outbox::record('StaffRosterUpdated', 'Staff', $staff->id, ['staffId' => $staff->id, 'change' => 'CREATED'] + $this->auditView($staff), (int) $staff->row_version);
+                Outbox::record('StaffRosterUpdated', 'Staff', $staff->id, ['staffId' => $staff->id, 'change' => 'CREATED', 'username' => $username, 'accountId' => $account->id] + $this->auditView($staff), (int) $staff->row_version);
 
                 return $staff;
             });
@@ -98,6 +98,7 @@ class StaffAdminService
             $account->forceFill(['failed_login_count' => 0, 'locked_until' => null])->save();
             $this->revoker->revokeAccount($account->id, 'credential_reset');
             Audit::record('credential.set', 'Staff', $staff->id, new: ['staffId' => $staff->id, 'credentialType' => $type]); // never the secret
+            $this->announceCredential($staff, $type);
         });
     }
 
@@ -121,6 +122,7 @@ class StaffAdminService
                 Credential::create(['user_account_id' => $account->id, 'credential_type' => Credential::NFC_CARD, 'credential_hash' => $hash, 'algorithm' => 'SHA256']);
             }
             Audit::record('credential.nfc_card.register', 'Staff', $staff->id, new: ['staffId' => $staff->id, 'credentialType' => Credential::NFC_CARD]);
+            $this->announceCredential($staff, Credential::NFC_CARD);
         });
     }
 
@@ -131,6 +133,7 @@ class StaffAdminService
         DB::transaction(function () use ($account, $staff): void {
             Credential::query()->where('user_account_id', $account->id)->where('credential_type', Credential::NFC_CARD)->where('is_active', 1)->update(['is_active' => 0]);
             Audit::record('credential.nfc_card.remove', 'Staff', $staff->id, new: ['staffId' => $staff->id]);
+            $this->announceCredential($staff, Credential::NFC_CARD);
         });
     }
 
@@ -146,6 +149,20 @@ class StaffAdminService
     private function account(Staff $staff): UserAccount
     {
         return UserAccount::query()->where('staff_id', $staff->id)->firstOrFail();
+    }
+
+    /**
+     * Tell the other node about a credential change so a PIN/password/card works on both servers. Carries the stored HASH
+     * (Argon2id / SHA-256), never the secret; the hash only travels node to node over the authenticated sync channel.
+     * Call inside the business transaction.
+     */
+    public function announceCredential(Staff $staff, string $type): void
+    {
+        $account = $this->account($staff);
+        $cred = Credential::query()->where('user_account_id', $account->id)->where('credential_type', $type)->where('is_active', 1)->latest('created_at')->first();
+        Outbox::record('StaffCredentialChanged', 'Staff', $staff->id, [
+            'staffId' => $staff->id, 'credentialType' => $type, 'hash' => $cred?->credential_hash, 'algorithm' => $cred?->algorithm,
+        ], (int) $staff->row_version);
     }
 
     /** @return array<string, mixed> */

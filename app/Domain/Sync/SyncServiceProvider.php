@@ -2,9 +2,13 @@
 
 namespace App\Domain\Sync;
 
+use App\Domain\Identity\Services\SessionRevoker;
+use App\Domain\Sync\Appliers\RowSnapshotApplier;
+use App\Domain\Sync\Appliers\StaffRosterApplier;
 use App\Domain\Sync\Appliers\VersionedDomainApplier;
 use App\Domain\Sync\Appliers\VersionedTarget;
 use App\Domain\Sync\Appliers\VersionedTargets;
+use App\Domain\Sync\Console\SyncPublishStaffCommand;
 use App\Domain\Sync\Console\SyncReplayFailedCommand;
 use App\Domain\Sync\Console\SyncRetryCommand;
 use App\Domain\Sync\Console\SyncRunOnceCommand;
@@ -23,6 +27,7 @@ use App\Domain\Sync\Services\SiteAvailability;
 use App\Domain\Sync\Services\SyncApplierRegistry;
 use App\Domain\Sync\Support\ApplyResult;
 use App\Domain\Sync\Support\Throttle;
+use App\Support\Sync\OpsSnapshotPlans;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
@@ -48,7 +53,7 @@ class SyncServiceProvider extends ServiceProvider
         $this->registerBuiltInAppliers();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([SyncStatusCommand::class, SyncRetryCommand::class, SyncReplayFailedCommand::class, SyncTokenCommand::class, SyncRunOnceCommand::class, TwoNodeCommand::class]);
+            $this->commands([SyncStatusCommand::class, SyncRetryCommand::class, SyncReplayFailedCommand::class, SyncTokenCommand::class, SyncRunOnceCommand::class, TwoNodeCommand::class, SyncPublishStaffCommand::class]);
         }
 
         $this->callAfterResolving(Schedule::class, fn (Schedule $s) => $this->schedule($s));
@@ -69,7 +74,11 @@ class SyncServiceProvider extends ServiceProvider
         $this->callAfterResolving(SyncApplierRegistry::class, function (SyncApplierRegistry $r) {
             $targets = $this->app->make(VersionedTargets::class);
             $r->register('ConfigurationUpdated', new VersionedDomainApplier($targets, 'CONFIGURATION'));
-            $r->register('StaffRosterUpdated', new VersionedDomainApplier($targets, 'PERMISSION'));
+            // Staff roster, role grants, PIN/password hashes and cash policy travel both ways (see StaffRosterApplier).
+            $r->register(['StaffRosterUpdated', 'StaffCredentialChanged', 'StaffCollectionPolicyChanged'],
+                new StaffRosterApplier(new VersionedDomainApplier($targets, 'PERMISSION'), $this->app->make(SessionRevoker::class)));
+            // Operational data (orders, payments, cash, stock, devices, memberships, customers, attendance): mirrored from the rows each event carries.
+            $r->register(OpsSnapshotPlans::TYPES, new RowSnapshotApplier);
             // Diagnostic only, not a business event (event-catalogue): acknowledge and move on.
             $r->register('HeartbeatAck', fn () => ApplyResult::applied());
         });
